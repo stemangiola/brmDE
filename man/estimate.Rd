@@ -68,4 +68,8 @@ Neither the offset nor the dispersion is computed here. Run
 \code{\link[=estimate_dispersion]{estimate_dispersion()}} on the whole object before \code{\link[=brmDE]{brmDE()}}, exactly as
 you compute the offset, so that both are ordinary columns of the input.
 Gene-wise fitting is the only thing this pipeline does.
+
+Prior constants derived from each gene are passed to Stan as data, so every
+gene generates identical Stan code and cmdstanr compiles it at most once per
+worker process rather than once per gene.
 }

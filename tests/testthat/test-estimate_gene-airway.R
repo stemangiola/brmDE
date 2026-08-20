@@ -85,7 +85,8 @@ test_that("ZINB with a dispersion-derived shape prior fits one airway gene", {
   shape_int <- shape_prior$prior[
     shape_prior$class == "Intercept" & shape_prior$dpar == "shape"
   ]
-  expect_match(shape_int, "^student_t\\(3, 0, 0\\.")
+  expect_identical(shape_int, "student_t(3, 0, brmde_shape_scale)")
+  expect_true(is.finite(brms::standata(fit)$brmde_shape_scale))
 })
 
 test_that("ZINB with a conjugate gamma shape prior fits one airway gene", {

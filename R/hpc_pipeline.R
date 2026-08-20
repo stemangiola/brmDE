@@ -374,6 +374,10 @@ brmDE <- function(.data,
 #' [estimate_dispersion()] on the whole object before [brmDE()], exactly as
 #' you compute the offset, so that both are ordinary columns of the input.
 #' Gene-wise fitting is the only thing this pipeline does.
+#'
+#' Prior constants derived from each gene are passed to Stan as data, so every
+#' gene generates identical Stan code and cmdstanr compiles it at most once per
+#' worker process rather than once per gene.
 #' @param target_output Name of the targets output.
 #' @param ... Passed to [estimate_gene()] (e.g. `family`, `chains`, `iter`).
 #'
@@ -438,7 +442,7 @@ estimate.HPCell <- function(input_hpc,
 
   # The formulas are targets of their own so that editing one invalidates the
   # fits that depend on it.
-  input_hpc |>
+  pipeline <- input_hpc |>
     HPCell::hpc_single(
       target_output = "formula_abundance_text",
       user_function = identity |> quote(),
@@ -448,7 +452,9 @@ estimate.HPCell <- function(input_hpc,
       target_output = "formula_dispersion_text",
       user_function = identity |> quote(),
       x = formula_text(formula_dispersion)
-    ) |>
+    )
+
+  pipeline |>
     HPCell::hpc_iterate(
       target_output = target_output,
       user_function = estimate_gene_from_se |> quote(),

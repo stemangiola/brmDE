@@ -17,3 +17,6 @@ functions/
 archive/
 brmDE.Rproj
 vignettes/brmDE.html
+
+# Local development scratch: benchmarks, profiling, throwaway scripts
+dev/

@@ -381,41 +381,102 @@ shape_student_t_prior <- function(data,
   }
   scale <- shape_intercept_scale(data, dispersion, dispersion_degrees_freedom, nu)
   p <- brms::prior_string(
-    sprintf(
-      "student_t(%s, 0, %s)",
-      format_prior_number(nu),
-      format_prior_number(scale)
-    ),
+    sprintf("student_t(%s, 0, brmde_shape_scale)", format_prior_number(nu)),
     class = "Intercept",
     dpar = "shape"
   )
   if (shape_submodel_has_terms(formula)) {
     p <- c(p, brms::prior(student_t(3, 0, 2), class = b, dpar = shape))
   }
-  p
+  gene_prior(p, gene_prior_stanvar("brmde_shape_scale", scale))
 }
 
 zinb_location_priors <- function(data, abundance, offset) {
   i <- intercept_location(data, abundance, offset)
-  c(
-    brms::prior_string(
-      sprintf("student_t(3, %s, 1.5)", format_prior_number(i)),
-      class = "Intercept"
+  gene_prior(
+    prior = c(
+      brms::prior_string(
+        "student_t(3, brmde_intercept_location, 1.5)",
+        class = "Intercept"
+      ),
+      brms::prior(student_t(3, 0, 5), class = b)
     ),
-    brms::prior(student_t(3, 0, 5), class = b)
+    stanvars = gene_prior_stanvar("brmde_intercept_location", i)
   )
 }
 
 shape_gamma_prior <- function(data, dispersion, dispersion_degrees_freedom) {
   pars <- shape_gamma_parameters(data, dispersion, dispersion_degrees_freedom)
-  brms::prior_string(
-    sprintf(
-      "gamma(%s, %s)",
-      format_prior_number(pars$shape),
-      format_prior_number(pars$rate)
+  gene_prior(
+    prior = brms::prior_string(
+      "gamma(brmde_shape_gamma_shape, brmde_shape_gamma_rate)",
+      class = "shape"
     ),
-    class = "shape"
+    stanvars = combine_stanvars(
+      gene_prior_stanvar("brmde_shape_gamma_shape", pars$shape),
+      gene_prior_stanvar("brmde_shape_gamma_rate", pars$rate)
+    )
   )
+}
+
+# Prior constants derived from a gene's own data are passed to Stan as data
+# rather than pasted into the model code as literals. The generated code is
+# then byte-identical for every gene, so cmdstanr compiles the model once per
+# process and reuses it for every other gene. Constants that come from user
+# arguments, such as the Student-t degrees of freedom, stay literal because
+# they cannot vary from gene to gene.
+gene_prior_stanvar <- function(name, value) {
+  brms::stanvar(x = as.numeric(value), name = name, block = "data")
+}
+
+# A brmsprior together with the stanvars that define the symbols it refers to.
+# The two always travel together: a prior naming `brmde_intercept_location`
+# will not compile unless the matching stanvar reaches brms as well.
+gene_prior <- function(prior, stanvars = NULL) {
+  list(prior = prior, stanvars = stanvars)
+}
+
+combine_stanvars <- function(...) {
+  parts <- Filter(Negate(is.null), list(...))
+  if (length(parts) == 0L) {
+    return(NULL)
+  }
+  Reduce(`+`, parts)
+}
+
+combine_gene_priors <- function(...) {
+  parts <- Filter(Negate(is.null), list(...))
+  gene_prior(
+    prior = do.call(c, lapply(parts, `[[`, "prior")),
+    stanvars = do.call(combine_stanvars, lapply(parts, `[[`, "stanvars"))
+  )
+}
+
+# The default prior set for a zero-inflated negative binomial gene: one term
+# for the shape, one for the location parameters.
+default_gene_priors <- function(data,
+                                formula,
+                                abundance,
+                                offset,
+                                dispersion,
+                                dispersion_degrees_freedom,
+                                shape_prior_df,
+                                shape_prior) {
+  shape <- if (has_shape_submodel(formula)) {
+    shape_student_t_prior(
+      data,
+      formula,
+      dispersion,
+      dispersion_degrees_freedom,
+      shape_prior_df,
+      shape_prior
+    )
+  } else if (identical(shape_prior, "gamma")) {
+    shape_gamma_prior(data, dispersion, dispersion_degrees_freedom)
+  } else {
+    gene_prior(brms::prior(student_t(3, 0, 2), class = shape))
+  }
+  combine_gene_priors(shape, zinb_location_priors(data, abundance, offset))
 }
 
 detect_cores <- function() {
@@ -426,12 +487,14 @@ detect_cores <- function() {
   }
 }
 
-make_gene_inits <- function(formula, data, family, prior, chains, abundance, offset) {
+make_gene_inits <- function(formula, data, family, prior, chains, abundance,
+                            offset, stanvars = NULL) {
   sdata <- brms::make_standata(
     formula = formula,
     data = data,
     family = family,
-    prior = prior
+    prior = prior,
+    stanvars = stanvars
   )
   mu <- intercept_location(data, abundance, offset)
   lapply(seq_len(chains), function(i) {

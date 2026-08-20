@@ -9,27 +9,34 @@ test_that("estimate_dispersion writes a positive tagwise column on airway", {
   expect_true(all(disp > 0))
 })
 
-make_default_zinb_priors <- function(data,
-                                     abundance,
-                                     offset,
-                                     formula = NULL,
-                                     dispersion = NULL,
-                                     dispersion_degrees_freedom = "dispersion_degrees_freedom",
-                                     shape_prior = "student_t",
-                                     shape_prior_df = 3) {
-  priors <- brmDE:::zinb_location_priors(data, abundance, offset)
-  if (brmDE:::has_shape_submodel(formula)) {
-    return(c(
-      priors,
-      brmDE:::shape_student_t_prior(
-        data, formula, dispersion, dispersion_degrees_freedom, shape_prior_df, shape_prior
-      )
-    ))
-  }
-  if (identical(shape_prior, "gamma")) {
-    return(c(priors, brmDE:::shape_gamma_prior(data, dispersion, dispersion_degrees_freedom)))
-  }
-  c(priors, brms::prior(student_t(3, 0, 2), class = shape))
+default_zinb_priors <- function(data,
+                                abundance,
+                                offset,
+                                formula = NULL,
+                                dispersion = NULL,
+                                dispersion_degrees_freedom = "dispersion_degrees_freedom",
+                                shape_prior = "student_t",
+                                shape_prior_df = 3) {
+  brmDE:::default_gene_priors(
+    data = data,
+    formula = formula,
+    abundance = abundance,
+    offset = offset,
+    dispersion = dispersion,
+    dispersion_degrees_freedom = dispersion_degrees_freedom,
+    shape_prior_df = shape_prior_df,
+    shape_prior = shape_prior
+  )
+}
+
+make_default_zinb_priors <- function(...) default_zinb_priors(...)$prior
+
+# Prior constants that depend on the gene reach Stan as data, so their values
+# are asserted on the stanvars rather than on the prior string.
+stanvar_value <- function(stanvars, name) stanvars[[name]]$sdata
+
+make_default_zinb_stanvar <- function(name, ...) {
+  stanvar_value(default_zinb_priors(...)$stanvars, name)
 }
 
 test_that("estimate_dispersion records d_eff = df.residual + prior.df", {
@@ -163,7 +170,20 @@ test_that("default_zinb_priors sets the shape intercept from d_eff", {
   )
   shape_int <- priors$prior[priors$class == "Intercept" & priors$dpar == "shape"]
   expect_length(shape_int, 1L)
-  expect_match(shape_int, "^student_t\\(3, 0, 0\\.27")
+  expect_identical(shape_int, "student_t(3, 0, brmde_shape_scale)")
+
+  # The scale itself travels as data, so that the Stan code is the same for
+  # every gene and one compiled model can serve all of them.
+  scale <- make_default_zinb_stanvar(
+    "brmde_shape_scale",
+    dat,
+    "counts",
+    "offset",
+    formula = f,
+    dispersion = "dispersion",
+    shape_prior_df = 3
+  )
+  expect_equal(scale, sqrt(trigamma(9.81176 / 2)) * sqrt(1 / 3), tolerance = 1e-6)
 
   # shape ~ 1 + offset(...) has no population-level coefficients, so a
   # `b` prior on shape would not correspond to any model parameter.
@@ -185,13 +205,15 @@ test_that("shape_prior_df changes both the df and the scale", {
     formula = f, dispersion = "dispersion", shape_prior_df = 10
   )
   shape_int <- priors$prior[priors$class == "Intercept" & priors$dpar == "shape"]
-  expect_match(shape_int, "^student_t\\(10, 0, ")
-  expect_match(
-    shape_int,
-    sprintf(
-      "0\\.%s",
-      substr(format(sqrt(trigamma(9.81176 / 2)) * sqrt(8 / 10)), 3, 5)
-    )
+  expect_identical(shape_int, "student_t(10, 0, brmde_shape_scale)")
+  expect_equal(
+    make_default_zinb_stanvar(
+      "brmde_shape_scale",
+      dat, "counts", "offset",
+      formula = f, dispersion = "dispersion", shape_prior_df = 10
+    ),
+    sqrt(trigamma(9.81176 / 2)) * sqrt(8 / 10),
+    tolerance = 1e-6
   )
 })
 
@@ -555,14 +577,16 @@ test_that('shape_prior = "gamma" puts a gamma on shape directly', {
   )
   shape_prior <- priors$prior[priors$class == "shape"]
   expect_length(shape_prior, 1L)
-  expect_match(
+  expect_identical(
     shape_prior,
-    sprintf(
-      "^gamma\\(%s, %s\\)$",
-      brmDE:::format_prior_number(d_eff / 2),
-      brmDE:::format_prior_number(d_eff * phi / 2)
-    )
+    "gamma(brmde_shape_gamma_shape, brmde_shape_gamma_rate)"
   )
+  stanvars <- default_zinb_priors(
+    dat, "counts", "offset",
+    formula = f, dispersion = "dispersion", shape_prior = "gamma"
+  )$stanvars
+  expect_equal(stanvar_value(stanvars, "brmde_shape_gamma_shape"), d_eff / 2)
+  expect_equal(stanvar_value(stanvars, "brmde_shape_gamma_rate"), d_eff * phi / 2)
   expect_false(any(priors$dpar == "shape"))
 })
 

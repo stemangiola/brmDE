@@ -140,11 +140,19 @@ test_that("as_gene_tibble accepts a one-gene SummarizedExperiment", {
 
 test_that("default ZINB priors omit shape submodel terms without shape ~", {
   dat <- airway_one_gene_tbl()
+  location <- brmDE:::zinb_location_priors(dat, "counts", "offset")
   priors <- c(
-    brmDE:::zinb_location_priors(dat, "counts", "offset"),
+    location$prior,
     brms::prior(student_t(3, 0, 2), class = shape)
   )
   expect_s3_class(priors, "brmsprior")
+
+  # The intercept is still centred on the gene's own mean; that number now
+  # reaches Stan as data instead of being written into the model code.
+  expect_equal(
+    location$stanvars[["brmde_intercept_location"]]$sdata,
+    brmDE:::intercept_location(dat, "counts", "offset")
+  )
   expect_true("Intercept" %in% priors$class)
   expect_true("shape" %in% priors$class)
   expect_false(any(priors$dpar == "shape"))

@@ -75,7 +75,8 @@ test_that("changed arguments change the targets script, unchanged ones do not", 
         dispersion = "dispersion",
         family = family
       )
-    sub(basename(store), "STORE", readLines(paste0(store, ".R")), fixed = TRUE)
+    # gsub, not sub: a single line can mention the store more than once.
+    gsub(basename(store), "STORE", readLines(paste0(store, ".R")), fixed = TRUE)
   }
 
   base <- script_for()

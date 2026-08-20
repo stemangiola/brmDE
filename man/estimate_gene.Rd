@@ -24,6 +24,7 @@ estimate_gene(
   init = "gene",
   sanitize_names = FALSE,
   feature = NULL,
+  stanvars = NULL,
   ...
 )
 }
@@ -119,6 +120,9 @@ names (\verb{___} → \verb{_}) to work around a brms parsing issue.}
 
 \item{feature}{Optional gene id used only in a warning string (handy for
 targets logs).}
+
+\item{stanvars}{Optional \code{\link[brms:stanvar]{brms::stanvar()}} object appended to the ones
+brmDE builds for its own priors.}
 
 \item{...}{Additional arguments passed to \code{\link[brms:brm]{brms::brm()}}.}
 }

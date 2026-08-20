@@ -91,6 +91,8 @@
 #'   names (`___` → `_`) to work around a brms parsing issue.
 #' @param feature Optional gene id used only in a warning string (handy for
 #'   targets logs).
+#' @param stanvars Optional [brms::stanvar()] object appended to the ones
+#'   brmDE builds for its own priors.
 #' @param ... Additional arguments passed to [brms::brm()].
 #'
 #' @return A `brmsfit` object.
@@ -133,6 +135,7 @@ estimate_gene <- function(data,
                           init = "gene",
                           sanitize_names = FALSE,
                           feature = NULL,
+                          stanvars = NULL,
                           ...) {
   if (identical(backend, "cmdstanr")) {
     check_and_install_cmdstanr()
@@ -184,25 +187,18 @@ estimate_gene <- function(data,
   )
 
   if (is.null(prior) && is_zinb_family(family)) {
-
-    # Prior for the shape parameter
-    if (has_shape_submodel(formula)) {
-      prior <- shape_student_t_prior(
-        data,
-        formula,
-        dispersion,
-        dispersion_degrees_freedom,
-        shape_prior_df,
-        shape_prior
-      )
-    } else if (identical(shape_prior, "gamma")) {
-      prior <- shape_gamma_prior(data, dispersion, dispersion_degrees_freedom)
-    } else {
-      prior <- brms::prior(student_t(3, 0, 2), class = shape)
-    }
-
-    # Prior for the location parameters
-    prior <- c(prior, zinb_location_priors(data, abundance, offset))
+    defaults <- default_gene_priors(
+      data = data,
+      formula = formula,
+      abundance = abundance,
+      offset = offset,
+      dispersion = dispersion,
+      dispersion_degrees_freedom = dispersion_degrees_freedom,
+      shape_prior_df = shape_prior_df,
+      shape_prior = shape_prior
+    )
+    prior <- defaults$prior
+    stanvars <- combine_stanvars(stanvars, defaults$stanvars)
   }
 
   if (identical(init, "gene")) {
@@ -213,7 +209,8 @@ estimate_gene <- function(data,
       prior = prior,
       chains = chains,
       abundance = abundance,
-      offset = offset
+      offset = offset,
+      stanvars = stanvars
     )
   }
 
@@ -226,6 +223,7 @@ estimate_gene <- function(data,
     data = data,
     family = family,
     prior = prior,
+    stanvars = stanvars,
     chains = chains,
     cores = n_cores,
     threads = threads,
