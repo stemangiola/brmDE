@@ -22,7 +22,6 @@ test_that("estimate, hypothesis, and adjust append to one HPCell script", {
 
   expect_s3_class(pipeline, "brmDE_hpc")
   expect_s3_class(pipeline, "HPCell")
-  expect_true("se_dispersion" %in% names(pipeline))
   expect_true("brms_fit" %in% names(pipeline))
   expect_true("hypothesis_tbl" %in% names(pipeline))
   expect_true("adjust_tbl" %in% names(pipeline))
@@ -36,7 +35,8 @@ test_that("estimate, hypothesis, and adjust append to one HPCell script", {
   expect_match(script, "estimate_args_[0-9a-f]+\\.rds")
   expect_match(script, 'target_output = "formula_abundance_text"')
   expect_match(script, 'target_output = "formula_dispersion_text"')
-  expect_match(script, "estimate_dispersion_from_args")
+  # Dispersion is estimated upstream of the pipeline, not inside it.
+  expect_no_match(script, "estimate_dispersion", fixed = TRUE)
   expect_match(script, "estimate_gene_from_se")
   expect_match(script, "hypothesis_gene_from_fit")
   expect_match(script, "adjust_gene_from_fit")
@@ -118,7 +118,6 @@ test_that("estimate |> hypothesis |> adjust evaluate as one pipeline", {
   skip_if_not_installed("HPCell")
   skip_if_no_cmdstan()
   skip_if_not_installed("targets")
-  skip_if_not_installed("tidybulk")
 
   se <- airway_for_hpc()
 
@@ -136,8 +135,7 @@ test_that("estimate |> hypothesis |> adjust evaluate as one pipeline", {
     se |>
       brmDE(
         features = c("ENSG00000120129"),
-        store = store,
-        method = "TMM"
+        store = store
       ) |>
       estimate(
         ~ dex + (1 | cell),

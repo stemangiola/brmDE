@@ -38,19 +38,16 @@ estimate(
 \arguments{
 \item{input_hpc}{An \code{HPCell} / \code{brmDE_hpc} pipeline from \code{\link[=brmDE]{brmDE()}}.}
 
-\item{formula_abundance}{Model for the mean, passed to both
-\code{\link[=estimate_dispersion]{estimate_dispersion()}} (as the edgeR design) and \code{\link[=estimate_gene]{estimate_gene()}}.}
+\item{formula_abundance}{Model for the mean, passed to \code{\link[=estimate_gene]{estimate_gene()}}.}
 
 \item{formula_dispersion}{One-sided model for the negative binomial shape,
 passed to \code{\link[=estimate_gene]{estimate_gene()}}. \code{~1} by default.}
 
-\item{offset}{Required name of the precomputed offset column (the same
-argument as \code{\link[=estimate_gene]{estimate_gene()}}). \code{\link[=brmDE]{brmDE()}} writes this as \code{"offset"}
-via \code{\link[=add_tidybulk_offset]{add_tidybulk_offset()}}.}
+\item{offset}{Required name of the precomputed offset column in \code{colData}
+(the same argument as \code{\link[=estimate_gene]{estimate_gene()}}).}
 
-\item{dispersion}{Required name of the \code{rowData} dispersion column written
-by \code{\link[=estimate_dispersion]{estimate_dispersion()}} (called once on the full object before
-gene-wise fits).}
+\item{dispersion}{Required name of the \code{rowData} dispersion column, as
+written by \code{\link[=estimate_dispersion]{estimate_dispersion()}}.}
 
 \item{...}{Passed to \code{\link[=estimate_gene]{estimate_gene()}} (e.g. \code{family}, \code{chains}, \code{iter}).}
 
@@ -63,6 +60,12 @@ column written alongside it by \code{\link[=estimate_dispersion]{estimate_disper
 The updated \code{HPCell} pipeline.
 }
 \description{
-Appends \code{\link[=estimate_dispersion]{estimate_dispersion()}} on the full object, then an
-\code{\link[HPCell:hpc_iterate]{HPCell::hpc_iterate()}} step that calls \code{\link[=estimate_gene]{estimate_gene()}} once per gene.
+Appends an \code{\link[HPCell:hpc_iterate]{HPCell::hpc_iterate()}} step that calls \code{\link[=estimate_gene]{estimate_gene()}} once
+per gene.
+}
+\details{
+Neither the offset nor the dispersion is computed here. Run
+\code{\link[=estimate_dispersion]{estimate_dispersion()}} on the whole object before \code{\link[=brmDE]{brmDE()}}, exactly as
+you compute the offset, so that both are ordinary columns of the input.
+Gene-wise fitting is the only thing this pipeline does.
 }

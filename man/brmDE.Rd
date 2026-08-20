@@ -8,14 +8,12 @@
 brmDE(
   .data,
   abundance = "counts",
-  method = "TMM",
   features = NULL,
   store = tempfile(tmpdir = tempdir(), pattern = "brmde_"),
   computing_resources = NULL,
   debug_step = NULL,
   callr_function = NULL,
-  packages = c("HPCell", "brmDE", "tidybulk", "SummarizedExperiment", "brms", "tibble",
-    "edgeR"),
+  packages = c("HPCell", "brmDE", "SummarizedExperiment", "brms", "tibble"),
   update = "thorough",
   garbage_collection = TRUE,
   workspace_on_error = FALSE,
@@ -25,16 +23,18 @@ brmDE(
 \method{print}{brmDE_hpc}(x, ...)
 }
 \arguments{
-\item{.data}{A \code{SummarizedExperiment}. Offset is calculated on all genes
-in this object.}
+\item{.data}{A \code{SummarizedExperiment} that already carries a library size
+offset in \code{colData} and edgeR dispersion in \code{rowData}. Neither is
+computed here: both are whole-matrix quantities, so derive them before
+the pipeline (\code{tidybulk::scale_abundance()} taking \code{log(1 / multiplier)},
+and \code{\link[=estimate_dispersion]{estimate_dispersion()}}) and name the columns when you call
+\code{\link[=estimate]{estimate()}}.}
 
 \item{abundance}{Count assay name.}
 
-\item{method}{tidybulk scaling method for the offset (\code{"TMM"} or
-\code{"TMMwsp"}).}
-
 \item{features}{Optional character vector of gene ids to fit, e.g.
-\code{c("gene1", "gene2")}. TMM is still computed on all genes in \code{.data}.}
+\code{c("gene1", "gene2")}. Subsetting here only limits which genes are
+fitted; the offset and dispersion already reflect all genes.}
 
 \item{store}{Directory used as the targets store. The script is
 \verb{\{store\}.R}.}
@@ -59,15 +59,26 @@ An \code{HPCell} pipeline object (\code{brmDE_hpc}).
 }
 \description{
 Analogue of HPCell's \code{\link[HPCell:initialise_hpc]{HPCell::initialise_hpc()}}: writes the targets
-header (\code{target_list}) and the shared steps (load SE, tidybulk offset,
-gene ids). Later calls to \code{\link[=estimate]{estimate()}}, \code{\link[=hypothesis]{hypothesis()}}, and \code{\link[=adjust]{adjust()}}
-append \code{hpc_iterate()} branches onto the same graph. Printing the object
-(or calling \code{\link[=evaluate_hpc]{evaluate_hpc()}}) runs the pipeline, as in HPCell.
+header (\code{target_list}) and the shared steps (load SE, gene ids). Later
+calls to \code{\link[=estimate]{estimate()}}, \code{\link[=hypothesis]{hypothesis()}}, and \code{\link[=adjust]{adjust()}} append
+\code{hpc_iterate()} branches onto the same graph. Printing the object (or
+calling \code{\link[=evaluate_hpc]{evaluate_hpc()}}) runs the pipeline, as in HPCell.
+}
+\details{
+The pipeline is gene-wise only. Anything estimated across the whole matrix,
+namely the library size offset and the edgeR dispersion, belongs upstream of
+\code{\link[=brmDE]{brmDE()}} and arrives as ordinary \code{colData} / \code{rowData} columns.
 }
 \examples{
 \dontrun{
 data("airway", package = "airway")
-airway |>
+
+# Whole-matrix quantities are prepared before the gene-wise pipeline.
+se <- airway
+se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
+se <- estimate_dispersion(se, formula_abundance = ~ dex + (1 | cell))
+
+se |>
   brmDE(features = c("ENSG00000120129")) |>
   estimate(
     ~ dex + (1 | cell),

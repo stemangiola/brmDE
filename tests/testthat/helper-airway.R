@@ -40,6 +40,10 @@ airway_one_gene_tbl <- function(feature = "ENSG00000120129") {
   brmDE:::as_gene_tibble(airway_one_gene(feature), abundance = "counts")
 }
 
+# The pipeline is gene-wise only, so the whole-matrix quantities it consumes -
+# the offset and the edgeR dispersion - have to be on the object already.
 airway_for_hpc <- function(n_genes = 150, feature = "ENSG00000120129") {
-  airway_se(n_genes = n_genes, feature = feature)
+  se <- airway_se(n_genes = n_genes, feature = feature)
+  se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
+  estimate_dispersion(se, ~ dex + (1 | cell), abundance = "counts")
 }

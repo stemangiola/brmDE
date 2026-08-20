@@ -57,7 +57,7 @@ test_that("ZINB with a dispersion-derived shape prior fits one airway gene", {
   skip_if_no_cmdstan()
   skip_if_not_installed("edgeR")
 
-  se <- airway_for_hpc()
+  se <- airway_se(n_genes = 150)
   se <- estimate_dispersion(se, ~ dex, abundance = "counts")
   se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
   se_gene <- se["ENSG00000120129", , drop = FALSE]
@@ -93,7 +93,7 @@ test_that("ZINB with a conjugate gamma shape prior fits one airway gene", {
   skip_if_no_cmdstan()
   skip_if_not_installed("edgeR")
 
-  se <- airway_for_hpc()
+  se <- airway_se(n_genes = 150)
   se <- estimate_dispersion(se, ~ dex, abundance = "counts")
   se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
   se_gene <- se["ENSG00000120129", , drop = FALSE]

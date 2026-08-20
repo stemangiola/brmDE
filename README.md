@@ -45,7 +45,7 @@ adjust_gene(
 )
 ```
 
-`estimate_gene()` does not calculate an offset or dispersion. Compute TMM first, store it as a column, and pass that name to `offset`. The pipeline writes edgeR dispersion to `rowData` before fitting.
+Neither `estimate_gene()` nor `brmDE()` normalises. Compute the offset yourself on all genes (TMM, or anything else), store it as a `colData` column, and pass that name to `offset`. Dispersion is different: the pipeline writes edgeR's estimate to `rowData` for you before fitting.
 
 The two models are given separately. `formula_abundance` is the mean model, and it is also the design `estimate_dispersion()` hands to edgeR. `formula_dispersion` (default `~1`) is the model for the negative binomial shape. Neither should carry an offset: the library size offset and the `log(1/dispersion)` offset are appended for you, and the assembled formulas are printed as a message so you can check them:
 
@@ -54,12 +54,16 @@ Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offs
 Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))
 ```
 
-To run many genes as **one** HPCell pipeline:
+To run many genes as **one** HPCell pipeline. The pipeline fits genes and nothing else, so the two whole-matrix quantities it consumes — the offset and the dispersion — are prepared first:
 
 ```r
 data("airway", package = "airway")
 
-airway |>
+se <- airway
+se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
+se <- estimate_dispersion(se, formula_abundance = ~ dex + (1 | cell))
+
+se |>
   brmDE(features = c("ENSG00000120129")) |>
   estimate(
     ~ dex + (1 | cell),

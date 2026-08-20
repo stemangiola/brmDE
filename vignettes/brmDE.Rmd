@@ -26,7 +26,7 @@ run_vignette <- instantiate::stan_cmdstan_exists()
 3. fit each gene with `estimate_gene()`, using the dispersion to inform the negative binomial shape prior
 4. optionally run posterior **hypothesis** tests and **adjust** for nuisance covariates
 
-`estimate_gene()` never computes the offset or the dispersion itself. Those are inputs.
+Step 1 happens outside `brmDE`. The package does no normalisation of its own: `brmDE()` and `estimate_gene()` both expect the offset column to be on the object already, so you stay in control of how library size is handled.
 
 Fitting chunks below are gated by `instantiate::stan_cmdstan_exists()`, so the vignette still builds when CmdStan is missing.
 
@@ -160,7 +160,7 @@ Both routes share the same log-scale spread, `trigamma(d_eff / 2)`. They differ 
 
 For many genes, start a pipeline with `brmDE()`, then append `estimate()`, `hypothesis()`, and `adjust()`. Printing the object runs it (`print` calls `evaluate_hpc()`).
 
-`brmDE()` does not take a gene list: offset and dispersion belong on the full matrix. After those columns exist, `filter()` any feature set and pass that object into the pipeline.
+The pipeline fits genes and nothing else. Offset and dispersion are whole-matrix quantities, so they are computed above, before any gene is chosen; once those columns exist you can `filter()` any feature set and pass that object in.
 
 ```{r pipeline, message = FALSE, warning = FALSE, eval = run_vignette}
 # `se` already has offset + dispersion from above; subset genes here
@@ -191,8 +191,8 @@ pipeline
 
 | Step | Column / target | Role |
 |------|-----------------|------|
-| tidybulk / tidySE (or `brmDE()`) | `colData` `"multiplier"`, `"offset"` | TMM scale factor and `log(1 / multiplier)` |
-| `estimate()` → `estimate_dispersion()` | `rowData` `"dispersion"`, `"dispersion_degrees_freedom"` | edgeR \(\phi_g\) and \(d_{\mathrm{eff}}\) |
+| tidybulk / tidySE, before `brmDE()` | `colData` `"multiplier"`, `"offset"` | TMM scale factor and `log(1 / multiplier)` |
+| `estimate_dispersion()`, before `brmDE()` | `rowData` `"dispersion"`, `"dispersion_degrees_freedom"` | edgeR \(\phi_g\) and \(d_{\mathrm{eff}}\) |
 | `estimate()` → `estimate_gene()` | `brms_fit` per gene | posterior fit with shape prior from dispersion |
 | `hypothesis()` | hypothesis table | posterior tests |
 | `adjust()` | adjusted residuals / fitted | nuisance covariates nullified |

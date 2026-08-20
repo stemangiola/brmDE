@@ -1,7 +1,7 @@
 test_that("estimate_dispersion writes a positive tagwise column on airway", {
   skip_if_not_installed("edgeR")
 
-  se <- airway_for_hpc()
+  se <- airway_se(n_genes = 150)
   out <- estimate_dispersion(se, ~ dex + (1 | cell), abundance = "counts")
   disp <- SummarizedExperiment::rowData(out)$dispersion
   expect_equal(length(disp), nrow(se))
@@ -35,7 +35,7 @@ make_default_zinb_priors <- function(data,
 test_that("estimate_dispersion records d_eff = df.residual + prior.df", {
   skip_if_not_installed("edgeR")
 
-  se <- airway_for_hpc()
+  se <- airway_se(n_genes = 150)
   out <- estimate_dispersion(se, ~ dex + (1 | cell), abundance = "counts")
   d_eff <- SummarizedExperiment::rowData(out)$dispersion_degrees_freedom
   expect_equal(length(d_eff), nrow(se))
@@ -123,7 +123,7 @@ test_that("shape_intercept_scale rejects unusable degrees of freedom", {
 test_that("estimate_dispersion output column names are arguments", {
   skip_if_not_installed("edgeR")
 
-  se <- airway_for_hpc()
+  se <- airway_se(n_genes = 150)
   out <- estimate_dispersion(
     se,
     ~ dex + (1 | cell),

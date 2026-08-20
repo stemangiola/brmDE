@@ -207,19 +207,6 @@ estimate_dispersion <- function(se,
   se
 }
 
-#' @keywords internal
-#' @export
-estimate_dispersion_from_args <- function(se, formula_abundance, args_rds) {
-  args <- readRDS(args_rds)
-  estimate_dispersion(
-    se,
-    formula_abundance = as_pipeline_formula(formula_abundance),
-    abundance = args$abundance,
-    dispersion = args$dispersion,
-    dispersion_degrees_freedom = args$dispersion_degrees_freedom
-  )
-}
-
 # edgeR has no random effects, so `(f | group)` terms are expanded into the
 # fixed effects they imply rather than discarded. Keeping the grouping factor
 # in the design costs the degrees of freedom it really consumes, which is what

@@ -198,18 +198,25 @@ collect_brmde_hpc <- function(input_hpc) {
 #' Start a gene-wise HPCell pipeline
 #'
 #' Analogue of HPCell's [HPCell::initialise_hpc()]: writes the targets
-#' header (`target_list`) and the shared steps (load SE, tidybulk offset,
-#' gene ids). Later calls to [estimate()], [hypothesis()], and [adjust()]
-#' append `hpc_iterate()` branches onto the same graph. Printing the object
-#' (or calling [evaluate_hpc()]) runs the pipeline, as in HPCell.
+#' header (`target_list`) and the shared steps (load SE, gene ids). Later
+#' calls to [estimate()], [hypothesis()], and [adjust()] append
+#' `hpc_iterate()` branches onto the same graph. Printing the object (or
+#' calling [evaluate_hpc()]) runs the pipeline, as in HPCell.
 #'
-#' @param .data A `SummarizedExperiment`. Offset is calculated on all genes
-#'   in this object.
+#' The pipeline is gene-wise only. Anything estimated across the whole matrix,
+#' namely the library size offset and the edgeR dispersion, belongs upstream of
+#' [brmDE()] and arrives as ordinary `colData` / `rowData` columns.
+#'
+#' @param .data A `SummarizedExperiment` that already carries a library size
+#'   offset in `colData` and edgeR dispersion in `rowData`. Neither is
+#'   computed here: both are whole-matrix quantities, so derive them before
+#'   the pipeline (`tidybulk::scale_abundance()` taking `log(1 / multiplier)`,
+#'   and [estimate_dispersion()]) and name the columns when you call
+#'   [estimate()].
 #' @param abundance Count assay name.
-#' @param method tidybulk scaling method for the offset (`"TMM"` or
-#'   `"TMMwsp"`).
 #' @param features Optional character vector of gene ids to fit, e.g.
-#'   `c("gene1", "gene2")`. TMM is still computed on all genes in `.data`.
+#'   `c("gene1", "gene2")`. Subsetting here only limits which genes are
+#'   fitted; the offset and dispersion already reflect all genes.
 #' @param store Directory used as the targets store. The script is
 #'   `{store}.R`.
 #' @param computing_resources A crew controller, or `NULL` for sequential
@@ -227,7 +234,13 @@ collect_brmde_hpc <- function(input_hpc) {
 #' @examples
 #' \dontrun{
 #' data("airway", package = "airway")
-#' airway |>
+#'
+#' # Whole-matrix quantities are prepared before the gene-wise pipeline.
+#' se <- airway
+#' se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
+#' se <- estimate_dispersion(se, formula_abundance = ~ dex + (1 | cell))
+#'
+#' se |>
 #'   brmDE(features = c("ENSG00000120129")) |>
 #'   estimate(
 #'     ~ dex + (1 | cell),
@@ -242,7 +255,6 @@ collect_brmde_hpc <- function(input_hpc) {
 #' @export
 brmDE <- function(.data,
                       abundance = "counts",
-                      method = "TMM",
                       features = NULL,
                       store = tempfile(tmpdir = tempdir(), pattern = "brmde_"),
                       computing_resources = NULL,
@@ -251,11 +263,9 @@ brmDE <- function(.data,
                       packages = c(
                         "HPCell",
                         "brmDE",
-                        "tidybulk",
                         "SummarizedExperiment",
                         "brms",
-                        "tibble",
-                        "edgeR"
+                        "tibble"
                       ),
                       update = "thorough",
                       garbage_collection = TRUE,
@@ -305,7 +315,6 @@ brmDE <- function(.data,
         debug_step = debug_step,
         verbosity = verbosity,
         abundance = abundance,
-        method = method,
         features = features,
         callr_function = callr_function
       )
@@ -320,16 +329,9 @@ brmDE <- function(.data,
       file = "file_se" |> HPCell::is_target()
     ) |>
     HPCell::hpc_single(
-      target_output = "se_offset",
-      user_function = add_tidybulk_offset |> quote(),
-      se = "se_input" |> HPCell::is_target(),
-      abundance = abundance,
-      method = method
-    ) |>
-    HPCell::hpc_single(
       target_output = "gene_id",
       user_function = gene_ids_for_hpc |> quote(),
-      se = "se_offset" |> HPCell::is_target(),
+      se = "se_input" |> HPCell::is_target(),
       features_rds = features_rds,
       iterate = "map"
     ) |>
@@ -338,22 +340,25 @@ brmDE <- function(.data,
 
 #' Estimate genes on an HPCell pipeline
 #'
-#' Appends [estimate_dispersion()] on the full object, then an
-#' [HPCell::hpc_iterate()] step that calls [estimate_gene()] once per gene.
+#' Appends an [HPCell::hpc_iterate()] step that calls [estimate_gene()] once
+#' per gene.
 #'
 #' @param input_hpc An `HPCell` / `brmDE_hpc` pipeline from [brmDE()].
-#' @param formula_abundance Model for the mean, passed to both
-#'   [estimate_dispersion()] (as the edgeR design) and [estimate_gene()].
+#' @param formula_abundance Model for the mean, passed to [estimate_gene()].
 #' @param formula_dispersion One-sided model for the negative binomial shape,
 #'   passed to [estimate_gene()]. `~1` by default.
-#' @param offset Required name of the precomputed offset column (the same
-#'   argument as [estimate_gene()]). [brmDE()] writes this as `"offset"`
-#'   via [add_tidybulk_offset()].
-#' @param dispersion Required name of the `rowData` dispersion column written
-#'   by [estimate_dispersion()] (called once on the full object before
-#'   gene-wise fits).
+#' @param offset Required name of the precomputed offset column in `colData`
+#'   (the same argument as [estimate_gene()]).
+#' @param dispersion Required name of the `rowData` dispersion column, as
+#'   written by [estimate_dispersion()].
 #' @param dispersion_degrees_freedom Name of the effective degrees of freedom
 #'   column written alongside it by [estimate_dispersion()].
+#'
+#' @details
+#' Neither the offset nor the dispersion is computed here. Run
+#' [estimate_dispersion()] on the whole object before [brmDE()], exactly as
+#' you compute the offset, so that both are ordinary columns of the input.
+#' Gene-wise fitting is the only thing this pipeline does.
 #' @param target_output Name of the targets output.
 #' @param ... Passed to [estimate_gene()] (e.g. `family`, `chains`, `iter`).
 #'
@@ -402,15 +407,6 @@ estimate.HPCell <- function(input_hpc,
 
   dots <- list(...)
   input_dir <- brmde_input_dir(input_hpc$initialisation$store)
-  dispersion_args_rds <- write_args_rds(
-    input_dir,
-    "dispersion_args",
-    list(
-      abundance = abundance,
-      dispersion = dispersion,
-      dispersion_degrees_freedom = dispersion_degrees_freedom
-    )
-  )
   args_rds <- write_args_rds(
     input_dir,
     "estimate_args",
@@ -426,8 +422,7 @@ estimate.HPCell <- function(input_hpc,
   )
 
   # The formulas are targets of their own so that editing one invalidates the
-  # fits that depend on it. Keeping them apart also means a change to the
-  # dispersion model does not re-run edgeR, which only sees the mean model.
+  # fits that depend on it.
   input_hpc |>
     HPCell::hpc_single(
       target_output = "formula_abundance_text",
@@ -439,17 +434,10 @@ estimate.HPCell <- function(input_hpc,
       user_function = identity |> quote(),
       x = formula_text(formula_dispersion)
     ) |>
-    HPCell::hpc_single(
-      target_output = "se_dispersion",
-      user_function = estimate_dispersion_from_args |> quote(),
-      se = "se_offset" |> HPCell::is_target(),
-      formula_abundance = "formula_abundance_text" |> HPCell::is_target(),
-      args_rds = dispersion_args_rds
-    ) |>
     HPCell::hpc_iterate(
       target_output = target_output,
       user_function = estimate_gene_from_se |> quote(),
-      se = "se_dispersion" |> HPCell::is_target(),
+      se = "se_input" |> HPCell::is_target(),
       feature_id = "gene_id" |> HPCell::is_target(),
       formula_abundance = "formula_abundance_text" |> HPCell::is_target(),
       formula_dispersion = "formula_dispersion_text" |> HPCell::is_target(),
