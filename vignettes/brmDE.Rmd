@@ -84,8 +84,6 @@ se <- se |> estimate_dispersion(formula_abundance = ~ dex + (1 | cell))
 head(as.data.frame(rowData(se)[, c("dispersion", "dispersion_degrees_freedom")]))
 head(se$offset)
 
-# Choose genes only after offset and dispersion are in the SE metadata
-se_gene <- se |> filter(.feature == "ENSG00000120129")
 ```
 
 ## Two formulas, and the offsets brmDE adds
@@ -106,73 +104,49 @@ Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))
 The default `shape_prior = "student_t"` builds the shape submodel from `formula_dispersion` and places a Student-t prior on its intercept. The scale of that prior comes from `dispersion_degrees_freedom` via `sqrt(trigamma(d_eff / 2))`. Because the dispersion enters as an offset on a log link, any terms you add to `formula_dispersion` describe departures from edgeR's per-gene estimate.
 
 ```{r one-gene-student, message = FALSE, warning = FALSE, eval = run_vignette}
-fit_t <- estimate_gene(
-  se_gene,
-  formula_abundance = ~ dex + (1 | cell),
-  offset = "offset",
-  dispersion = "dispersion",
-  shape_prior = "student_t",
-  shape_prior_df = 3,
-  family = brms::zero_inflated_negbinomial(),
-  chains = 1,
-  iter = 250,
-  warmup = 100,
-  cores = 1,
-  backend = "cmdstanr",
-  refresh = 0,
-  silent = 2
-)
+fit_t <- se |>
+  filter(.feature == "ENSG00000120129") |>
+  estimate_gene(
+    formula_abundance = ~ dex + (1 | cell),
+    offset = "offset",
+    dispersion = "dispersion",
+    family = brms::zero_inflated_negbinomial(),
+    chains = 1,
+    iter = 250,
+    warmup = 100,
+    cores = 1,
+    refresh = 0,
+    silent = 2
+  )
 
 hypothesis_gene(fit_t, "dextrt = 0")
 
-adjust_gene(
-  fit_t,
-  nullify = "dex",
-  re_formula = ~(1 | cell)
-)
+# Keep the dex main effect; drop the cell random intercept.
+adjust_gene(fit_t, re_formula = ~0)
 ```
-
-## Conjugate gamma shape prior
-
-Alternatively, `shape_prior = "gamma"` puts a gamma prior directly on the scalar `shape` parameter (no shape submodel). The prior mean is `1 / phi_g` for that gene. A scalar `shape` carries no linear predictor, so `formula_dispersion` must stay at its `~1` default here; anything else is an error rather than a silently ignored argument.
-
-```{r one-gene-gamma, message = FALSE, warning = FALSE, eval = run_vignette}
-fit_g <- estimate_gene(
-  se_gene,
-  formula_abundance = ~ dex + (1 | cell),
-  offset = "offset",
-  dispersion = "dispersion",
-  shape_prior = "gamma",
-  family = brms::zero_inflated_negbinomial(),
-  chains = 1,
-  iter = 250,
-  warmup = 100,
-  cores = 1,
-  backend = "cmdstanr",
-  refresh = 0,
-  silent = 2
-)
-```
-
-Both routes share the same log-scale spread, `trigamma(d_eff / 2)`. They differ in tail weight and in whether they centre the *median* (Student-t) or the *mean* (gamma) of the shape on edgeR's estimate. See `?estimate_dispersion` for the derivation.
 
 # Full scalable pipeline
 
 For many genes, start a pipeline with `brmDE()`, then append `estimate()`, `hypothesis()`, and `adjust()`. Printing the object runs it (`print` calls `evaluate_hpc()`).
 
-The pipeline fits genes and nothing else. Offset and dispersion are whole-matrix quantities, so they are computed above, before any gene is chosen; once those columns exist you can `filter()` any feature set and pass that object in.
+The pipeline fits genes and nothing else. Offset and dispersion are whole-matrix quantities, so they are computed above, before any gene is chosen; once those columns exist you can `filter()` any feature set and pass that object in. Five genes are enough to show the gene-wise branches that `estimate()` maps over; pass a local `crew` controller to `brmDE()` so those branches run in parallel on your machine (the default is sequential).
 
 ```{r pipeline, message = FALSE, warning = FALSE, eval = run_vignette}
-# `se` already has offset + dispersion from above; subset genes here
+library(crew)
 pipeline <- se |>
-  filter(.feature == "ENSG00000120129") |>
-  brmDE(store = tempfile(pattern = "brmde_")) |>
+  filter(.feature %in% c(
+    "ENSG00000120129",
+    "ENSG00000000003",
+    "ENSG00000000005",
+    "ENSG00000000419",
+    "ENSG00000000457"
+  )) |>
+  brmDE(computing_resources = crew_controller_local(workers = 5)) |>
   estimate(
     ~ dex + (1 | cell),
     offset = "offset",
     dispersion = "dispersion",
-    shape_prior = "student_t",
-    family = brms::negbinomial(),
+    family = brms::zero_inflated_negbinomial(),
     chains = 1,
     iter = 250,
     warmup = 100,
@@ -181,9 +155,44 @@ pipeline <- se |>
     silent = 2
   ) |>
   hypothesis("dextrt = 0") |>
-  adjust(nullify = "dex")
+  adjust(re_formula = ~0)
 
 # Runs the targets graph
+pipeline
+```
+
+## SLURM
+
+On a cluster, pass a `crew.cluster` controller to `brmDE()` as `computing_resources`. Gene-wise targets then launch as SLURM jobs (run this block from a login node, not in the vignette build).
+
+```{r slurm, eval = FALSE}
+library(crew.cluster)
+
+pipeline <- se |>
+  filter(.feature %in% c(
+    "ENSG00000120129",
+    "ENSG00000000003",
+    "ENSG00000000005",
+    "ENSG00000000419",
+    "ENSG00000000457"
+  )) |>
+  brmDE(
+    store = "/path/to/brmde_store",
+    computing_resources = crew_controller_slurm(
+      slurm_memory_gigabytes_per_cpu = 5,
+      workers = 100,
+      tasks_max = 5
+    )
+  ) |>
+  estimate(
+    ~ dex + (1 | cell),
+    offset = "offset",
+    dispersion = "dispersion",
+    family = brms::negbinomial()
+  ) |>
+  hypothesis("dextrt = 0") |>
+  adjust(re_formula = ~0)
+
 pipeline
 ```
 
@@ -195,7 +204,7 @@ pipeline
 | `estimate_dispersion()`, before `brmDE()` | `rowData` `"dispersion"`, `"dispersion_degrees_freedom"` | edgeR \(\phi_g\) and \(d_{\mathrm{eff}}\) |
 | `estimate()` → `estimate_gene()` | `brms_fit` per gene | posterior fit with shape prior from dispersion |
 | `hypothesis()` | hypothesis table | posterior tests |
-| `adjust()` | adjusted residuals / fitted | nuisance covariates nullified |
+| `adjust()` | adjusted residuals / fitted | dex kept; random intercepts dropped |
 
 # Dispersion priors at a glance
 

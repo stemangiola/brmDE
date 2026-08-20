@@ -40,7 +40,9 @@ fitted; the offset and dispersion already reflect all genes.}
 \verb{\{store\}.R}.}
 
 \item{computing_resources}{A crew controller, or \code{NULL} for sequential
-targets (default).}
+targets (default). On SLURM, use
+\code{crew.cluster::crew_controller_slurm()}; see the vignette section
+\emph{SLURM} for an example.}
 
 \item{debug_step}{Optional target name for \code{tar_option_set(debug = )}.}
 
@@ -88,6 +90,19 @@ se |>
   ) |>
   hypothesis("dextrt = 0") |>
   adjust(nullify = "dex")
+
+# SLURM (from a cluster login node; requires crew.cluster):
+# library(crew.cluster)
+# se |>
+#   brmDE(
+#     store = "/path/to/brmde_store",
+#     computing_resources = crew_controller_slurm(
+#       slurm_memory_gigabytes_per_cpu = 5,
+#       workers = 100,
+#       tasks_max = 5
+#     )
+#   ) |>
+#   estimate(~ dex + (1 | cell), offset = "offset", dispersion = "dispersion")
 }
 
 }

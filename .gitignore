@@ -16,3 +16,4 @@ dynamic_tar_script.R
 functions/
 archive/
 brmDE.Rproj
+vignettes/brmDE.html

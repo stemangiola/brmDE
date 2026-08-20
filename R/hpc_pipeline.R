@@ -220,7 +220,9 @@ collect_brmde_hpc <- function(input_hpc) {
 #' @param store Directory used as the targets store. The script is
 #'   `{store}.R`.
 #' @param computing_resources A crew controller, or `NULL` for sequential
-#'   targets (default).
+#'   targets (default). On SLURM, use
+#'   `crew.cluster::crew_controller_slurm()`; see the vignette section
+#'   *SLURM* for an example.
 #' @param debug_step Optional target name for `tar_option_set(debug = )`.
 #' @param callr_function Passed to [targets::tar_make()] by
 #'   [evaluate_hpc()]. `NULL` (default) runs in the current session.
@@ -250,6 +252,19 @@ collect_brmde_hpc <- function(input_hpc) {
 #'   ) |>
 #'   hypothesis("dextrt = 0") |>
 #'   adjust(nullify = "dex")
+#'
+#' # SLURM (from a cluster login node; requires crew.cluster):
+#' # library(crew.cluster)
+#' # se |>
+#' #   brmDE(
+#' #     store = "/path/to/brmde_store",
+#' #     computing_resources = crew_controller_slurm(
+#' #       slurm_memory_gigabytes_per_cpu = 5,
+#' #       workers = 100,
+#' #       tasks_max = 5
+#' #     )
+#' #   ) |>
+#' #   estimate(~ dex + (1 | cell), offset = "offset", dispersion = "dispersion")
 #' }
 #'
 #' @export
