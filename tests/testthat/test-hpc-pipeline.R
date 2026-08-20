@@ -30,10 +30,16 @@ test_that("estimate, hypothesis, and adjust append to one HPCell script", {
   lines <- readLines(paste0(store, ".R"))
   script <- paste(lines, collapse = "\n")
   expect_match(script, "hpc_internal")
-  # Args files are named after a hash of their contents so that editing an
-  # argument changes the target command and forces a rebuild.
-  expect_match(script, "features_[0-9a-f]+\\.rds")
-  expect_match(script, "estimate_args_[0-9a-f]+\\.rds")
+  # Arguments are targets, so targets invalidates the fits when they change and
+  # no worker reads them off disk. Only the input object itself is a file.
+  expect_match(script, 'target_output = "brms_fit_args"')
+  expect_match(script, 'target_output = "hypothesis_tbl_args"')
+  expect_match(script, 'target_output = "adjust_tbl_args"')
+  expect_match(script, 'offset = "offset"', fixed = TRUE)
+  expect_setequal(
+    list.files(paste0(store, "_input")),
+    c("se.rds", "computing_resources.rds")
+  )
   expect_match(script, 'target_output = "formula_abundance_text"')
   expect_match(script, 'target_output = "formula_dispersion_text"')
   # Setup / identity targets run on the main process, not the crew controller.
@@ -62,34 +68,41 @@ test_that("changed arguments change the targets script, unchanged ones do not", 
   )
 
   # targets hashes the target command, so anything that should force a refit
-  # has to be visible in the generated script.
+  # has to be visible in the generated script. Arguments passed through `...`
+  # get there as the code they were written as, hence the quoted family.
   script_for <- function(formula_abundance = ~dex,
                          formula_dispersion = ~1,
                          features = "ENSG00000120129",
-                         family = brms::negbinomial()) {
+                         family = quote(brms::negbinomial())) {
     store <- tempfile("brmde_hash_")
     stores <<- c(stores, store)
-    se |>
-      brmDE(store = store, features = features) |>
-      estimate(
-        formula_abundance,
-        formula_dispersion = formula_dispersion,
-        offset = "offset",
-        dispersion = "dispersion",
-        dispersion_degrees_freedom = "dispersion_degrees_freedom",
-        family = family
-      )
+    eval(bquote(
+      se |>
+        brmDE(store = store, features = features) |>
+        estimate(
+          formula_abundance,
+          formula_dispersion = formula_dispersion,
+          offset = "offset",
+          dispersion = "dispersion",
+          dispersion_degrees_freedom = "dispersion_degrees_freedom",
+          family = .(family)
+        )
+    ))
     # gsub, not sub: a single line can mention the store more than once.
     gsub(basename(store), "STORE", readLines(paste0(store, ".R")), fixed = TRUE)
   }
 
   base <- script_for()
+  expect_true(any(grepl("brms::negbinomial()", base, fixed = TRUE)))
   expect_identical(script_for(), base)
   expect_false(identical(script_for(formula_abundance = ~ dex + (1 | cell)), base))
   expect_false(identical(script_for(formula_dispersion = ~cell), base))
   expect_false(identical(script_for(features = "ENSG00000000003"), base))
   expect_false(
-    identical(script_for(family = brms::zero_inflated_negbinomial()), base)
+    identical(
+      script_for(family = quote(brms::zero_inflated_negbinomial())),
+      base
+    )
   )
 })
 

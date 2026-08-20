@@ -98,9 +98,10 @@ se |>
 #   brmDE(
 #     store = "/path/to/brmde_store",
 #     computing_resources = crew_controller_slurm(
-#       slurm_memory_gigabytes_per_cpu = 5,
 #       workers = 100,
-#       tasks_max = 5
+#       options_cluster = crew_options_slurm(
+#         memory_gigabytes_per_cpu = 5
+#       )
 #     )
 #   ) |>
 #   estimate(~ dex + (1 | cell), offset = "offset", dispersion = "dispersion",

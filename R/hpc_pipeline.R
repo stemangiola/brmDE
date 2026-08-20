@@ -11,25 +11,6 @@ brmde_input_dir <- function(store) {
   paste0(store, "_input")
 }
 
-# targets hashes the arguments baked into a target's command, not the contents
-# of any file those arguments point to. A fixed args path would therefore never
-# change, and edited arguments would be answered with a stale cached result.
-# Naming the file after a hash of its contents moves the change into the
-# command. Elements are deparsed before hashing because objects such as brms
-# families carry environments, whose raw hash differs between R sessions and
-# would force a rebuild on every run.
-write_args_rds <- function(input_dir, prefix, args) {
-  fingerprint <- rlang::hash(
-    vapply(args, function(x) paste(deparse(x), collapse = " "), character(1))
-  )
-  path <- file.path(
-    input_dir,
-    sprintf("%s_%s.rds", prefix, substr(fingerprint, 1, 16))
-  )
-  saveRDS(args, path)
-  normalizePath(path, mustWork = FALSE)
-}
-
 # Formulas cross into the targets graph as text, so they carry no environment
 # and compare cleanly between runs. Terms resolve against the data first and
 # the global environment after, matching estimate_gene().
@@ -102,9 +83,8 @@ check_features <- function(features) {
 
 #' @keywords internal
 #' @export
-gene_ids_for_hpc <- function(se, features_rds) {
+gene_ids_for_hpc <- function(se, features = NULL) {
   ids <- rownames(se)
-  features <- readRDS(features_rds)$features
   if (!is.null(features)) {
     ids <- intersect(ids, features)
   }
@@ -120,42 +100,29 @@ estimate_gene_from_se <- function(se,
                                   feature_id,
                                   formula_abundance,
                                   formula_dispersion,
-                                  args_rds) {
-  args <- readRDS(args_rds)
-  named <- c("abundance", "offset", "dispersion", "dispersion_degrees_freedom")
+                                  args) {
   do.call(
     estimate_gene,
     c(
       list(
         data = se[unlist(feature_id), , drop = FALSE],
         formula_abundance = as_pipeline_formula(formula_abundance),
-        formula_dispersion = as_pipeline_formula(formula_dispersion),
-        offset = args$offset,
-        abundance = args$abundance,
-        dispersion = args$dispersion,
-        dispersion_degrees_freedom = args$dispersion_degrees_freedom
+        formula_dispersion = as_pipeline_formula(formula_dispersion)
       ),
-      args[setdiff(names(args), named)]
+      args
     )
   )
 }
 
 #' @keywords internal
 #' @export
-hypothesis_gene_from_fit <- function(fit, args_rds) {
-  do.call(hypothesis_gene, c(list(fit = fit), readRDS(args_rds)))
+hypothesis_gene_from_fit <- function(fit, args) {
+  do.call(hypothesis_gene, c(list(fit = fit), args))
 }
 
 #' @keywords internal
 #' @export
-adjust_gene_from_fit <- function(fit, args_rds) {
-  args <- readRDS(args_rds)
-  if (is.character(args$re_formula) && !is.na(args$re_formula)) {
-    args$re_formula <- stats::as.formula(
-      args$re_formula,
-      env = new.env(parent = globalenv())
-    )
-  }
+adjust_gene_from_fit <- function(fit, args) {
   do.call(adjust_gene, c(list(fit = fit), args))
 }
 
@@ -306,7 +273,6 @@ brmDE <- function(.data,
   script <- paste0(store, ".R")
 
   se_rds <- normalizePath(file.path(input_dir, "se.rds"), mustWork = FALSE)
-  features_rds <- write_args_rds(input_dir, "features", list(features = features))
   controller_rds <- normalizePath(
     file.path(input_dir, "computing_resources.rds"),
     mustWork = FALSE
@@ -358,7 +324,7 @@ brmDE <- function(.data,
       target_output = "gene_id",
       user_function = gene_ids_for_hpc |> quote(),
       se = "se_input" |> HPCell::is_target(),
-      features_rds = features_rds,
+      features = features,
       iterate = "map",
       deployment = "main"
     ) |>
@@ -446,25 +412,27 @@ estimate.HPCell <- function(input_hpc,
       check_degrees_freedom_name(dispersion_degrees_freedom)
   }
   abundance <- input_hpc$initialisation$abundance
+  args_target <- paste0(target_output, "_args")
 
-  dots <- list(...)
-  input_dir <- brmde_input_dir(input_hpc$initialisation$store)
-  args_rds <- write_args_rds(
-    input_dir,
-    "estimate_args",
-    c(
-      list(
-        abundance = abundance,
-        offset = offset,
-        dispersion = dispersion,
-        dispersion_degrees_freedom = dispersion_degrees_freedom
-      ),
-      dots
-    )
-  )
+  # The arguments travel as the code they were written as, so targets hashes
+  # that code and the worker rebuilds the objects rather than reading them off
+  # disk. As anywhere in targets, an argument naming something only this session
+  # holds cannot be rebuilt there: pass `brms::negbinomial()`, not a variable
+  # standing for it.
+  args <- as.call(c(
+    quote(list),
+    list(
+      abundance = abundance,
+      offset = offset,
+      dispersion = dispersion,
+      dispersion_degrees_freedom = dispersion_degrees_freedom
+    ),
+    as.list(substitute(list(...)))[-1L]
+  ))
 
-  # The formulas are targets of their own so that editing one invalidates the
-  # fits that depend on it. They only store a string, so run on main.
+  # The formulas and the arguments are targets of their own so that editing one
+  # invalidates the fits that depend on it. They only assemble small objects, so
+  # they run on main.
   pipeline <- input_hpc |>
     HPCell::hpc_single(
       target_output = "formula_abundance_text",
@@ -477,6 +445,12 @@ estimate.HPCell <- function(input_hpc,
       user_function = identity |> quote(),
       x = formula_text(formula_dispersion),
       deployment = "main"
+    ) |>
+    HPCell::hpc_single(
+      target_output = args_target,
+      user_function = identity |> quote(),
+      x = call("quote", args),
+      deployment = "main"
     )
 
   pipeline |>
@@ -487,7 +461,7 @@ estimate.HPCell <- function(input_hpc,
       feature_id = "gene_id" |> HPCell::is_target(),
       formula_abundance = "formula_abundance_text" |> HPCell::is_target(),
       formula_dispersion = "formula_dispersion_text" |> HPCell::is_target(),
-      args_rds = args_rds
+      args = args_target |> HPCell::is_target()
     ) |>
     as_brmde_hpc()
 }
@@ -520,18 +494,25 @@ hypothesis.HPCell <- function(x,
     )
   }
 
-  args_rds <- write_args_rds(
-    brmde_input_dir(x$initialisation$store),
-    "hypothesis_args",
-    c(list(hypothesis = hypothesis), list(...))
-  )
+  args_target <- paste0(target_output, "_args")
+  args <- as.call(c(
+    quote(list),
+    list(hypothesis = hypothesis),
+    as.list(substitute(list(...)))[-1L]
+  ))
 
   x |>
+    HPCell::hpc_single(
+      target_output = args_target,
+      user_function = identity |> quote(),
+      x = call("quote", args),
+      deployment = "main"
+    ) |>
     HPCell::hpc_iterate(
       target_output = target_output,
       user_function = hypothesis_gene_from_fit |> quote(),
       fit = target_input |> HPCell::is_target(),
-      args_rds = args_rds
+      args = args_target |> HPCell::is_target()
     ) |>
     as_brmde_hpc()
 }
@@ -581,25 +562,25 @@ adjust.HPCell <- function(input_hpc,
     )
   }
 
-  dots <- list(...)
-  if (!is.null(dots$re_formula) &&
-      !identical(dots$re_formula, NA) &&
-      inherits(dots$re_formula, "formula")) {
-    dots$re_formula <- formula_text(dots$re_formula)
-  }
-
-  args_rds <- write_args_rds(
-    brmde_input_dir(input_hpc$initialisation$store),
-    "adjust_args",
-    c(list(nullify = nullify), dots)
-  )
+  args_target <- paste0(target_output, "_args")
+  args <- as.call(c(
+    quote(list),
+    list(nullify = nullify),
+    as.list(substitute(list(...)))[-1L]
+  ))
 
   input_hpc |>
+    HPCell::hpc_single(
+      target_output = args_target,
+      user_function = identity |> quote(),
+      x = call("quote", args),
+      deployment = "main"
+    ) |>
     HPCell::hpc_iterate(
       target_output = target_output,
       user_function = adjust_gene_from_fit |> quote(),
       fit = target_input |> HPCell::is_target(),
-      args_rds = args_rds
+      args = args_target |> HPCell::is_target()
     ) |>
     as_brmde_hpc()
 }
