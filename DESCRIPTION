@@ -1,0 +1,49 @@
+Package: brmDE
+Title: Gene-wise Bayesian Differential Expression with brms
+Version: 0.0.1
+Authors@R: c(
+    person("Stefano", "Mangiola", email = "mangiolastefano@gmail.com",
+           role = c("aut", "cre"))
+    )
+Description: Fit, test, and adjust one gene at a time using brms count
+    models. An HPCell pipeline composes estimate, hypothesis, and adjust
+    onto the same targets graph.
+License: GPL-3
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Depends:
+    R (>= 4.1.0)
+Imports:
+    brms,
+    dplyr,
+    glue,
+    HPCell,
+    instantiate (>= 0.2.3),
+    parallel,
+    rlang,
+    stats,
+    stringr,
+    tibble,
+    tidybulk,
+    targets,
+    SummarizedExperiment,
+    edgeR
+Suggests:
+    cmdstanr,
+    parallelly,
+    airway,
+    crew,
+    callr,
+    knitr,
+    rmarkdown,
+    tidySummarizedExperiment,
+    testthat (>= 3.0.0)
+VignetteBuilder: knitr
+SystemRequirements: CmdStan (https://mc-stan.org/users/interfaces/cmdstan), C++14
+Remotes:
+    MangiolaLaboratory/HPCell@ed763c6f53cfedf63d3a3353ec5ffcfd09bfe0e6
+Additional_repositories: https://stan-dev.r-universe.dev
+Config/testthat/edition: 3
+URL: https://github.com/MangiolaLaboratory
+BugReports: https://github.com/MangiolaLaboratory/issues
+Config/roxygen2/version: 8.0.0

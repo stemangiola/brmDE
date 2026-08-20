@@ -1,0 +1,10 @@
+^HPCell$
+^functions$
+^dynamic_tar_script\.R$
+^batch_run\.R$
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.cursor$
+^canvases$
+^\.github$
+^LICENSE\.md$

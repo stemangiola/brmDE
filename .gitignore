@@ -1,0 +1,17 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.so
+*.o
+*.dll
+inst/doc
+
+# Reference checkout of HPCell, not part of this package
+HPCell/
+
+# Local scratch from the earlier pipeline, not part of this package
+batch_run.R
+dynamic_tar_script.R
+functions/
+brmDE.Rproj

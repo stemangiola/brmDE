@@ -1,0 +1,198 @@
+---
+title: "Gene-wise Bayesian DE with brmDE"
+author: "Stefano Mangiola"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Gene-wise Bayesian DE with brmDE}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+# Fitting chunks run only when CmdStan is available (same gate as sccomp).
+run_vignette <- instantiate::stan_cmdstan_exists()
+```
+
+# Overview
+
+`brmDE` fits one gene at a time with [brms](https://paul-buerkner.github.io/brms/), then composes those fits into an [HPCell](https://github.com/MangiolaLaboratory/HPCell) `targets` pipeline. The typical flow is:
+
+1. scale with TMM (`tidybulk::scale_abundance()`) and set `offset = log(1 / multiplier)`
+2. estimate edgeR **dispersion** once on the full matrix (`estimate_dispersion()`)
+3. fit each gene with `estimate_gene()`, using the dispersion to inform the negative binomial shape prior
+4. optionally run posterior **hypothesis** tests and **adjust** for nuisance covariates
+
+`estimate_gene()` never computes the offset or the dispersion itself. Those are inputs.
+
+Fitting chunks below are gated by `instantiate::stan_cmdstan_exists()`, so the vignette still builds when CmdStan is missing.
+
+# Install CmdStan
+
+`brmDE` uses `cmdstanr` (not on CRAN) for the default Stan backend. Three steps:
+
+1. R package install of `brmDE`
+2. R install of `cmdstanr`
+3. `cmdstanr` install of CmdStan itself
+
+```{r install, eval = FALSE}
+# from this repository
+devtools::install()
+
+install.packages(
+  "cmdstanr",
+  repos = c("https://stan-dev.r-universe.dev/", getOption("repos"))
+)
+
+cmdstanr::check_cmdstan_toolchain(fix = TRUE)
+cmdstanr::install_cmdstan()
+```
+
+```{r packages, message = FALSE}
+library(brmDE)
+library(tidybulk)
+library(tidySummarizedExperiment)
+library(SummarizedExperiment)
+data("airway", package = "airway")
+
+airway$dex <- relevel(factor(airway$dex), ref = "untrt")
+airway$cell <- droplevels(airway$cell)
+```
+
+# One gene, with dispersion
+
+For a single gene you still prepare the offset and dispersion on a multi-gene matrix. After those columns exist, `filter()` the feature set you want to fit. These steps do not need CmdStan.
+
+Get the TMM `multiplier` from `tidybulk::scale_abundance()`, then form the library-size offset as `log(1 / multiplier)` with `mutate()` from tidySummarizedExperiment (same convention as the immuneBodyMap / HPCell pipeline).
+
+```{r one-gene-dispersion, message = FALSE}
+
+se <- airway |>
+  identify_abundant(formula_design = ~ dex) |>
+  scale_abundance(method = "TMM") |>
+  # library size factor is the reciprocal of the multiplier
+  mutate(offset = log(1 / multiplier))
+
+se <- se |> estimate_dispersion( formula = ~ dex + (1 | cell))
+
+# One rowData column per estimate, both named by arguments of the same name:
+#   dispersion                 = tagwise phi_g
+#   dispersion_degrees_freedom = d_eff = df.residual + prior.df
+head(as.data.frame(rowData(se)[, c("dispersion", "dispersion_degrees_freedom")]))
+head(se$offset)
+
+# Choose genes only after offset and dispersion are in the SE metadata
+se_gene <- se |> filter(.feature == "ENSG00000120129")
+```
+
+## Student-t shape prior (default)
+
+The default `shape_prior = "student_t"` adds
+
+`shape ~ 1 + offset(log(1/dispersion))`
+
+and places a Student-t prior on the shape intercept. The scale of that prior comes from `dispersion_degrees_freedom` via `sqrt(trigamma(d_eff / 2))`.
+
+```{r one-gene-student, message = FALSE, warning = FALSE, eval = run_vignette}
+fit_t <- estimate_gene(
+  se_gene,
+  formula = ~ dex + (1 | cell),
+  offset = "offset",
+  dispersion = "dispersion",
+  shape_prior = "student_t",
+  shape_prior_df = 3,
+  family = brms::zero_inflated_negbinomial(),
+  chains = 1,
+  iter = 250,
+  warmup = 100,
+  cores = 1,
+  backend = "cmdstanr",
+  refresh = 0,
+  silent = 2
+)
+
+hypothesis_gene(fit_t, "dextrt = 0")
+
+adjust_gene(
+  fit_t,
+  nullify = "dex",
+  re_formula = ~(1 | cell)
+)
+```
+
+## Conjugate gamma shape prior
+
+Alternatively, `shape_prior = "gamma"` puts a gamma prior directly on the scalar `shape` parameter (no shape submodel). The prior mean is `1 / phi_g` for that gene.
+
+```{r one-gene-gamma, message = FALSE, warning = FALSE, eval = run_vignette}
+fit_g <- estimate_gene(
+  se_gene,
+  formula = ~ dex + (1 | cell),
+  offset = "offset",
+  dispersion = "dispersion",
+  shape_prior = "gamma",
+  family = brms::zero_inflated_negbinomial(),
+  chains = 1,
+  iter = 250,
+  warmup = 100,
+  cores = 1,
+  backend = "cmdstanr",
+  refresh = 0,
+  silent = 2
+)
+```
+
+Both routes share the same log-scale spread, `trigamma(d_eff / 2)`. They differ in tail weight and in whether they centre the *median* (Student-t) or the *mean* (gamma) of the shape on edgeR's estimate. See `?estimate_dispersion` for the derivation.
+
+# Full scalable pipeline
+
+For many genes, start a pipeline with `brmDE()`, then append `estimate()`, `hypothesis()`, and `adjust()`. Printing the object runs it (`print` calls `evaluate_hpc()`).
+
+`brmDE()` does not take a gene list: offset and dispersion belong on the full matrix. After those columns exist, `filter()` any feature set and pass that object into the pipeline.
+
+```{r pipeline, message = FALSE, warning = FALSE, eval = run_vignette}
+# `se` already has offset + dispersion from above; subset genes here
+pipeline <- se |>
+  filter(.feature == "ENSG00000120129") |>
+  brmDE(store = tempfile(pattern = "brmde_")) |>
+  estimate(
+    ~ dex + (1 | cell),
+    offset = "offset",
+    dispersion = "dispersion",
+    shape_prior = "student_t",
+    family = brms::negbinomial(),
+    chains = 1,
+    iter = 250,
+    warmup = 100,
+    cores = 1,
+    refresh = 0,
+    silent = 2
+  ) |>
+  hypothesis("dextrt = 0") |>
+  adjust(nullify = "dex")
+
+# Runs the targets graph
+pipeline
+```
+
+# What the pipeline writes
+
+| Step | Column / target | Role |
+|------|-----------------|------|
+| tidybulk / tidySE (or `brmDE()`) | `colData` `"multiplier"`, `"offset"` | TMM scale factor and `log(1 / multiplier)` |
+| `estimate()` → `estimate_dispersion()` | `rowData` `"dispersion"`, `"dispersion_degrees_freedom"` | edgeR \(\phi_g\) and \(d_{\mathrm{eff}}\) |
+| `estimate()` → `estimate_gene()` | `brms_fit` per gene | posterior fit with shape prior from dispersion |
+| `hypothesis()` | hypothesis table | posterior tests |
+| `adjust()` | adjusted residuals / fitted | nuisance covariates nullified |
+
+# Dispersion priors at a glance
+
+| `shape_prior` | Model for shape | Prior |
+|---------------|-----------------|-------|
+| `"student_t"` (default) | `shape ~ 1 + offset(log(1/dispersion))` | Student-t on the intercept; scale from `d_eff` |
+| `"gamma"` | scalar `shape` (no submodel) | `gamma(d_eff/2, d_eff * dispersion/2)` |
+
+`prior.df` from `estimateDisp()` is shared across genes (unless `robust = TRUE` in edgeR). What varies per gene is the tagwise `dispersion` that sets the prior location.
