@@ -45,7 +45,7 @@ adjust_gene(
 )
 ```
 
-Neither `estimate_gene()` nor `brmDE()` normalises. Compute the offset yourself on all genes (TMM, or anything else), store it as a `colData` column, and pass that name to `offset`. Dispersion is different: the pipeline writes edgeR's estimate to `rowData` for you before fitting.
+Neither `estimate_gene()` nor `brmDE()` normalises. Compute the offset yourself on all genes (TMM, or anything else), store it as a `colData` column, and pass that name to `offset`. Dispersion is the same kind of whole-matrix quantity: run `estimate_dispersion()` before `brmDE()` and pass the two column names to `estimate()`.
 
 The two models are given separately. `formula_abundance` is the mean model, and it is also the design `estimate_dispersion()` hands to edgeR. `formula_dispersion` (default `~1`) is the model for the negative binomial shape. Neither should carry an offset: the library size offset and the `log(1/dispersion)` offset are appended for you, and the assembled formulas are printed as a message so you can check them:
 
@@ -69,6 +69,7 @@ se |>
     ~ dex + (1 | cell),
     offset = "offset",
     dispersion = "dispersion",
+    dispersion_degrees_freedom = "dispersion_degrees_freedom",
     family = brms::negbinomial()
   ) |>
   hypothesis("dextrt = 0") |>
@@ -85,11 +86,11 @@ vignette("brmDE", package = "brmDE")
 
 ### Dispersion priors
 
-`estimate_dispersion()` writes one `rowData` column per estimate: `dispersion` holds edgeR's gene-wise \(\phi_g\) and `dispersion_degrees_freedom` holds the effective degrees of freedom behind it, `d_eff = df.residual + prior.df`. Both names are arguments (`dispersion=`, `dispersion_degrees_freedom=`), and the same two names are passed on to `estimate()` / `estimate_gene()`. `estimate_gene()` turns that pair into a prior on the negative binomial shape, in one of two equivalent parameterisations chosen with `shape_prior`:
+`estimate_dispersion()` writes one `rowData` column per estimate: `dispersion` holds edgeR's gene-wise \(\phi_g\) and `dispersion_degrees_freedom` holds the effective degrees of freedom behind it, `d_eff = df.residual + prior.df`. Both names are arguments (`dispersion=`, `dispersion_degrees_freedom=`), and the same two names are passed on to `estimate()` / `estimate_gene()`. Both default to `NULL` (`offset(0)` on the shape submodel, Student-t log-scale SD of 1); computing them and passing both columns is the preferred starting point. `estimate_gene()` turns that pair into a prior on the negative binomial shape, in one of two equivalent parameterisations chosen with `shape_prior`:
 
 | `shape_prior` | Prior | Notes |
 | --- | --- | --- |
-| `"student_t"` (default) | `student_t` on the intercept of a `shape ~ 1 + offset(log(1/dispersion))` submodel | Heavier tails, tolerant of over-shrunk genes; leaves the submodel open to dispersion covariates |
+| `"student_t"` (default) | `student_t` on the intercept of a `shape ~ 1 + offset(log(1/dispersion))` submodel (`offset(0)` if `dispersion` is omitted) | Heavier tails, tolerant of over-shrunk genes; leaves the submodel open to dispersion covariates |
 | `"gamma"` | `gamma(d_eff/2, d_eff * dispersion/2)` on `shape` directly, no submodel | Conjugate to edgeR's scaled inverse chi-square hierarchy; lighter tails |
 
 Both encode the same log-scale spread, `trigamma(d_eff / 2)`, because a chi-square *is* a gamma, and both put all their mass on a positive shape — the Student-t by exponentiating an unbounded parameter through brms' log link, the gamma by bounding it. They are not, however, reparameterisations of each other: the Student-t centres the *median* shape on edgeR's estimate while the gamma centres the *mean*, leaving their log-scale centres about `1/d_eff` apart. See `?estimate_dispersion` for the derivation and references.

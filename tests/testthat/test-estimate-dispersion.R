@@ -14,7 +14,7 @@ default_zinb_priors <- function(data,
                                 offset,
                                 formula = NULL,
                                 dispersion = NULL,
-                                dispersion_degrees_freedom = "dispersion_degrees_freedom",
+                                dispersion_degrees_freedom = NULL,
                                 shape_prior = "student_t",
                                 shape_prior_df = 3) {
   brmDE:::default_gene_priors(
@@ -94,20 +94,21 @@ test_that("shape_intercept_scale uses d_eff, defaulting only when unasked", {
   d_eff <- 9.81176
   dat <- tibble::tibble(dispersion = 0.05, dispersion_degrees_freedom = d_eff)
   expect_equal(
-    brmDE:::shape_intercept_scale(dat, "dispersion", "dispersion_degrees_freedom", nu = 3),
+    brmDE:::shape_intercept_scale(dat, "dispersion_degrees_freedom", nu = 3),
     sqrt(trigamma(d_eff / 2)) / sqrt(3)
   )
 
-  # No dispersion requested at all: the documented default for a user-supplied
-  # shape submodel.
-  expect_equal(brmDE:::shape_intercept_scale(dat, NULL, "dispersion_degrees_freedom", nu = 3), 1)
-  # Dispersion requested but no degrees of freedom recorded is an error, not a
-  # scale that quietly stops depending on the data.
+  # Degrees of freedom omitted: documented default SD, converted to scale.
+  expect_equal(
+    brmDE:::shape_intercept_scale(dat, NULL, nu = 3),
+    brmDE:::student_t_scale_for_sd(brmDE:::shape_prior_sd_default, 3)
+  )
+  # A df name that is not a column is an error, not a silent default.
   expect_error(
     brmDE:::shape_intercept_scale(
-      tibble::tibble(dispersion = 0.05), "dispersion", "dispersion_degrees_freedom", nu = 3
+      tibble::tibble(dispersion = 0.05), "dispersion_degrees_freedom", nu = 3
     ),
-    "without its degrees of freedom column"
+    "not found"
   )
 })
 
@@ -118,7 +119,6 @@ test_that("shape_intercept_scale rejects unusable degrees of freedom", {
     expect_error(
       brmDE:::shape_intercept_scale(
         tibble::tibble(dispersion = 0.05, dispersion_degrees_freedom = bad),
-        "dispersion",
         "dispersion_degrees_freedom",
         nu = 3
       ),
@@ -166,6 +166,7 @@ test_that("default_zinb_priors sets the shape intercept from d_eff", {
     "offset",
     formula = f,
     dispersion = "dispersion",
+    dispersion_degrees_freedom = "dispersion_degrees_freedom",
     shape_prior_df = 3
   )
   shape_int <- priors$prior[priors$class == "Intercept" & priors$dpar == "shape"]
@@ -181,6 +182,7 @@ test_that("default_zinb_priors sets the shape intercept from d_eff", {
     "offset",
     formula = f,
     dispersion = "dispersion",
+    dispersion_degrees_freedom = "dispersion_degrees_freedom",
     shape_prior_df = 3
   )
   expect_equal(scale, sqrt(trigamma(9.81176 / 2)) * sqrt(1 / 3), tolerance = 1e-6)
@@ -202,7 +204,9 @@ test_that("shape_prior_df changes both the df and the scale", {
   )
   priors <- make_default_zinb_priors(
     dat, "counts", "offset",
-    formula = f, dispersion = "dispersion", shape_prior_df = 10
+    formula = f, dispersion = "dispersion",
+    dispersion_degrees_freedom = "dispersion_degrees_freedom",
+    shape_prior_df = 10
   )
   shape_int <- priors$prior[priors$class == "Intercept" & priors$dpar == "shape"]
   expect_identical(shape_int, "student_t(10, 0, brmde_shape_scale)")
@@ -210,7 +214,9 @@ test_that("shape_prior_df changes both the df and the scale", {
     make_default_zinb_stanvar(
       "brmde_shape_scale",
       dat, "counts", "offset",
-      formula = f, dispersion = "dispersion", shape_prior_df = 10
+      formula = f, dispersion = "dispersion",
+      dispersion_degrees_freedom = "dispersion_degrees_freedom",
+      shape_prior_df = 10
     ),
     sqrt(trigamma(9.81176 / 2)) * sqrt(8 / 10),
     tolerance = 1e-6
@@ -381,8 +387,8 @@ test_that("formula_dispersion becomes the shape submodel, offset and all", {
   shape_txt <- paste(deparse(f$pforms$shape), collapse = " ")
   expect_match(shape_txt, "^shape ~ cell \\+ offset\\(log\\(1/dispersion\\)\\)$")
 
-  # Dispersion covariates are fitted even without an edgeR estimate; there is
-  # simply no offset to anchor them to.
+  # Dispersion covariates are fitted even without an edgeR estimate; the
+  # offset is then 0 rather than log(1/dispersion).
   f_no_disp <- brmDE:::prepare_formula(
     ~dex,
     formula_dispersion = ~cell,
@@ -391,7 +397,7 @@ test_that("formula_dispersion becomes the shape submodel, offset and all", {
   )
   expect_equal(
     paste(deparse(f_no_disp$pforms$shape), collapse = " "),
-    "shape ~ cell"
+    "shape ~ cell + offset(0)"
   )
 })
 
@@ -437,6 +443,14 @@ test_that("prepare_formula reports the formulas it assembled", {
       dispersion = "dispersion"
     ),
     "Dispersion model \\(offset added by brmDE\\): shape ~ 1 \\+ offset\\(log\\(1/dispersion\\)\\)"
+  )
+  expect_message(
+    brmDE:::prepare_formula(
+      ~dex,
+      abundance = "counts",
+      offset = "offset"
+    ),
+    "Dispersion model \\(offset added by brmDE\\): shape ~ 1 \\+ offset\\(0\\)"
   )
   # Nothing is announced as added when the user wrote the offset themselves.
   expect_message(
@@ -502,18 +516,42 @@ test_that("the two routes centre different summaries of the shape", {
   expect_gt(abs(gap(4) - (-1 / 4)) / abs(gap(4)), 0.07)
 })
 
+test_that("prepare_formula uses a zero shape offset when dispersion is omitted", {
+  f <- suppressMessages(
+    brmDE:::prepare_formula(
+      ~dex,
+      abundance = "counts",
+      offset = "offset"
+    )
+  )
+  expect_true(brmDE:::has_shape_submodel(f))
+  expect_equal(
+    paste(deparse(f$pforms$shape), collapse = " "),
+    "shape ~ 1 + offset(0)"
+  )
+})
+
 test_that("shape_gamma_parameters uses brms' vague gamma when unasked", {
   vague <- list(shape = 0.01, rate = 0.01)
   dat <- tibble::tibble(dispersion = 0.05, dispersion_degrees_freedom = 9.81176)
-  expect_equal(brmDE:::shape_gamma_parameters(dat, NULL, "dispersion_degrees_freedom"), vague)
+  expect_equal(brmDE:::shape_gamma_parameters(dat, NULL, NULL), vague)
 })
 
-test_that("shape_gamma_parameters needs both columns once dispersion is asked for", {
+test_that("shape_gamma_parameters needs both columns or neither", {
+  dat <- tibble::tibble(dispersion = 0.05, dispersion_degrees_freedom = 9.8)
+  expect_error(
+    brmDE:::shape_gamma_parameters(dat, "dispersion", NULL),
+    "both `dispersion` and `dispersion_degrees_freedom`"
+  )
+  expect_error(
+    brmDE:::shape_gamma_parameters(dat, NULL, "dispersion_degrees_freedom"),
+    "both `dispersion` and `dispersion_degrees_freedom`"
+  )
   expect_error(
     brmDE:::shape_gamma_parameters(
       tibble::tibble(dispersion = 0.05), "dispersion", "dispersion_degrees_freedom"
     ),
-    "without its degrees of freedom column"
+    "not found"
   )
   expect_error(
     brmDE:::shape_gamma_parameters(
@@ -573,7 +611,9 @@ test_that('shape_prior = "gamma" puts a gamma on shape directly', {
   )
   priors <- make_default_zinb_priors(
     dat, "counts", "offset",
-    formula = f, dispersion = "dispersion", shape_prior = "gamma"
+    formula = f, dispersion = "dispersion",
+    dispersion_degrees_freedom = "dispersion_degrees_freedom",
+    shape_prior = "gamma"
   )
   shape_prior <- priors$prior[priors$class == "shape"]
   expect_length(shape_prior, 1L)
@@ -583,7 +623,9 @@ test_that('shape_prior = "gamma" puts a gamma on shape directly', {
   )
   stanvars <- default_zinb_priors(
     dat, "counts", "offset",
-    formula = f, dispersion = "dispersion", shape_prior = "gamma"
+    formula = f, dispersion = "dispersion",
+    dispersion_degrees_freedom = "dispersion_degrees_freedom",
+    shape_prior = "gamma"
   )$stanvars
   expect_equal(stanvar_value(stanvars, "brmde_shape_gamma_shape"), d_eff / 2)
   expect_equal(stanvar_value(stanvars, "brmde_shape_gamma_rate"), d_eff * phi / 2)
@@ -598,13 +640,15 @@ test_that('shape_prior = "gamma" rejects a user shape submodel', {
   expect_error(
     make_default_zinb_priors(
       dat, "counts", "offset",
-      formula = f, dispersion = "dispersion", shape_prior = "gamma"
+      formula = f, dispersion = "dispersion",
+      dispersion_degrees_freedom = "dispersion_degrees_freedom",
+      shape_prior = "gamma"
     ),
     "has a shape submodel"
   )
 })
 
-test_that("a dispersion column without its degrees of freedom is an error", {
+test_that("a dispersion column without degrees of freedom uses the default scale", {
   dat <- airway_one_gene_tbl()
   dat$dispersion <- 0.05
   f <- brmDE:::prepare_formula(
@@ -613,12 +657,32 @@ test_that("a dispersion column without its degrees of freedom is an error", {
     offset = "offset",
     dispersion = "dispersion"
   )
-  expect_error(
-    make_default_zinb_priors(
+  scale <- make_default_zinb_stanvar(
+    "brmde_shape_scale",
+    dat, "counts", "offset",
+    formula = f, dispersion = "dispersion"
+  )
+  expect_equal(
+    scale,
+    brmDE:::student_t_scale_for_sd(brmDE:::shape_prior_sd_default, 3)
+  )
+})
+
+test_that("omitting dispersion still builds a shape intercept prior", {
+  dat <- airway_one_gene_tbl()
+  f <- suppressMessages(
+    brmDE:::prepare_formula(~dex, abundance = "counts", offset = "offset")
+  )
+  priors <- make_default_zinb_priors(dat, "counts", "offset", formula = f)
+  shape_int <- priors$prior[priors$class == "Intercept" & priors$dpar == "shape"]
+  expect_identical(shape_int, "student_t(3, 0, brmde_shape_scale)")
+  expect_equal(
+    make_default_zinb_stanvar(
+      "brmde_shape_scale",
       dat, "counts", "offset",
-      formula = f, dispersion = "dispersion"
+      formula = f
     ),
-    "without its degrees of freedom column"
+    brmDE:::student_t_scale_for_sd(brmDE:::shape_prior_sd_default, 3)
   )
 })
 

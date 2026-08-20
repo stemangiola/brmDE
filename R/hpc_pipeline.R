@@ -248,6 +248,7 @@ collect_brmde_hpc <- function(input_hpc) {
 #'     ~ dex + (1 | cell),
 #'     offset = "offset",
 #'     dispersion = "dispersion",
+#'     dispersion_degrees_freedom = "dispersion_degrees_freedom",
 #'     family = brms::negbinomial()
 #'   ) |>
 #'   hypothesis("dextrt = 0") |>
@@ -264,7 +265,8 @@ collect_brmde_hpc <- function(input_hpc) {
 #' #       tasks_max = 5
 #' #     )
 #' #   ) |>
-#' #   estimate(~ dex + (1 | cell), offset = "offset", dispersion = "dispersion")
+#' #   estimate(~ dex + (1 | cell), offset = "offset", dispersion = "dispersion",
+#' #            dispersion_degrees_freedom = "dispersion_degrees_freedom")
 #' }
 #'
 #' @export
@@ -364,16 +366,21 @@ brmDE <- function(.data,
 #'   passed to [estimate_gene()]. `~1` by default.
 #' @param offset Required name of the precomputed offset column in `colData`
 #'   (the same argument as [estimate_gene()]).
-#' @param dispersion Required name of the `rowData` dispersion column, as
-#'   written by [estimate_dispersion()].
-#' @param dispersion_degrees_freedom Name of the effective degrees of freedom
-#'   column written alongside it by [estimate_dispersion()].
+#' @param dispersion Optional name of the `rowData` dispersion column, as
+#'   written by [estimate_dispersion()]. Default `NULL` puts a zero offset on
+#'   the shape submodel (see [estimate_gene()]).
+#' @param dispersion_degrees_freedom Optional name of the effective degrees of
+#'   freedom column written alongside it by [estimate_dispersion()]. Default
+#'   `NULL` uses a default Student-t SD of 1 on the log-shape intercept.
 #'
 #' @details
 #' Neither the offset nor the dispersion is computed here. Run
 #' [estimate_dispersion()] on the whole object before [brmDE()], exactly as
-#' you compute the offset, so that both are ordinary columns of the input.
-#' Gene-wise fitting is the only thing this pipeline does.
+#' you compute the offset, so that both are ordinary columns of the input, then
+#' pass those column names here. Gene-wise fitting is the only thing this
+#' pipeline does. Omitting `dispersion` and/or `dispersion_degrees_freedom`
+#' is valid (zero shape offset, default prior SD) but computing and passing
+#' both is the preferred starting point.
 #'
 #' Prior constants derived from each gene are passed to Stan as data, so every
 #' gene generates identical Stan code and cmdstanr compiles it at most once per
@@ -388,7 +395,8 @@ estimate <- function(input_hpc,
                      formula_abundance,
                      formula_dispersion = ~1,
                      offset,
-                     dispersion,
+                     dispersion = NULL,
+                     dispersion_degrees_freedom = NULL,
                      ...) {
   UseMethod("estimate")
 }
@@ -399,7 +407,8 @@ estimate.default <- function(input_hpc,
                              formula_abundance,
                              formula_dispersion = ~1,
                              offset,
-                             dispersion,
+                             dispersion = NULL,
+                             dispersion_degrees_freedom = NULL,
                              ...) {
   stop(
     "estimate() expects a pipeline from brmDE(). ",
@@ -414,14 +423,18 @@ estimate.HPCell <- function(input_hpc,
                             formula_abundance,
                             formula_dispersion = ~1,
                             offset,
-                            dispersion,
-                            dispersion_degrees_freedom = "dispersion_degrees_freedom",
+                            dispersion = NULL,
+                            dispersion_degrees_freedom = NULL,
                             target_output = "brms_fit",
                             ...) {
   offset <- check_offset_name(offset)
-  dispersion <- check_dispersion_name(dispersion)
-  dispersion_degrees_freedom <-
-    check_degrees_freedom_name(dispersion_degrees_freedom)
+  if (!is.null(dispersion)) {
+    dispersion <- check_dispersion_name(dispersion)
+  }
+  if (!is.null(dispersion_degrees_freedom)) {
+    dispersion_degrees_freedom <-
+      check_degrees_freedom_name(dispersion_degrees_freedom)
+  }
   abundance <- input_hpc$initialisation$abundance
 
   dots <- list(...)

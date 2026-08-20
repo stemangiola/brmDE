@@ -25,21 +25,28 @@
 #'   than by you, and the assembled formula is reported with a message.
 #' @param formula_dispersion One-sided model for the negative binomial shape,
 #'   `~1` by default. Used only when `shape_prior = "student_t"`, where it
-#'   becomes a `shape ~ <terms> + offset(log(1/<dispersion>))` submodel: the
-#'   edgeR dispersion enters as an offset on brms' log link, so the terms you
-#'   give describe departures from it. Do not write the offset yourself.
+#'   becomes a `shape ~ <terms> + offset(...)` submodel. The offset is
+#'   `log(1/<dispersion>)` when `dispersion` is supplied, and `0` when it is
+#'   `NULL`, so the terms you give describe departures from edgeR's estimate
+#'   or, with a zero offset, the log-shape itself. Do not write the offset
+#'   yourself.
 #' @param offset Required name of the precomputed offset column in `data`
 #'   (or in `colData` if `data` is a `SummarizedExperiment`). The offset is
 #'   never calculated inside this function.
 #' @param dispersion Optional name of a precomputed edgeR dispersion column
-#'   in `rowData` (or in `data`), used to build the prior on the negative
-#'   binomial shape as described under `shape_prior`. [estimate_dispersion()]
-#'   writes this column; this function does not compute it.
-#' @param dispersion_degrees_freedom Name of the effective degrees of freedom
-#'   column that accompanies `dispersion`, as written by
-#'   [estimate_dispersion()]. Only consulted when `dispersion` is supplied;
-#'   when the column is absent the shape prior falls back to a weakly
-#'   informative default.
+#'   in `rowData` (or in `data`). Default `NULL` puts a zero offset on the
+#'   shape submodel: the intercept is then `log(shape)`, with prior median
+#'   shape `1`. Use this when the sample size is large enough that an
+#'   informative location from previous tools is unnecessary. When supplied,
+#'   the column becomes `offset(log(1/<dispersion>))` as described under
+#'   `shape_prior`. [estimate_dispersion()] writes this column; this function
+#'   does not compute it.
+#' @param dispersion_degrees_freedom Optional name of the effective degrees
+#'   of freedom column that accompanies `dispersion`, as written by
+#'   [estimate_dispersion()]. Default `NULL` gives the Student-t shape
+#'   intercept a log-scale SD of 1, so the prior scale does not depend on
+#'   previous tools. Independent of `dispersion`: you can pass one, both, or
+#'   neither.
 #' @param shape_prior How edgeR's dispersion is turned into a prior on the
 #'   shape parameter. Both forms imply the same log-scale spread,
 #'   `trigamma(d_eff / 2)`, but they are not reparameterisations of one
@@ -49,19 +56,22 @@
 #'   bounding it. See [estimate_dispersion()] for the derivation.
 #'
 #'   * `"student_t"` (default) adds a
-#'     `shape ~ 1 + offset(log(1/dispersion))` submodel and puts a Student-t
-#'     prior on its intercept, scaled by `shape_prior_df`. brms gives the
-#'     submodel a log link, so this is symmetric in `log(shape)` and centres
-#'     the *median* shape on `1/dispersion`. Heavier-tailed, so more forgiving
-#'     when edgeR has over-shrunk a gene, and the submodel stays available for
-#'     dispersion covariates.
+#'     `shape ~ 1 + offset(log(1/dispersion))` submodel (or `offset(0)` when
+#'     `dispersion` is `NULL`) and puts a Student-t prior on its intercept,
+#'     scaled by `shape_prior_df`. brms gives the submodel a log link, so this
+#'     is symmetric in `log(shape)` and centres the *median* shape on
+#'     `1/dispersion` (or on `1` when the offset is 0). Heavier-tailed, so
+#'     more forgiving when edgeR has over-shrunk a gene, and the submodel
+#'     stays available for dispersion covariates.
 #'   * `"gamma"` adds no submodel and instead puts
 #'     `gamma(d_eff/2, d_eff * dispersion/2)` on `shape` directly. This is the
 #'     conjugate form implied by the edgeR hierarchy, in which the dispersion
 #'     is scaled inverse chi-square and hence the precision `1/dispersion` is
 #'     gamma. It centres the *mean* shape on `1/dispersion`, which sits
 #'     `digamma(d_eff/2) - log(d_eff/2)`, roughly `-1/d_eff`, from the
-#'     Student-t centre on the log scale. Lighter-tailed. A scalar `shape`
+#'     Student-t centre on the log scale. Lighter-tailed. Needs both
+#'     `dispersion` and `dispersion_degrees_freedom`, or neither (in which
+#'     case brms' vague `gamma(0.01, 0.01)` is used). A scalar `shape`
 #'     carries no linear predictor, so a `formula_dispersion` with terms is an
 #'     error here.
 #' @param shape_prior_df Degrees of freedom \eqn{\nu} of the Student-t prior
@@ -71,8 +81,8 @@
 #'   `scale * sqrt(nu / (nu - 2))`; the scale is therefore
 #'   `sd * sqrt((nu - 2) / nu)` for a target `sd`. Must exceed 2, since the
 #'   Student-t standard deviation does not exist at or below 2 degrees of
-#'   freedom. The target `sd` comes from the effective degrees of freedom
-#'   recorded by [estimate_dispersion()]; see its Details for the derivation.
+#'   freedom. The target `sd` is `sqrt(trigamma(d_eff / 2))` when
+#'   `dispersion_degrees_freedom` is supplied, and 1 when it is omitted.
 #' @param family A brms family. Default is
 #'   [brms::zero_inflated_negbinomial()].
 #' @param abundance Name of the count column, or assay name if `data` is a
@@ -121,7 +131,7 @@ estimate_gene <- function(data,
                           formula_dispersion = ~1,
                           offset,
                           dispersion = NULL,
-                          dispersion_degrees_freedom = "dispersion_degrees_freedom",
+                          dispersion_degrees_freedom = NULL,
                           shape_prior = c("student_t", "gamma"),
                           shape_prior_df = 3,
                           family = NULL,
@@ -145,10 +155,10 @@ estimate_gene <- function(data,
   shape_prior_df <- check_student_df(shape_prior_df)
   if (!is.null(dispersion)) {
     dispersion <- check_dispersion_name(dispersion)
+  }
+  if (!is.null(dispersion_degrees_freedom)) {
     dispersion_degrees_freedom <-
       check_degrees_freedom_name(dispersion_degrees_freedom)
-  } else {
-    dispersion_degrees_freedom <- NULL
   }
   prepared <- prepare_gene_data(
     data,

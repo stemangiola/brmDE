@@ -35,9 +35,10 @@ test_that("prepare_formula adds response and offset", {
   se <- airway_one_gene()
   expect_true(all(c("dex", "cell") %in% colnames(SummarizedExperiment::colData(se))))
   f <- brmDE:::prepare_formula(~ dex + (1 | cell), abundance = "counts", offset = "offset")
-  txt <- paste(deparse(f), collapse = " ")
+  txt <- paste(deparse(f$formula), collapse = " ")
   expect_match(txt, "counts")
   expect_match(txt, "offset\\s*\\(\\s*offset\\s*\\)")
+  expect_match(paste(deparse(f$pforms$shape), collapse = " "), "offset\\(0\\)")
 })
 
 test_that("prepare_formula does not duplicate an existing offset", {
@@ -48,7 +49,8 @@ test_that("prepare_formula does not duplicate an existing offset", {
     abundance = "counts",
     offset = "offset"
   )
-  txt <- paste(deparse(f), collapse = " ")
+  main <- if (inherits(f, "brmsformula")) f$formula else f
+  txt <- paste(deparse(main), collapse = " ")
   expect_equal(length(gregexpr("offset\\s*\\(", txt)[[1]]), 1)
 })
 

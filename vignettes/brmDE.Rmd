@@ -76,7 +76,10 @@ se <- airway |>
   # library size factor is the reciprocal of the multiplier
   mutate(offset = log(1 / multiplier))
 
-se <- se |> estimate_dispersion(formula_abundance = ~ dex + (1 | cell))
+# Because the edgeR dispersion estimation (in the backend of the `estimate_dispersion` function)
+# cannot model mixed effect model, we do the next best thing
+# by adding the cell random effect to the formula_abundance as fixed effect
+se <- se |> estimate_dispersion(formula_abundance = ~ dex + cell)
 
 # One rowData column per estimate, both named by arguments of the same name:
 #   dispersion                 = tagwise phi_g
@@ -99,9 +102,11 @@ Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offs
 Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))
 ```
 
+`dispersion` and `dispersion_degrees_freedom` both default to `NULL`. Leaving `dispersion` unset puts a zero offset on the shape submodel (the intercept is then `log(shape)` itself), which is useful when the sample size is large enough that an informative location from edgeR is unnecessary. Leaving `dispersion_degrees_freedom` unset gives the Student-t intercept a log-scale SD of 1, so the prior scale does not depend on previous tools. Computing both columns with `estimate_dispersion()` and passing their names, as below, is the preferred starting point.
+
 ## Student-t shape prior (default)
 
-The default `shape_prior = "student_t"` builds the shape submodel from `formula_dispersion` and places a Student-t prior on its intercept. The scale of that prior comes from `dispersion_degrees_freedom` via `sqrt(trigamma(d_eff / 2))`. Because the dispersion enters as an offset on a log link, any terms you add to `formula_dispersion` describe departures from edgeR's per-gene estimate.
+The default `shape_prior = "student_t"` builds the shape submodel from `formula_dispersion` and places a Student-t prior on its intercept. With `dispersion_degrees_freedom` passed in, the scale of that prior comes from `sqrt(trigamma(d_eff / 2))`. Because the dispersion enters as an offset on a log link, any terms you add to `formula_dispersion` describe departures from edgeR's per-gene estimate.
 
 ```{r one-gene-student, message = FALSE, warning = FALSE, eval = run_vignette}
 fit_t <- se |>
@@ -110,13 +115,14 @@ fit_t <- se |>
     formula_abundance = ~ dex + (1 | cell),
     offset = "offset",
     dispersion = "dispersion",
+    dispersion_degrees_freedom = "dispersion_degrees_freedom",
     family = brms::zero_inflated_negbinomial(),
-    chains = 1,
-    iter = 250,
-    warmup = 100,
-    cores = 1,
-    refresh = 0,
-    silent = 2
+    chains = 1,       # set for vignette build
+    iter = 250,       # set for vignette build
+    warmup = 100,     # set for vignette build
+    cores = 1,        # set for vignette build
+    refresh = 0,      # set for vignette build
+    silent = 2        # set for vignette build
   )
 
 hypothesis_gene(fit_t, "dextrt = 0")
@@ -146,13 +152,14 @@ pipeline <- se |>
     ~ dex + (1 | cell),
     offset = "offset",
     dispersion = "dispersion",
+    dispersion_degrees_freedom = "dispersion_degrees_freedom",
     family = brms::zero_inflated_negbinomial(),
-    chains = 1,
-    iter = 250,
-    warmup = 100,
-    cores = 1,
-    refresh = 0,
-    silent = 2
+    chains = 1,       # set for vignette build
+    iter = 250,       # set for vignette build
+    warmup = 100,     # set for vignette build
+    cores = 1,        # set for vignette build
+    refresh = 0,      # set for vignette build
+    silent = 2        # set for vignette build
   ) |>
   hypothesis("dextrt = 0") |>
   adjust(re_formula = ~0)
@@ -188,6 +195,7 @@ pipeline <- se |>
     ~ dex + (1 | cell),
     offset = "offset",
     dispersion = "dispersion",
+    dispersion_degrees_freedom = "dispersion_degrees_freedom",
     family = brms::negbinomial()
   ) |>
   hypothesis("dextrt = 0") |>
@@ -210,7 +218,7 @@ pipeline
 
 | `shape_prior` | Model for shape | Prior |
 |---------------|-----------------|-------|
-| `"student_t"` (default) | `shape ~ 1 + offset(log(1/dispersion))` | Student-t on the intercept; scale from `d_eff` |
-| `"gamma"` | scalar `shape` (no submodel) | `gamma(d_eff/2, d_eff * dispersion/2)` |
+| `"student_t"` (default) | `shape ~ 1 + offset(log(1/dispersion))`, or `offset(0)` if `dispersion` is `NULL` | Student-t on the intercept; scale from `d_eff`, or log-scale SD 1 if `dispersion_degrees_freedom` is `NULL` |
+| `"gamma"` | scalar `shape` (no submodel) | `gamma(d_eff/2, d_eff * dispersion/2)` (needs both columns) |
 
 `prior.df` from `estimateDisp()` is shared across genes (unless `robust = TRUE` in edgeR). What varies per gene is the tagwise `dispersion` that sets the prior location.

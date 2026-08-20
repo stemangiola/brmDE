@@ -115,12 +115,18 @@ dispersion_formula_has_terms <- function(formula_dispersion) {
 
 # The shape submodel is assembled here rather than being handed in whole, so
 # that the edgeR dispersion always enters as an offset on brms' log link.
+# No dispersion means that offset is 0: the intercept is then log(shape)
+# itself, with prior median shape = 1.
 add_dispersion_shape <- function(formula, formula_dispersion, dispersion) {
   rhs <- formula_rhs_text(formula_dispersion, "formula_dispersion")
-  added_offset <- !is.null(dispersion) &&
-    !formula_has_offset(formula_dispersion)
+  added_offset <- !formula_has_offset(formula_dispersion)
   if (added_offset) {
-    rhs <- sprintf("%s + offset(log(1/%s))", rhs, dispersion)
+    offset_term <- if (is.null(dispersion)) {
+      "offset(0)"
+    } else {
+      sprintf("offset(log(1/%s))", dispersion)
+    }
+    rhs <- sprintf("%s + %s", rhs, offset_term)
   }
   shape_f <- stats::as.formula(paste("shape ~", rhs))
   announce_formula("Dispersion model", shape_f, added_offset)
@@ -172,11 +178,10 @@ prepare_formula <- function(formula_abundance,
     )
   }
 
-  # Without an edgeR dispersion and without dispersion covariates there is
-  # nothing for a submodel to express, so brms keeps a scalar shape.
-  scalar_shape <- gamma_prior ||
-    (is.null(dispersion) && !dispersion_formula_has_terms(formula_dispersion))
-  out <- if (scalar_shape) {
+  # The gamma prior sits on a scalar `shape`, which has no linear predictor.
+  # The Student-t prior always uses a shape submodel; the edgeR dispersion
+  # is an offset on that submodel, or 0 when it is omitted.
+  out <- if (gamma_prior) {
     formula_abundance
   } else {
     add_dispersion_shape(formula_abundance, formula_dispersion, dispersion)
@@ -270,20 +275,24 @@ student_t_scale_for_sd <- function(sd, nu) {
   sd * sqrt((nu - 2) / nu)
 }
 
-# Prior scale for the shape intercept, derived from the effective degrees of
-# freedom that estimate_dispersion() recorded. `default` applies only when no
-# dispersion was requested at all, which is the case of a user-supplied shape
-# submodel. Once dispersion is in play the degrees of freedom must be there
-# too, otherwise the scale would silently stop depending on the data.
+# Log-scale SD of the Student-t shape intercept when no edgeR degrees of
+# freedom are supplied. Independent of `dispersion`: that argument only
+# shifts the offset. Converted to a Student-t scale through
+# student_t_scale_for_sd() like the d_eff path, so nu still controls both
+# the df and the scale.
+shape_prior_sd_default <- 1
+
+# Prior scale for the shape intercept. When `dispersion_degrees_freedom` is
+# supplied it is derived from the effective degrees of freedom that
+# estimate_dispersion() recorded; when it is omitted the scale comes from
+# `shape_prior_sd_default`, so the prior does not depend on previous tools.
 shape_intercept_scale <- function(data,
-                                  dispersion,
                                   dispersion_degrees_freedom,
-                                  nu,
-                                  default = 1) {
-  if (is.null(dispersion)) {
-    return(default)
+                                  nu) {
+  if (is.null(dispersion_degrees_freedom)) {
+    return(student_t_scale_for_sd(shape_prior_sd_default, nu))
   }
-  require_degrees_freedom_column(data, dispersion, dispersion_degrees_freedom)
+  require_degrees_freedom_column(data, dispersion_degrees_freedom)
   d_eff <- check_degrees_freedom_value(data, dispersion_degrees_freedom)
   scale <- student_t_scale_for_sd(dispersion_log_sd(d_eff), nu)
   if (!is.finite(scale) || scale <= 0) {
@@ -296,18 +305,15 @@ shape_intercept_scale <- function(data,
   scale
 }
 
-require_degrees_freedom_column <- function(data,
-                                           dispersion,
-                                           dispersion_degrees_freedom) {
-  if (!is.null(dispersion_degrees_freedom) &&
-      dispersion_degrees_freedom %in% names(data)) {
+require_degrees_freedom_column <- function(data, dispersion_degrees_freedom) {
+  if (dispersion_degrees_freedom %in% names(data)) {
     return(invisible(NULL))
   }
   stop(
-    "Dispersion column '", dispersion, "' was supplied without its degrees ",
-    "of freedom column '", dispersion_degrees_freedom,
-    "'. estimate_dispersion() writes both; pass `dispersion_degrees_freedom` ",
-    "if you named it something else.",
+    "Degrees of freedom column '", dispersion_degrees_freedom,
+    "' was not found in `data`. estimate_dispersion() writes it; pass ",
+    "`dispersion_degrees_freedom` if you named it something else, or omit ",
+    "the argument to use the default Student-t scale.",
     call. = FALSE
   )
 }
@@ -341,15 +347,24 @@ check_degrees_freedom_value <- function(data, dispersion_degrees_freedom) {
 # Gamma(d/2, scale = 2). The two forms differ only in tail weight, the
 # Student-t being the more robust to a badly shrunk edgeR estimate.
 #
-# Falls back to brms' own vague gamma(0.01, 0.01) only when there is no
-# dispersion to build a prior from; values that are present but unusable are
-# an error.
+# Falls back to brms' own vague gamma(0.01, 0.01) only when neither column
+# is asked for. The conjugate form needs both phi and d_eff, so supplying
+# exactly one is an error rather than a silent fallback; values that are
+# present but unusable are also an error.
 shape_gamma_parameters <- function(data,
                                    dispersion,
                                    dispersion_degrees_freedom,
                                    default = list(shape = 0.01, rate = 0.01)) {
-  if (is.null(dispersion)) {
+  if (is.null(dispersion) && is.null(dispersion_degrees_freedom)) {
     return(default)
+  }
+  if (is.null(dispersion) || is.null(dispersion_degrees_freedom)) {
+    stop(
+      'shape_prior = "gamma" needs both `dispersion` and ',
+      "`dispersion_degrees_freedom` to form the conjugate gamma, or neither ",
+      "to use brms' vague gamma(0.01, 0.01).",
+      call. = FALSE
+    )
   }
   if (!dispersion %in% names(data)) {
     stop(
@@ -357,7 +372,7 @@ shape_gamma_parameters <- function(data,
       call. = FALSE
     )
   }
-  require_degrees_freedom_column(data, dispersion, dispersion_degrees_freedom)
+  require_degrees_freedom_column(data, dispersion_degrees_freedom)
   d_eff <- check_degrees_freedom_value(data, dispersion_degrees_freedom)
   data <- check_dispersion_values(data, dispersion)
   phi <- as.numeric(data[[dispersion]])[[1]]
@@ -366,7 +381,6 @@ shape_gamma_parameters <- function(data,
 
 shape_student_t_prior <- function(data,
                                   formula,
-                                  dispersion,
                                   dispersion_degrees_freedom,
                                   shape_prior_df,
                                   shape_prior = "student_t") {
@@ -379,7 +393,7 @@ shape_student_t_prior <- function(data,
       call. = FALSE
     )
   }
-  scale <- shape_intercept_scale(data, dispersion, dispersion_degrees_freedom, nu)
+  scale <- shape_intercept_scale(data, dispersion_degrees_freedom, nu)
   p <- brms::prior_string(
     sprintf("student_t(%s, 0, brmde_shape_scale)", format_prior_number(nu)),
     class = "Intercept",
@@ -466,7 +480,6 @@ default_gene_priors <- function(data,
     shape_student_t_prior(
       data,
       formula,
-      dispersion,
       dispersion_degrees_freedom,
       shape_prior_df,
       shape_prior
@@ -620,8 +633,7 @@ prepare_gene_data <- function(data,
   data <- as_gene_tibble(
     data,
     abundance = abundance,
-    rowdata_cols = dispersion,
-    rowdata_cols_optional = dispersion_degrees_freedom
+    rowdata_cols = c(dispersion, dispersion_degrees_freedom)
   )
 
   if (!abundance %in% names(data)) {

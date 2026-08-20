@@ -16,7 +16,8 @@ test_that("estimate, hypothesis, and adjust append to one HPCell script", {
 
   pipeline <- se |>
     brmDE(store = store, features = c("ENSG00000120129")) |>
-    estimate(~ dex, offset = "offset", dispersion = "dispersion") |>
+    estimate(~ dex, offset = "offset", dispersion = "dispersion",
+             dispersion_degrees_freedom = "dispersion_degrees_freedom") |>
     hypothesis("dextrt = 0") |>
     adjust(nullify = "dex")
 
@@ -73,6 +74,7 @@ test_that("changed arguments change the targets script, unchanged ones do not", 
         formula_dispersion = formula_dispersion,
         offset = "offset",
         dispersion = "dispersion",
+        dispersion_degrees_freedom = "dispersion_degrees_freedom",
         family = family
       )
     # gsub, not sub: a single line can mention the store more than once.
@@ -95,7 +97,7 @@ test_that("brmDE features must be a character vector", {
   expect_error(brmDE(se, features = 1L), "character vector")
 })
 
-test_that("estimate requires offset and dispersion column names", {
+test_that("estimate requires an offset column name", {
   skip_if_not_installed("HPCell")
   skip_if_not_installed("targets")
 
@@ -111,7 +113,10 @@ test_that("estimate requires offset and dispersion column names", {
   )
   pipeline <- brmDE(se, store = store, features = c("ENSG00000120129"))
   expect_error(estimate(pipeline, ~ dex), "offset")
-  expect_error(estimate(pipeline, ~ dex, offset = "offset"), "dispersion")
+  expect_s3_class(
+    estimate(pipeline, ~ dex, offset = "offset"),
+    "brmDE_hpc"
+  )
 })
 
 test_that("estimate |> hypothesis |> adjust evaluate as one pipeline", {
@@ -142,6 +147,7 @@ test_that("estimate |> hypothesis |> adjust evaluate as one pipeline", {
         ~ dex + (1 | cell),
         offset = "offset",
         dispersion = "dispersion",
+        dispersion_degrees_freedom = "dispersion_degrees_freedom",
         family = brms::negbinomial(),
         chains = 1,
         iter = 250,

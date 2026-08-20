@@ -10,7 +10,7 @@ estimate_gene(
   formula_dispersion = ~1,
   offset,
   dispersion = NULL,
-  dispersion_degrees_freedom = "dispersion_degrees_freedom",
+  dispersion_degrees_freedom = NULL,
   shape_prior = c("student_t", "gamma"),
   shape_prior_df = 3,
   family = NULL,
@@ -39,24 +39,31 @@ than by you, and the assembled formula is reported with a message.}
 
 \item{formula_dispersion}{One-sided model for the negative binomial shape,
 \code{~1} by default. Used only when \code{shape_prior = "student_t"}, where it
-becomes a \verb{shape ~ <terms> + offset(log(1/<dispersion>))} submodel: the
-edgeR dispersion enters as an offset on brms' log link, so the terms you
-give describe departures from it. Do not write the offset yourself.}
+becomes a \verb{shape ~ <terms> + offset(...)} submodel. The offset is
+\verb{log(1/<dispersion>)} when \code{dispersion} is supplied, and \code{0} when it is
+\code{NULL}, so the terms you give describe departures from edgeR's estimate
+or, with a zero offset, the log-shape itself. Do not write the offset
+yourself.}
 
 \item{offset}{Required name of the precomputed offset column in \code{data}
 (or in \code{colData} if \code{data} is a \code{SummarizedExperiment}). The offset is
 never calculated inside this function.}
 
 \item{dispersion}{Optional name of a precomputed edgeR dispersion column
-in \code{rowData} (or in \code{data}), used to build the prior on the negative
-binomial shape as described under \code{shape_prior}. \code{\link[=estimate_dispersion]{estimate_dispersion()}}
-writes this column; this function does not compute it.}
+in \code{rowData} (or in \code{data}). Default \code{NULL} puts a zero offset on the
+shape submodel: the intercept is then \code{log(shape)}, with prior median
+shape \code{1}. Use this when the sample size is large enough that an
+informative location from previous tools is unnecessary. When supplied,
+the column becomes \verb{offset(log(1/<dispersion>))} as described under
+\code{shape_prior}. \code{\link[=estimate_dispersion]{estimate_dispersion()}} writes this column; this function
+does not compute it.}
 
-\item{dispersion_degrees_freedom}{Name of the effective degrees of freedom
-column that accompanies \code{dispersion}, as written by
-\code{\link[=estimate_dispersion]{estimate_dispersion()}}. Only consulted when \code{dispersion} is supplied;
-when the column is absent the shape prior falls back to a weakly
-informative default.}
+\item{dispersion_degrees_freedom}{Optional name of the effective degrees
+of freedom column that accompanies \code{dispersion}, as written by
+\code{\link[=estimate_dispersion]{estimate_dispersion()}}. Default \code{NULL} gives the Student-t shape
+intercept a log-scale SD of 1, so the prior scale does not depend on
+previous tools. Independent of \code{dispersion}: you can pass one, both, or
+neither.}
 
 \item{shape_prior}{How edgeR's dispersion is turned into a prior on the
 shape parameter. Both forms imply the same log-scale spread,
@@ -67,19 +74,22 @@ shape, one by exponentiating an unbounded parameter and the other by
 bounding it. See \code{\link[=estimate_dispersion]{estimate_dispersion()}} for the derivation.
 \itemize{
 \item \code{"student_t"} (default) adds a
-\code{shape ~ 1 + offset(log(1/dispersion))} submodel and puts a Student-t
-prior on its intercept, scaled by \code{shape_prior_df}. brms gives the
-submodel a log link, so this is symmetric in \code{log(shape)} and centres
-the \emph{median} shape on \code{1/dispersion}. Heavier-tailed, so more forgiving
-when edgeR has over-shrunk a gene, and the submodel stays available for
-dispersion covariates.
+\code{shape ~ 1 + offset(log(1/dispersion))} submodel (or \code{offset(0)} when
+\code{dispersion} is \code{NULL}) and puts a Student-t prior on its intercept,
+scaled by \code{shape_prior_df}. brms gives the submodel a log link, so this
+is symmetric in \code{log(shape)} and centres the \emph{median} shape on
+\code{1/dispersion} (or on \code{1} when the offset is 0). Heavier-tailed, so
+more forgiving when edgeR has over-shrunk a gene, and the submodel
+stays available for dispersion covariates.
 \item \code{"gamma"} adds no submodel and instead puts
 \code{gamma(d_eff/2, d_eff * dispersion/2)} on \code{shape} directly. This is the
 conjugate form implied by the edgeR hierarchy, in which the dispersion
 is scaled inverse chi-square and hence the precision \code{1/dispersion} is
 gamma. It centres the \emph{mean} shape on \code{1/dispersion}, which sits
 \code{digamma(d_eff/2) - log(d_eff/2)}, roughly \code{-1/d_eff}, from the
-Student-t centre on the log scale. Lighter-tailed. A scalar \code{shape}
+Student-t centre on the log scale. Lighter-tailed. Needs both
+\code{dispersion} and \code{dispersion_degrees_freedom}, or neither (in which
+case brms' vague \code{gamma(0.01, 0.01)} is used). A scalar \code{shape}
 carries no linear predictor, so a \code{formula_dispersion} with terms is an
 error here.
 }}
@@ -91,8 +101,8 @@ the \code{scale}, because a Student-t has standard deviation
 \code{scale * sqrt(nu / (nu - 2))}; the scale is therefore
 \code{sd * sqrt((nu - 2) / nu)} for a target \code{sd}. Must exceed 2, since the
 Student-t standard deviation does not exist at or below 2 degrees of
-freedom. The target \code{sd} comes from the effective degrees of freedom
-recorded by \code{\link[=estimate_dispersion]{estimate_dispersion()}}; see its Details for the derivation.}
+freedom. The target \code{sd} is \code{sqrt(trigamma(d_eff / 2))} when
+\code{dispersion_degrees_freedom} is supplied, and 1 when it is omitted.}
 
 \item{family}{A brms family. Default is
 \code{\link[brms:zero_inflated_negbinomial]{brms::zero_inflated_negbinomial()}}.}
