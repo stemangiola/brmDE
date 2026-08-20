@@ -92,15 +92,17 @@ gene_ids_for_hpc <- function(se, features_rds) {
 #' @export
 estimate_gene_from_se <- function(se, feature_id, args_rds) {
   args <- readRDS(args_rds)
-  formula <- stats::as.formula(
-    args$formula,
-    env = new.env(parent = globalenv())
-  )
+  as_local_formula <- function(text) {
+    stats::as.formula(text, env = new.env(parent = globalenv()))
+  }
+  formula_abundance <- as_local_formula(args$formula_abundance)
+  formula_dispersion <- as_local_formula(args$formula_dispersion)
   offset <- args$offset
   abundance <- args$abundance
   dispersion <- args$dispersion
   dispersion_degrees_freedom <- args$dispersion_degrees_freedom
-  args$formula <- NULL
+  args$formula_abundance <- NULL
+  args$formula_dispersion <- NULL
   args$offset <- NULL
   args$abundance <- NULL
   args$dispersion <- NULL
@@ -110,7 +112,8 @@ estimate_gene_from_se <- function(se, feature_id, args_rds) {
     c(
       list(
         data = se[unlist(feature_id), , drop = FALSE],
-        formula = formula,
+        formula_abundance = formula_abundance,
+        formula_dispersion = formula_dispersion,
         offset = offset,
         abundance = abundance,
         dispersion = dispersion,
@@ -324,7 +327,10 @@ brmDE <- function(.data,
 #' [HPCell::hpc_iterate()] step that calls [estimate_gene()] once per gene.
 #'
 #' @param input_hpc An `HPCell` / `brmDE_hpc` pipeline from [brmDE()].
-#' @param formula Model formula passed to [estimate_gene()].
+#' @param formula_abundance Model for the mean, passed to both
+#'   [estimate_dispersion()] (as the edgeR design) and [estimate_gene()].
+#' @param formula_dispersion One-sided model for the negative binomial shape,
+#'   passed to [estimate_gene()]. `~1` by default.
 #' @param offset Required name of the precomputed offset column (the same
 #'   argument as [estimate_gene()]). [brmDE()] writes this as `"offset"`
 #'   via [add_tidybulk_offset()].
@@ -341,13 +347,23 @@ brmDE <- function(.data,
 #' @return The updated `HPCell` pipeline.
 #'
 #' @export
-estimate <- function(input_hpc, formula, offset, dispersion, ...) {
+estimate <- function(input_hpc,
+                     formula_abundance,
+                     formula_dispersion = ~1,
+                     offset,
+                     dispersion,
+                     ...) {
   UseMethod("estimate")
 }
 
 #' @rdname estimate
 #' @export
-estimate.default <- function(input_hpc, formula, offset, dispersion, ...) {
+estimate.default <- function(input_hpc,
+                             formula_abundance,
+                             formula_dispersion = ~1,
+                             offset,
+                             dispersion,
+                             ...) {
   stop(
     "estimate() expects a pipeline from brmDE(). ",
     "For one gene, use estimate_gene().",
@@ -358,7 +374,8 @@ estimate.default <- function(input_hpc, formula, offset, dispersion, ...) {
 #' @rdname estimate
 #' @export
 estimate.HPCell <- function(input_hpc,
-                            formula,
+                            formula_abundance,
+                            formula_dispersion = ~1,
                             offset,
                             dispersion,
                             dispersion_degrees_freedom = "dispersion_degrees_freedom",
@@ -377,6 +394,8 @@ estimate.HPCell <- function(input_hpc,
   }
 
   dots <- list(...)
+  dots$formula_abundance <- NULL
+  dots$formula_dispersion <- NULL
   dots$offset <- NULL
   dots$dispersion <- NULL
   dots$dispersion_degrees_freedom <- NULL
@@ -391,7 +410,7 @@ estimate.HPCell <- function(input_hpc,
   )
   saveRDS(
     list(
-      formula = formula_text(formula),
+      formula_abundance = formula_text(formula_abundance),
       abundance = abundance,
       dispersion = dispersion,
       dispersion_degrees_freedom = dispersion_degrees_freedom
@@ -401,7 +420,8 @@ estimate.HPCell <- function(input_hpc,
   saveRDS(
     c(
       list(
-        formula = formula_text(formula),
+        formula_abundance = formula_text(formula_abundance),
+        formula_dispersion = formula_text(formula_dispersion),
         abundance = abundance,
         offset = offset,
         dispersion = dispersion,

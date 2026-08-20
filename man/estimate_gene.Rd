@@ -6,7 +6,8 @@
 \usage{
 estimate_gene(
   data,
-  formula,
+  formula_abundance,
+  formula_dispersion = ~1,
   offset,
   dispersion = NULL,
   dispersion_degrees_freedom = "dispersion_degrees_freedom",
@@ -30,9 +31,16 @@ estimate_gene(
 \item{data}{A data frame with one row per sample, or a
 \code{SummarizedExperiment} with a single feature.}
 
-\item{formula}{A \code{formula} or \code{brmsformula}. The response may be omitted
-(\code{~ dex + (1 | donor)}); it is then set to \code{abundance}. An
-\verb{offset(<offset>)} term is added if missing.}
+\item{formula_abundance}{Model for the mean. A \code{formula} or \code{brmsformula}
+whose response may be omitted (\code{~ dex + (1 | donor)}); it is then set to
+\code{abundance}. The library size \verb{offset(<offset>)} term is added here rather
+than by you, and the assembled formula is reported with a message.}
+
+\item{formula_dispersion}{One-sided model for the negative binomial shape,
+\code{~1} by default. Used only when \code{shape_prior = "student_t"}, where it
+becomes a \verb{shape ~ <terms> + offset(log(1/<dispersion>))} submodel: the
+edgeR dispersion enters as an offset on brms' log link, so the terms you
+give describe departures from it. Do not write the offset yourself.}
 
 \item{offset}{Required name of the precomputed offset column in \code{data}
 (or in \code{colData} if \code{data} is a \code{SummarizedExperiment}). The offset is
@@ -70,8 +78,9 @@ conjugate form implied by the edgeR hierarchy, in which the dispersion
 is scaled inverse chi-square and hence the precision \code{1/dispersion} is
 gamma. It centres the \emph{mean} shape on \code{1/dispersion}, which sits
 \code{digamma(d_eff/2) - log(d_eff/2)}, roughly \code{-1/d_eff}, from the
-Student-t centre on the log scale. Lighter-tailed. Ignored with a
-warning if \code{formula} already carries a shape submodel.
+Student-t centre on the log scale. Lighter-tailed. A scalar \code{shape}
+carries no linear predictor, so a \code{formula_dispersion} with terms is an
+error here.
 }}
 
 \item{shape_prior_df}{Degrees of freedom \eqn{\nu} of the Student-t prior
@@ -118,8 +127,10 @@ A \code{brmsfit} object.
 }
 \description{
 Prepares one gene's samples (data frame or one-row
-\code{SummarizedExperiment}), injects a precomputed offset into the formula if
-needed, and fits a brms model. Priors, inits, and MCMC defaults follow the
+\code{SummarizedExperiment}) and fits a brms model. You give the mean and
+dispersion models as plain one-sided formulas; the library size offset and
+the edgeR dispersion offset are appended here, and the assembled formulas
+are reported with a message. Priors, inits, and MCMC defaults follow the
 immuneBodyMap ZINB specification and can all be overridden.
 }
 \examples{
@@ -134,7 +145,7 @@ if (instantiate::stan_cmdstan_exists()) {
 
   fit <- estimate_gene(
     se,
-    formula = ~ dex + (1 | cell),
+    formula_abundance = ~ dex + (1 | cell),
     offset = "offset",
     abundance = "counts"
   )

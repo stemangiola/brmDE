@@ -334,15 +334,97 @@ test_that("prepare_formula adds a shape offset from dispersion", {
   expect_match(shape_txt, "log\\s*\\(\\s*1/dispersion")
 })
 
-test_that("prepare_formula does not overwrite an existing shape formula", {
+test_that("prepare_formula rejects a shape submodel inside formula_abundance", {
+  # Silently keeping it would drop the edgeR dispersion offset.
   f0 <- brms::bf(counts ~ dex + offset(offset), shape ~ 1)
+  expect_error(
+    brmDE:::prepare_formula(
+      f0,
+      abundance = "counts",
+      offset = "offset",
+      dispersion = "dispersion"
+    ),
+    "Model the dispersion through `formula_dispersion`"
+  )
+})
+
+test_that("formula_dispersion becomes the shape submodel, offset and all", {
   f <- brmDE:::prepare_formula(
-    f0,
+    ~dex,
+    formula_dispersion = ~cell,
     abundance = "counts",
     offset = "offset",
     dispersion = "dispersion"
   )
-  expect_equal(deparse(f$pforms$shape), deparse(f0$pforms$shape))
+  shape_txt <- paste(deparse(f$pforms$shape), collapse = " ")
+  expect_match(shape_txt, "^shape ~ cell \\+ offset\\(log\\(1/dispersion\\)\\)$")
+
+  # Dispersion covariates are fitted even without an edgeR estimate; there is
+  # simply no offset to anchor them to.
+  f_no_disp <- brmDE:::prepare_formula(
+    ~dex,
+    formula_dispersion = ~cell,
+    abundance = "counts",
+    offset = "offset"
+  )
+  expect_equal(
+    paste(deparse(f_no_disp$pforms$shape), collapse = " "),
+    "shape ~ cell"
+  )
+})
+
+test_that("formula_dispersion must be one-sided and gamma-compatible", {
+  expect_error(
+    brmDE:::prepare_formula(
+      ~dex,
+      formula_dispersion = shape ~ cell,
+      abundance = "counts",
+      offset = "offset",
+      dispersion = "dispersion"
+    ),
+    "must be one-sided"
+  )
+  expect_error(
+    brmDE:::prepare_formula(
+      ~dex,
+      formula_dispersion = ~cell,
+      abundance = "counts",
+      offset = "offset",
+      dispersion = "dispersion",
+      shape_prior = "gamma"
+    ),
+    "scalar `shape` with no linear predictor"
+  )
+})
+
+test_that("prepare_formula reports the formulas it assembled", {
+  expect_message(
+    brmDE:::prepare_formula(
+      ~dex,
+      abundance = "counts",
+      offset = "offset",
+      dispersion = "dispersion"
+    ),
+    "Abundance model \\(offset added by brmDE\\): counts ~ dex \\+ offset\\(offset\\)"
+  )
+  expect_message(
+    brmDE:::prepare_formula(
+      ~dex,
+      abundance = "counts",
+      offset = "offset",
+      dispersion = "dispersion"
+    ),
+    "Dispersion model \\(offset added by brmDE\\): shape ~ 1 \\+ offset\\(log\\(1/dispersion\\)\\)"
+  )
+  # Nothing is announced as added when the user wrote the offset themselves.
+  expect_message(
+    brmDE:::prepare_formula(
+      counts ~ dex + offset(offset),
+      abundance = "counts",
+      offset = "offset"
+    ),
+    "Abundance model: counts ~ dex \\+ offset\\(offset\\)"
+  )
 })
 
 test_that("shape_gamma_parameters is the conjugate gamma with mean 1/phi", {
@@ -494,7 +576,7 @@ test_that('shape_prior = "gamma" rejects a user shape submodel', {
       dat, "counts", "offset",
       formula = f, dispersion = "dispersion", shape_prior = "gamma"
     ),
-    "already has a shape submodel"
+    "has a shape submodel"
   )
 })
 

@@ -85,13 +85,46 @@ add_offset_term <- function(formula, offset) {
   stats::update(formula, stats::as.formula(rhs))
 }
 
-add_dispersion_shape <- function(formula, dispersion) {
-  if (is.null(dispersion) || has_shape_submodel(formula)) {
-    return(formula)
+formula_rhs_text <- function(formula, arg) {
+  if (inherits(formula, "brmsformula")) {
+    formula <- formula$formula
   }
-  shape_f <- stats::as.formula(
-    sprintf("shape ~ 1 + offset(log(1/%s))", dispersion)
-  )
+  if (is.character(formula)) {
+    formula <- stats::as.formula(formula)
+  }
+  if (!inherits(formula, "formula")) {
+    stop(sprintf("`%s` must be a formula.", arg), call. = FALSE)
+  }
+  if (length(formula) == 3L) {
+    stop(
+      sprintf(
+        "`%s` must be one-sided (e.g. ~1 or ~ dex); the response is set for you.",
+        arg
+      ),
+      call. = FALSE
+    )
+  }
+  deparse1(formula[[2]])
+}
+
+dispersion_formula_has_terms <- function(formula_dispersion) {
+  rhs <- formula_rhs_text(formula_dispersion, "formula_dispersion")
+  labels <- attr(stats::terms(stats::as.formula(paste("~", rhs))), "term.labels")
+  length(labels) > 0L
+}
+
+# The shape submodel is assembled here rather than being handed in whole, so
+# that the edgeR dispersion always enters as an offset on brms' log link.
+add_dispersion_shape <- function(formula, formula_dispersion, dispersion) {
+  rhs <- formula_rhs_text(formula_dispersion, "formula_dispersion")
+  added_offset <- !is.null(dispersion) &&
+    !formula_has_offset(formula_dispersion)
+  if (added_offset) {
+    rhs <- sprintf("%s + offset(log(1/%s))", rhs, dispersion)
+  }
+  shape_f <- stats::as.formula(paste("shape ~", rhs))
+  announce_formula("Dispersion model", shape_f, added_offset)
+
   if (inherits(formula, "brmsformula")) {
     formula$pforms$shape <- shape_f
     return(formula)
@@ -99,18 +132,54 @@ add_dispersion_shape <- function(formula, dispersion) {
   brms::bf(formula, shape_f)
 }
 
-prepare_formula <- function(formula,
+announce_formula <- function(label, formula, added_offset) {
+  message(
+    label,
+    if (added_offset) " (offset added by brmDE)" else "",
+    ": ",
+    formula_text(formula)
+  )
+}
+
+prepare_formula <- function(formula_abundance,
+                            formula_dispersion = ~1,
                             abundance,
                             offset,
                             dispersion = NULL,
                             shape_prior = "student_t") {
-  formula <- add_response(formula, abundance)
-  formula <- add_offset_term(formula, offset)
-  if (identical(check_shape_prior(shape_prior), "gamma")) {
-    # The gamma prior is placed on `shape` directly, so no submodel is built.
-    return(formula)
+  if (has_shape_submodel(formula_abundance)) {
+    stop(
+      "`formula_abundance` carries a shape submodel. Model the dispersion ",
+      "through `formula_dispersion` instead, so that the edgeR dispersion ",
+      "offset is added to it.",
+      call. = FALSE
+    )
   }
-  add_dispersion_shape(formula, dispersion)
+  formula_abundance <- add_response(formula_abundance, abundance)
+  added_offset <- !is.null(offset) && !formula_has_offset(formula_abundance)
+  formula_abundance <- add_offset_term(formula_abundance, offset)
+  announce_formula("Abundance model", formula_abundance, added_offset)
+
+  if (identical(check_shape_prior(shape_prior), "gamma")) {
+    # The gamma prior is placed on the scalar `shape`, which no linear
+    # predictor can carry, so a dispersion model cannot be honoured here.
+    if (dispersion_formula_has_terms(formula_dispersion)) {
+      stop(
+        '`formula_dispersion` has terms, but shape_prior = "gamma" puts a ',
+        "prior on a scalar `shape` with no linear predictor. Use ",
+        'shape_prior = "student_t" to model the dispersion.',
+        call. = FALSE
+      )
+    }
+    return(formula_abundance)
+  }
+
+  # Without an edgeR dispersion and without dispersion covariates there is
+  # nothing for a submodel to express, so brms keeps a scalar shape.
+  if (is.null(dispersion) && !dispersion_formula_has_terms(formula_dispersion)) {
+    return(formula_abundance)
+  }
+  add_dispersion_shape(formula_abundance, formula_dispersion, dispersion)
 }
 
 is_zinb_family <- function(family) {
@@ -282,8 +351,8 @@ shape_student_t_prior <- function(data,
   nu <- check_student_df(shape_prior_df)
   if (identical(shape_prior, "gamma")) {
     stop(
-      'shape_prior = "gamma" puts a prior on a scalar `shape`, but `formula` ',
-      "already has a shape submodel, which has no such parameter. Drop the ",
+      'shape_prior = "gamma" puts a prior on a scalar `shape`, but the model ',
+      "has a shape submodel, which has no such parameter. Drop the ",
       'submodel or use shape_prior = "student_t".',
       call. = FALSE
     )

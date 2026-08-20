@@ -9,7 +9,7 @@ test_that("estimate_gene, hypothesis_gene, and adjust_gene run on one airway gen
 
   fit <- estimate_gene(
     se,
-    formula = ~ dex + (1 | cell),
+    formula_abundance = ~ dex + (1 | cell),
     family = brms::negbinomial(),
     abundance = "counts",
     offset = "offset",
@@ -64,7 +64,7 @@ test_that("ZINB with a dispersion-derived shape prior fits one airway gene", {
 
   fit <- estimate_gene(
     se_gene,
-    formula = ~ dex,
+    formula_abundance = ~ dex,
     offset = "offset",
     dispersion = "dispersion",
     shape_prior_df = 3,
@@ -100,7 +100,7 @@ test_that("ZINB with a conjugate gamma shape prior fits one airway gene", {
 
   fit <- estimate_gene(
     se_gene,
-    formula = ~ dex,
+    formula_abundance = ~ dex,
     offset = "offset",
     dispersion = "dispersion",
     shape_prior = "gamma",
@@ -135,7 +135,7 @@ test_that("estimate_gene default ZINB priors work on one airway gene", {
 
   fit <- estimate_gene(
     se,
-    formula = ~ dex,
+    formula_abundance = ~ dex,
     offset = "offset",
     chains = 1,
     iter = 250,

@@ -76,7 +76,7 @@ se <- airway |>
   # library size factor is the reciprocal of the multiplier
   mutate(offset = log(1 / multiplier))
 
-se <- se |> estimate_dispersion( formula = ~ dex + (1 | cell))
+se <- se |> estimate_dispersion(formula_abundance = ~ dex + (1 | cell))
 
 # One rowData column per estimate, both named by arguments of the same name:
 #   dispersion                 = tagwise phi_g
@@ -88,18 +88,27 @@ head(se$offset)
 se_gene <- se |> filter(.feature == "ENSG00000120129")
 ```
 
+## Two formulas, and the offsets brmDE adds
+
+`formula_abundance` is the mean model. It is the same formula `estimate_dispersion()` gave to edgeR above, and it is where the library size offset goes.
+
+`formula_dispersion` is the model for the negative binomial shape, `~1` by default. It is where the edgeR dispersion offset goes.
+
+You write neither offset. Both are appended in the backend, and the assembled formulas are printed so you can confirm what was fitted:
+
+```
+Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offset)
+Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))
+```
+
 ## Student-t shape prior (default)
 
-The default `shape_prior = "student_t"` adds
-
-`shape ~ 1 + offset(log(1/dispersion))`
-
-and places a Student-t prior on the shape intercept. The scale of that prior comes from `dispersion_degrees_freedom` via `sqrt(trigamma(d_eff / 2))`.
+The default `shape_prior = "student_t"` builds the shape submodel from `formula_dispersion` and places a Student-t prior on its intercept. The scale of that prior comes from `dispersion_degrees_freedom` via `sqrt(trigamma(d_eff / 2))`. Because the dispersion enters as an offset on a log link, any terms you add to `formula_dispersion` describe departures from edgeR's per-gene estimate.
 
 ```{r one-gene-student, message = FALSE, warning = FALSE, eval = run_vignette}
 fit_t <- estimate_gene(
   se_gene,
-  formula = ~ dex + (1 | cell),
+  formula_abundance = ~ dex + (1 | cell),
   offset = "offset",
   dispersion = "dispersion",
   shape_prior = "student_t",
@@ -125,12 +134,12 @@ adjust_gene(
 
 ## Conjugate gamma shape prior
 
-Alternatively, `shape_prior = "gamma"` puts a gamma prior directly on the scalar `shape` parameter (no shape submodel). The prior mean is `1 / phi_g` for that gene.
+Alternatively, `shape_prior = "gamma"` puts a gamma prior directly on the scalar `shape` parameter (no shape submodel). The prior mean is `1 / phi_g` for that gene. A scalar `shape` carries no linear predictor, so `formula_dispersion` must stay at its `~1` default here; anything else is an error rather than a silently ignored argument.
 
 ```{r one-gene-gamma, message = FALSE, warning = FALSE, eval = run_vignette}
 fit_g <- estimate_gene(
   se_gene,
-  formula = ~ dex + (1 | cell),
+  formula_abundance = ~ dex + (1 | cell),
   offset = "offset",
   dispersion = "dispersion",
   shape_prior = "gamma",

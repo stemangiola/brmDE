@@ -4,13 +4,14 @@
 #' (<https://github.com/MangiolaLaboratory/HPCell/blob/ed763c6f53cfedf63d3a3353ec5ffcfd09bfe0e6/R/differential_expression.R#L36>):
 #' tagwise dispersion when there are fewer than 1000 samples, otherwise
 #' trended dispersion on a random subset of up to 2000 samples. Random-effect
-#' terms in `formula` are turned into the fixed effects they imply before the
-#' design matrix is built. [estimate_gene()] does not compute this;
+#' terms in `formula_abundance` are turned into the fixed effects they imply
+#' before the design matrix is built. [estimate_gene()] does not compute this;
 #' [estimate()] calls this helper once on the full object before iterating
 #' genes.
 #'
 #' @param se A `SummarizedExperiment`.
-#' @param formula Model formula used to build the edgeR design. edgeR has no
+#' @param formula_abundance Model for the mean, used to build the edgeR
+#'   design; the same formula you pass to [estimate_gene()]. edgeR has no
 #'   random effects, so `(1 | donor)` enters the design as `donor` and
 #'   `(1 + treatment | donor)` as `donor + treatment:donor`.
 #' @param abundance Assay name (default `"counts"`).
@@ -39,7 +40,7 @@
 #' Because the grouping factors enter as fixed effects, a factor with close to
 #' one level per sample will exhaust the design and leave no residual degrees
 #' of freedom. That is an error rather than a column of `NA`s: pass a simpler
-#' `formula` for this step if it happens.
+#' `formula_abundance` for this step if it happens.
 #'
 #' The link from degrees of freedom to a standard deviation runs through the
 #' chi-square distribution of the estimator. For \eqn{s^2 \sim \sigma^2
@@ -138,15 +139,18 @@
 #'
 #' @export
 estimate_dispersion <- function(se,
-                                formula,
+                                formula_abundance,
                                 abundance = "counts",
                                 dispersion = "dispersion",
                                 dispersion_degrees_freedom = "dispersion_degrees_freedom") {
   if (!inherits(se, "SummarizedExperiment")) {
     stop("`se` must be a SummarizedExperiment.", call. = FALSE)
   }
-  if (missing(formula) || is.null(formula)) {
-    stop("`formula` is required to build the edgeR design.", call. = FALSE)
+  if (missing(formula_abundance) || is.null(formula_abundance)) {
+    stop(
+      "`formula_abundance` is required to build the edgeR design.",
+      call. = FALSE
+    )
   }
   dispersion <- check_dispersion_name(dispersion)
   dispersion_degrees_freedom <-
@@ -173,7 +177,7 @@ estimate_dispersion <- function(se,
     stop("`se` has no samples, so there is nothing to estimate.", call. = FALSE)
   }
 
-  design_formula <- fixed_effects_formula(formula)
+  design_formula <- fixed_effects_formula(formula_abundance)
 
   if (n_sample < 1000L) {
     design <- dispersion_design(se, design_formula)
@@ -207,13 +211,13 @@ estimate_dispersion <- function(se,
 #' @export
 estimate_dispersion_from_args <- function(se, args_rds) {
   args <- readRDS(args_rds)
-  formula <- stats::as.formula(
-    args$formula,
+  formula_abundance <- stats::as.formula(
+    args$formula_abundance,
     env = new.env(parent = globalenv())
   )
   estimate_dispersion(
     se,
-    formula = formula,
+    formula_abundance = formula_abundance,
     abundance = args$abundance,
     dispersion = args$dispersion,
     dispersion_degrees_freedom = args$dispersion_degrees_freedom
@@ -297,7 +301,7 @@ check_residual_df <- function(design, n_sample) {
     n_sample, " samples, leaving no residual degrees of freedom. ",
     "Random-effect terms are fitted as fixed effects here, so a grouping ",
     "factor with nearly one level per sample will exhaust the design. ",
-    "Pass a simpler `formula` to estimate_dispersion().",
+    "Pass a simpler `formula_abundance` to estimate_dispersion().",
     call. = FALSE
   )
 }

@@ -6,7 +6,7 @@
 \usage{
 estimate_dispersion(
   se,
-  formula,
+  formula_abundance,
   abundance = "counts",
   dispersion = "dispersion",
   dispersion_degrees_freedom = "dispersion_degrees_freedom"
@@ -15,7 +15,8 @@ estimate_dispersion(
 \arguments{
 \item{se}{A \code{SummarizedExperiment}.}
 
-\item{formula}{Model formula used to build the edgeR design. edgeR has no
+\item{formula_abundance}{Model for the mean, used to build the edgeR
+design; the same formula you pass to \code{\link[=estimate_gene]{estimate_gene()}}. edgeR has no
 random effects, so \code{(1 | donor)} enters the design as \code{donor} and
 \code{(1 + treatment | donor)} as \code{donor + treatment:donor}.}
 
@@ -37,8 +38,8 @@ Port of HPCell's \code{se_estimate_dispersion()}
 (\url{https://github.com/MangiolaLaboratory/HPCell/blob/ed763c6f53cfedf63d3a3353ec5ffcfd09bfe0e6/R/differential_expression.R#L36}):
 tagwise dispersion when there are fewer than 1000 samples, otherwise
 trended dispersion on a random subset of up to 2000 samples. Random-effect
-terms in \code{formula} are turned into the fixed effects they imply before the
-design matrix is built. \code{\link[=estimate_gene]{estimate_gene()}} does not compute this;
+terms in \code{formula_abundance} are turned into the fixed effects they imply
+before the design matrix is built. \code{\link[=estimate_gene]{estimate_gene()}} does not compute this;
 \code{\link[=estimate]{estimate()}} calls this helper once on the full object before iterating
 genes.
 }
@@ -61,7 +62,7 @@ branch used above 1000 samples) performs no such shrinkage and returns no
 Because the grouping factors enter as fixed effects, a factor with close to
 one level per sample will exhaust the design and leave no residual degrees
 of freedom. That is an error rather than a column of \code{NA}s: pass a simpler
-\code{formula} for this step if it happens.
+\code{formula_abundance} for this step if it happens.
 
 The link from degrees of freedom to a standard deviation runs through the
 chi-square distribution of the estimator. For \eqn{s^2 \sim \sigma^2

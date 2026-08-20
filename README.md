@@ -26,7 +26,7 @@ se$dex <- relevel(factor(se$dex), ref = "untrt")
 
 fit <- estimate_gene(
   se,
-  formula = ~ dex + (1 | cell),
+  formula_abundance = ~ dex + (1 | cell),
   offset = "offset",
   abundance = "counts"
 )
@@ -45,7 +45,16 @@ adjust_gene(
 )
 ```
 
-`estimate_gene()` does not calculate an offset or dispersion. Compute TMM first, store it as a column, and pass that name to `offset`. The pipeline writes edgeR dispersion to `rowData` before fitting. To run many genes as **one** HPCell pipeline:
+`estimate_gene()` does not calculate an offset or dispersion. Compute TMM first, store it as a column, and pass that name to `offset`. The pipeline writes edgeR dispersion to `rowData` before fitting.
+
+The two models are given separately. `formula_abundance` is the mean model, and it is also the design `estimate_dispersion()` hands to edgeR. `formula_dispersion` (default `~1`) is the model for the negative binomial shape. Neither should carry an offset: the library size offset and the `log(1/dispersion)` offset are appended for you, and the assembled formulas are printed as a message so you can check them:
+
+```
+Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offset)
+Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))
+```
+
+To run many genes as **one** HPCell pipeline:
 
 ```r
 data("airway", package = "airway")

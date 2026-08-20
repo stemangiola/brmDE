@@ -6,13 +6,28 @@
 \alias{estimate.HPCell}
 \title{Estimate genes on an HPCell pipeline}
 \usage{
-estimate(input_hpc, formula, offset, dispersion, ...)
+estimate(
+  input_hpc,
+  formula_abundance,
+  formula_dispersion = ~1,
+  offset,
+  dispersion,
+  ...
+)
 
-\method{estimate}{default}(input_hpc, formula, offset, dispersion, ...)
+\method{estimate}{default}(
+  input_hpc,
+  formula_abundance,
+  formula_dispersion = ~1,
+  offset,
+  dispersion,
+  ...
+)
 
 \method{estimate}{HPCell}(
   input_hpc,
-  formula,
+  formula_abundance,
+  formula_dispersion = ~1,
   offset,
   dispersion,
   dispersion_degrees_freedom = "dispersion_degrees_freedom",
@@ -24,7 +39,11 @@ estimate(input_hpc, formula, offset, dispersion, ...)
 \arguments{
 \item{input_hpc}{An \code{HPCell} / \code{brmDE_hpc} pipeline from \code{\link[=brmDE]{brmDE()}}.}
 
-\item{formula}{Model formula passed to \code{\link[=estimate_gene]{estimate_gene()}}.}
+\item{formula_abundance}{Model for the mean, passed to both
+\code{\link[=estimate_dispersion]{estimate_dispersion()}} (as the edgeR design) and \code{\link[=estimate_gene]{estimate_gene()}}.}
+
+\item{formula_dispersion}{One-sided model for the negative binomial shape,
+passed to \code{\link[=estimate_gene]{estimate_gene()}}. \code{~1} by default.}
 
 \item{offset}{Required name of the precomputed offset column (the same
 argument as \code{\link[=estimate_gene]{estimate_gene()}}). \code{\link[=brmDE]{brmDE()}} writes this as \code{"offset"}
