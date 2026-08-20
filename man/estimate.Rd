@@ -31,7 +31,6 @@ estimate(
   offset,
   dispersion,
   dispersion_degrees_freedom = "dispersion_degrees_freedom",
-  abundance = NULL,
   target_output = "brms_fit",
   ...
 )
@@ -57,9 +56,6 @@ gene-wise fits).}
 
 \item{dispersion_degrees_freedom}{Name of the effective degrees of freedom
 column written alongside it by \code{\link[=estimate_dispersion]{estimate_dispersion()}}.}
-
-\item{abundance}{Count assay name. Default is the value given to
-\code{\link[=brmDE]{brmDE()}}.}
 
 \item{target_output}{Name of the targets output.}
 }

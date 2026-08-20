@@ -133,6 +133,17 @@ the edgeR dispersion offset are appended here, and the assembled formulas
 are reported with a message. Priors, inits, and MCMC defaults follow the
 immuneBodyMap ZINB specification and can all be overridden.
 }
+\details{
+Formula terms are resolved against \code{data} first and the global environment
+after. The environment a formula was written in is deliberately dropped:
+R attaches the defining frame to every formula, so a fit produced inside a
+function would otherwise serialise that whole frame - the
+\code{SummarizedExperiment} included - into each stored \code{brmsfit}, once per gene.
+A formula referring to a local variable (\code{~ poly(dose, k)} with a local \code{k})
+will therefore not resolve it; promote such values to arguments or to the
+global environment. The HPCell pipeline has always behaved this way, because
+formulas make a round trip through disk as text.
+}
 \examples{
 print("cmdstanr is needed to run this example.")
 # install.packages("cmdstanr", repos = c("https://stan-dev.r-universe.dev/", getOption("repos")))

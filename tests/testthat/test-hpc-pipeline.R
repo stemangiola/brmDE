@@ -30,12 +30,62 @@ test_that("estimate, hypothesis, and adjust append to one HPCell script", {
   lines <- readLines(paste0(store, ".R"))
   script <- paste(lines, collapse = "\n")
   expect_match(script, "hpc_internal")
-  expect_match(script, "features\\.rds")
+  # Args files are named after a hash of their contents so that editing an
+  # argument changes the target command and forces a rebuild.
+  expect_match(script, "features_[0-9a-f]+\\.rds")
+  expect_match(script, "estimate_args_[0-9a-f]+\\.rds")
+  expect_match(script, 'target_output = "formula_abundance_text"')
+  expect_match(script, 'target_output = "formula_dispersion_text"')
   expect_match(script, "estimate_dispersion_from_args")
   expect_match(script, "estimate_gene_from_se")
   expect_match(script, "hypothesis_gene_from_fit")
   expect_match(script, "adjust_gene_from_fit")
   expect_false(identical(trimws(lines[length(lines)]), "target_list"))
+})
+
+test_that("changed arguments change the targets script, unchanged ones do not", {
+  skip_if_not_installed("HPCell")
+  skip_if_not_installed("targets")
+
+  se <- airway_for_hpc()
+  stores <- character(0)
+  on.exit(
+    for (s in stores) {
+      unlink(s, recursive = TRUE)
+      unlink(paste0(s, ".R"))
+      unlink(paste0(s, "_input"), recursive = TRUE)
+    },
+    add = TRUE
+  )
+
+  # targets hashes the target command, so anything that should force a refit
+  # has to be visible in the generated script.
+  script_for <- function(formula_abundance = ~dex,
+                         formula_dispersion = ~1,
+                         features = "ENSG00000120129",
+                         family = brms::negbinomial()) {
+    store <- tempfile("brmde_hash_")
+    stores <<- c(stores, store)
+    se |>
+      brmDE(store = store, features = features) |>
+      estimate(
+        formula_abundance,
+        formula_dispersion = formula_dispersion,
+        offset = "offset",
+        dispersion = "dispersion",
+        family = family
+      )
+    sub(basename(store), "STORE", readLines(paste0(store, ".R")), fixed = TRUE)
+  }
+
+  base <- script_for()
+  expect_identical(script_for(), base)
+  expect_false(identical(script_for(formula_abundance = ~ dex + (1 | cell)), base))
+  expect_false(identical(script_for(formula_dispersion = ~cell), base))
+  expect_false(identical(script_for(features = "ENSG00000000003"), base))
+  expect_false(
+    identical(script_for(family = brms::zero_inflated_negbinomial()), base)
+  )
 })
 
 test_that("brmDE features must be a character vector", {

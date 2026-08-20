@@ -160,26 +160,48 @@ prepare_formula <- function(formula_abundance,
   formula_abundance <- add_offset_term(formula_abundance, offset)
   announce_formula("Abundance model", formula_abundance, added_offset)
 
-  if (identical(check_shape_prior(shape_prior), "gamma")) {
+  gamma_prior <- identical(check_shape_prior(shape_prior), "gamma")
+  if (gamma_prior && dispersion_formula_has_terms(formula_dispersion)) {
     # The gamma prior is placed on the scalar `shape`, which no linear
     # predictor can carry, so a dispersion model cannot be honoured here.
-    if (dispersion_formula_has_terms(formula_dispersion)) {
-      stop(
-        '`formula_dispersion` has terms, but shape_prior = "gamma" puts a ',
-        "prior on a scalar `shape` with no linear predictor. Use ",
-        'shape_prior = "student_t" to model the dispersion.',
-        call. = FALSE
-      )
-    }
-    return(formula_abundance)
+    stop(
+      '`formula_dispersion` has terms, but shape_prior = "gamma" puts a ',
+      "prior on a scalar `shape` with no linear predictor. Use ",
+      'shape_prior = "student_t" to model the dispersion.',
+      call. = FALSE
+    )
   }
 
   # Without an edgeR dispersion and without dispersion covariates there is
   # nothing for a submodel to express, so brms keeps a scalar shape.
-  if (is.null(dispersion) && !dispersion_formula_has_terms(formula_dispersion)) {
-    return(formula_abundance)
+  scalar_shape <- gamma_prior ||
+    (is.null(dispersion) && !dispersion_formula_has_terms(formula_dispersion))
+  out <- if (scalar_shape) {
+    formula_abundance
+  } else {
+    add_dispersion_shape(formula_abundance, formula_dispersion, dispersion)
   }
-  add_dispersion_shape(formula_abundance, formula_dispersion, dispersion)
+  strip_formula_env(out)
+}
+
+# A formula holds a reference to the frame it was written in, so a model fitted
+# inside a function serialises that entire frame - the SummarizedExperiment
+# included - into every stored fit. Terms are resolved against the data first
+# and the global environment after, which is where user-defined helpers live.
+# This also makes a direct estimate_gene() call match the pipeline, which has
+# always rebuilt formulas against globalenv() after a round trip through disk.
+strip_formula_env <- function(x) {
+  if (inherits(x, "brmsformula")) {
+    x$formula <- strip_formula_env(x$formula)
+    if (length(x$pforms)) {
+      x$pforms <- lapply(x$pforms, strip_formula_env)
+    }
+    return(x)
+  }
+  if (inherits(x, "formula")) {
+    environment(x) <- globalenv()
+  }
+  x
 }
 
 is_zinb_family <- function(family) {

@@ -11,6 +11,32 @@ brmde_input_dir <- function(store) {
   paste0(store, "_input")
 }
 
+# targets hashes the arguments baked into a target's command, not the contents
+# of any file those arguments point to. A fixed args path would therefore never
+# change, and edited arguments would be answered with a stale cached result.
+# Naming the file after a hash of its contents moves the change into the
+# command. Elements are deparsed before hashing because objects such as brms
+# families carry environments, whose raw hash differs between R sessions and
+# would force a rebuild on every run.
+write_args_rds <- function(input_dir, prefix, args) {
+  fingerprint <- rlang::hash(
+    vapply(args, function(x) paste(deparse(x), collapse = " "), character(1))
+  )
+  path <- file.path(
+    input_dir,
+    sprintf("%s_%s.rds", prefix, substr(fingerprint, 1, 16))
+  )
+  saveRDS(args, path)
+  normalizePath(path, mustWork = FALSE)
+}
+
+# Formulas cross into the targets graph as text, so they carry no environment
+# and compare cleanly between runs. Terms resolve against the data first and
+# the global environment after, matching estimate_gene().
+as_pipeline_formula <- function(text) {
+  stats::as.formula(text, env = globalenv())
+}
+
 write_brmde_hpc_header <- function(script,
                                    packages,
                                    controller_rds,
@@ -78,7 +104,7 @@ check_features <- function(features) {
 #' @export
 gene_ids_for_hpc <- function(se, features_rds) {
   ids <- rownames(se)
-  features <- readRDS(features_rds)
+  features <- readRDS(features_rds)$features
   if (!is.null(features)) {
     ids <- intersect(ids, features)
   }
@@ -90,36 +116,26 @@ gene_ids_for_hpc <- function(se, features_rds) {
 
 #' @keywords internal
 #' @export
-estimate_gene_from_se <- function(se, feature_id, args_rds) {
+estimate_gene_from_se <- function(se,
+                                  feature_id,
+                                  formula_abundance,
+                                  formula_dispersion,
+                                  args_rds) {
   args <- readRDS(args_rds)
-  as_local_formula <- function(text) {
-    stats::as.formula(text, env = new.env(parent = globalenv()))
-  }
-  formula_abundance <- as_local_formula(args$formula_abundance)
-  formula_dispersion <- as_local_formula(args$formula_dispersion)
-  offset <- args$offset
-  abundance <- args$abundance
-  dispersion <- args$dispersion
-  dispersion_degrees_freedom <- args$dispersion_degrees_freedom
-  args$formula_abundance <- NULL
-  args$formula_dispersion <- NULL
-  args$offset <- NULL
-  args$abundance <- NULL
-  args$dispersion <- NULL
-  args$dispersion_degrees_freedom <- NULL
+  named <- c("abundance", "offset", "dispersion", "dispersion_degrees_freedom")
   do.call(
     estimate_gene,
     c(
       list(
         data = se[unlist(feature_id), , drop = FALSE],
-        formula_abundance = formula_abundance,
-        formula_dispersion = formula_dispersion,
-        offset = offset,
-        abundance = abundance,
-        dispersion = dispersion,
-        dispersion_degrees_freedom = dispersion_degrees_freedom
+        formula_abundance = as_pipeline_formula(formula_abundance),
+        formula_dispersion = as_pipeline_formula(formula_dispersion),
+        offset = args$offset,
+        abundance = args$abundance,
+        dispersion = args$dispersion,
+        dispersion_degrees_freedom = args$dispersion_degrees_freedom
       ),
-      args
+      args[setdiff(names(args), named)]
     )
   )
 }
@@ -262,13 +278,12 @@ brmDE <- function(.data,
   script <- paste0(store, ".R")
 
   se_rds <- normalizePath(file.path(input_dir, "se.rds"), mustWork = FALSE)
-  features_rds <- normalizePath(file.path(input_dir, "features.rds"), mustWork = FALSE)
+  features_rds <- write_args_rds(input_dir, "features", list(features = features))
   controller_rds <- normalizePath(
     file.path(input_dir, "computing_resources.rds"),
     mustWork = FALSE
   )
   saveRDS(.data, se_rds)
-  saveRDS(features, features_rds)
   saveRDS(computing_resources, controller_rds)
 
   write_brmde_hpc_header(
@@ -339,8 +354,6 @@ brmDE <- function(.data,
 #'   gene-wise fits).
 #' @param dispersion_degrees_freedom Name of the effective degrees of freedom
 #'   column written alongside it by [estimate_dispersion()].
-#' @param abundance Count assay name. Default is the value given to
-#'   [brmDE()].
 #' @param target_output Name of the targets output.
 #' @param ... Passed to [estimate_gene()] (e.g. `family`, `chains`, `iter`).
 #'
@@ -379,64 +392,58 @@ estimate.HPCell <- function(input_hpc,
                             offset,
                             dispersion,
                             dispersion_degrees_freedom = "dispersion_degrees_freedom",
-                            abundance = NULL,
                             target_output = "brms_fit",
                             ...) {
   offset <- check_offset_name(offset)
   dispersion <- check_dispersion_name(dispersion)
   dispersion_degrees_freedom <-
     check_degrees_freedom_name(dispersion_degrees_freedom)
-  if (is.null(abundance)) {
-    abundance <- input_hpc$initialisation$abundance
-  }
-  if (is.null(abundance)) {
-    abundance <- "counts"
-  }
+  abundance <- input_hpc$initialisation$abundance
 
   dots <- list(...)
-  dots$formula_abundance <- NULL
-  dots$formula_dispersion <- NULL
-  dots$offset <- NULL
-  dots$dispersion <- NULL
-  dots$dispersion_degrees_freedom <- NULL
   input_dir <- brmde_input_dir(input_hpc$initialisation$store)
-  dispersion_args_rds <- normalizePath(
-    file.path(input_dir, "dispersion_args.rds"),
-    mustWork = FALSE
-  )
-  args_rds <- normalizePath(
-    file.path(input_dir, "estimate_args.rds"),
-    mustWork = FALSE
-  )
-  saveRDS(
+  dispersion_args_rds <- write_args_rds(
+    input_dir,
+    "dispersion_args",
     list(
-      formula_abundance = formula_text(formula_abundance),
       abundance = abundance,
       dispersion = dispersion,
       dispersion_degrees_freedom = dispersion_degrees_freedom
-    ),
-    dispersion_args_rds
+    )
   )
-  saveRDS(
+  args_rds <- write_args_rds(
+    input_dir,
+    "estimate_args",
     c(
       list(
-        formula_abundance = formula_text(formula_abundance),
-        formula_dispersion = formula_text(formula_dispersion),
         abundance = abundance,
         offset = offset,
         dispersion = dispersion,
         dispersion_degrees_freedom = dispersion_degrees_freedom
       ),
       dots
-    ),
-    args_rds
+    )
   )
 
+  # The formulas are targets of their own so that editing one invalidates the
+  # fits that depend on it. Keeping them apart also means a change to the
+  # dispersion model does not re-run edgeR, which only sees the mean model.
   input_hpc |>
+    HPCell::hpc_single(
+      target_output = "formula_abundance_text",
+      user_function = identity |> quote(),
+      x = formula_text(formula_abundance)
+    ) |>
+    HPCell::hpc_single(
+      target_output = "formula_dispersion_text",
+      user_function = identity |> quote(),
+      x = formula_text(formula_dispersion)
+    ) |>
     HPCell::hpc_single(
       target_output = "se_dispersion",
       user_function = estimate_dispersion_from_args |> quote(),
       se = "se_offset" |> HPCell::is_target(),
+      formula_abundance = "formula_abundance_text" |> HPCell::is_target(),
       args_rds = dispersion_args_rds
     ) |>
     HPCell::hpc_iterate(
@@ -444,6 +451,8 @@ estimate.HPCell <- function(input_hpc,
       user_function = estimate_gene_from_se |> quote(),
       se = "se_dispersion" |> HPCell::is_target(),
       feature_id = "gene_id" |> HPCell::is_target(),
+      formula_abundance = "formula_abundance_text" |> HPCell::is_target(),
+      formula_dispersion = "formula_dispersion_text" |> HPCell::is_target(),
       args_rds = args_rds
     ) |>
     as_brmde_hpc()
@@ -477,14 +486,11 @@ hypothesis.HPCell <- function(x,
     )
   }
 
-  args_rds <- normalizePath(
-    file.path(
-      brmde_input_dir(x$initialisation$store),
-      "hypothesis_args.rds"
-    ),
-    mustWork = FALSE
+  args_rds <- write_args_rds(
+    brmde_input_dir(x$initialisation$store),
+    "hypothesis_args",
+    c(list(hypothesis = hypothesis), list(...))
   )
-  saveRDS(c(list(hypothesis = hypothesis), list(...)), args_rds)
 
   x |>
     HPCell::hpc_iterate(
@@ -548,11 +554,11 @@ adjust.HPCell <- function(input_hpc,
     dots$re_formula <- formula_text(dots$re_formula)
   }
 
-  args_rds <- normalizePath(
-    file.path(brmde_input_dir(input_hpc$initialisation$store), "adjust_args.rds"),
-    mustWork = FALSE
+  args_rds <- write_args_rds(
+    brmde_input_dir(input_hpc$initialisation$store),
+    "adjust_args",
+    c(list(nullify = nullify), dots)
   )
-  saveRDS(c(list(nullify = nullify), dots), args_rds)
 
   input_hpc |>
     HPCell::hpc_iterate(

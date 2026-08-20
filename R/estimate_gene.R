@@ -7,6 +7,16 @@
 #' are reported with a message. Priors, inits, and MCMC defaults follow the
 #' immuneBodyMap ZINB specification and can all be overridden.
 #'
+#' Formula terms are resolved against `data` first and the global environment
+#' after. The environment a formula was written in is deliberately dropped:
+#' R attaches the defining frame to every formula, so a fit produced inside a
+#' function would otherwise serialise that whole frame - the
+#' `SummarizedExperiment` included - into each stored `brmsfit`, once per gene.
+#' A formula referring to a local variable (`~ poly(dose, k)` with a local `k`)
+#' will therefore not resolve it; promote such values to arguments or to the
+#' global environment. The HPCell pipeline has always behaved this way, because
+#' formulas make a round trip through disk as text.
+#'
 #' @param data A data frame with one row per sample, or a
 #'   `SummarizedExperiment` with a single feature.
 #' @param formula_abundance Model for the mean. A `formula` or `brmsformula`

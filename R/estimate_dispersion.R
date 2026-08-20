@@ -209,15 +209,11 @@ estimate_dispersion <- function(se,
 
 #' @keywords internal
 #' @export
-estimate_dispersion_from_args <- function(se, args_rds) {
+estimate_dispersion_from_args <- function(se, formula_abundance, args_rds) {
   args <- readRDS(args_rds)
-  formula_abundance <- stats::as.formula(
-    args$formula_abundance,
-    env = new.env(parent = globalenv())
-  )
   estimate_dispersion(
     se,
-    formula_abundance = formula_abundance,
+    formula_abundance = as_pipeline_formula(formula_abundance),
     abundance = args$abundance,
     dispersion = args$dispersion,
     dispersion_degrees_freedom = args$dispersion_degrees_freedom

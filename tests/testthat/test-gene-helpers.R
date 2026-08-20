@@ -52,6 +52,27 @@ test_that("prepare_formula does not duplicate an existing offset", {
   expect_equal(length(gregexpr("offset\\s*\\(", txt)[[1]]), 1)
 })
 
+test_that("prepare_formula drops the caller frame from the formula", {
+  # A formula written inside a function otherwise carries that whole frame into
+  # every serialised fit, which for a gene-wise pipeline means one copy of the
+  # SummarizedExperiment per gene on disk.
+  build <- function() {
+    hidden <- matrix(0, nrow = 5e4, ncol = 10)
+    brmDE:::prepare_formula(
+      ~ dex + (1 | cell),
+      abundance = "counts",
+      offset = "offset",
+      dispersion = "dispersion"
+    )
+  }
+  f <- suppressMessages(build())
+
+  expect_identical(environment(f$formula), globalenv())
+  expect_identical(environment(f$pforms$shape), globalenv())
+  expect_false(exists("hidden", environment(f$formula), inherits = TRUE))
+  expect_lt(length(serialize(f, NULL)), 10000)
+})
+
 test_that("sanitize_names collapses repeated underscores", {
   dat <- airway_one_gene_tbl()
   dat$assay_groups___altered <- as.character(dat$dex)
