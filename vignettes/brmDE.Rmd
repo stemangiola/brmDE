@@ -79,6 +79,7 @@ se <- airway |>
 # Because the edgeR dispersion estimation (in the backend of the `estimate_dispersion` function)
 # cannot model mixed effect model, we do the next best thing
 # by adding the cell random effect to the formula_abundance as fixed effect
+# So `dex + (1|cell)` becomes `dex + cell` and `dex + (dex|cell)` becomes  `dex*cell`
 se <- se |> estimate_dispersion(formula_abundance = ~ dex + cell)
 
 # One rowData column per estimate, both named by arguments of the same name:

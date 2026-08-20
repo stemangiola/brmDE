@@ -12,8 +12,8 @@ These objects are imported from other packages. Follow the links
 below to see their documentation.
 
 \describe{
-  \item{brms}{\code{\link[brms:hypothesis]{hypothesis()}}}
-
   \item{HPCell}{\code{\link[HPCell:evaluate_hpc]{evaluate_hpc()}}}
+
+  \item{brms}{\code{\link[brms:hypothesis]{hypothesis()}}}
 }}
 
