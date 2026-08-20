@@ -10,9 +10,13 @@ Description: Fit, test, and adjust one gene at a time using brms count
     onto the same targets graph.
 License: GPL-3
 Encoding: UTF-8
+Biarch: true
+biocViews: AssayDomain, Infrastructure, RNASeq, DifferentialExpression,
+    GeneExpression, Normalization, Clustering, QualityControl, Sequencing,
+    Transcription, Transcriptomics
 Roxygen: list(markdown = TRUE)
 Depends:
-    R (>= 4.1.0)
+    R (>= 4.6.0)
 Imports:
     brms,
     dplyr,
