@@ -36,6 +36,8 @@ test_that("estimate, hypothesis, and adjust append to one HPCell script", {
   expect_match(script, "estimate_args_[0-9a-f]+\\.rds")
   expect_match(script, 'target_output = "formula_abundance_text"')
   expect_match(script, 'target_output = "formula_dispersion_text"')
+  # Setup / identity targets run on the main process, not the crew controller.
+  expect_match(script, 'deployment = "main"')
   # Dispersion is estimated upstream of the pipeline, not inside it.
   expect_no_match(script, "estimate_dispersion", fixed = TRUE)
   expect_match(script, "estimate_gene_from_se")

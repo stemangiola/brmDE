@@ -339,18 +339,27 @@ brmDE <- function(.data,
   )
 
   input_hpc |>
-    HPCell::hpc_single("file_se", se_rds, format = "file") |>
+    # Cheap setup targets stay on the main process; only gene-wise branches
+    # go through the crew controller.
+    HPCell::hpc_single(
+      "file_se",
+      se_rds,
+      format = "file",
+      deployment = "main"
+    ) |>
     HPCell::hpc_single(
       target_output = "se_input",
       user_function = readRDS |> quote(),
-      file = "file_se" |> HPCell::is_target()
+      file = "file_se" |> HPCell::is_target(),
+      deployment = "main"
     ) |>
     HPCell::hpc_single(
       target_output = "gene_id",
       user_function = gene_ids_for_hpc |> quote(),
       se = "se_input" |> HPCell::is_target(),
       features_rds = features_rds,
-      iterate = "map"
+      iterate = "map",
+      deployment = "main"
     ) |>
     as_brmde_hpc()
 }
@@ -454,17 +463,19 @@ estimate.HPCell <- function(input_hpc,
   )
 
   # The formulas are targets of their own so that editing one invalidates the
-  # fits that depend on it.
+  # fits that depend on it. They only store a string, so run on main.
   pipeline <- input_hpc |>
     HPCell::hpc_single(
       target_output = "formula_abundance_text",
       user_function = identity |> quote(),
-      x = formula_text(formula_abundance)
+      x = formula_text(formula_abundance),
+      deployment = "main"
     ) |>
     HPCell::hpc_single(
       target_output = "formula_dispersion_text",
       user_function = identity |> quote(),
-      x = formula_text(formula_dispersion)
+      x = formula_text(formula_dispersion),
+      deployment = "main"
     )
 
   pipeline |>
