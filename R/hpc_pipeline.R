@@ -94,6 +94,19 @@ gene_ids_for_hpc <- function(se, features = NULL) {
   as.list(ids)
 }
 
+# One branch per element, so this list is what sets the number of HPC jobs.
+# Splitting genes into fewer, larger elements trades scheduler overhead for
+# coarser invalidation: the ids in a bundle are hashed together, so changing
+# the gene set reshuffles the bundles and refits all of them.
+#' @keywords internal
+#' @export
+bundle_gene_ids <- function(ids, bundle) {
+  ids <- unlist(ids, use.names = FALSE)
+  unname(split(ids, ceiling(seq_along(ids) / max(1L, as.integer(bundle)))))
+}
+
+# Every branch returns a list of gene-wise results, one element per gene it was
+# given, whether or not genes were bundled. collect_branches() relies on that.
 #' @keywords internal
 #' @export
 estimate_gene_from_se <- function(se,
@@ -101,29 +114,35 @@ estimate_gene_from_se <- function(se,
                                   formula_abundance,
                                   formula_dispersion,
                                   args) {
-  do.call(
-    estimate_gene,
-    c(
-      list(
-        data = se[unlist(feature_id), , drop = FALSE],
-        formula_abundance = as_pipeline_formula(formula_abundance),
-        formula_dispersion = as_pipeline_formula(formula_dispersion)
-      ),
-      args
+  lapply(unlist(feature_id), function(id) {
+    do.call(
+      estimate_gene,
+      c(
+        list(
+          data = se[id, , drop = FALSE],
+          formula_abundance = as_pipeline_formula(formula_abundance),
+          formula_dispersion = as_pipeline_formula(formula_dispersion)
+        ),
+        args
+      )
     )
-  )
+  })
 }
 
 #' @keywords internal
 #' @export
 hypothesis_gene_from_fit <- function(fit, args) {
-  do.call(hypothesis_gene, c(list(fit = fit), args))
+  lapply(as_branch_list(fit), function(f) {
+    do.call(hypothesis_gene, c(list(fit = f), args))
+  })
 }
 
 #' @keywords internal
 #' @export
 adjust_gene_from_fit <- function(fit, args) {
-  do.call(adjust_gene, c(list(fit = fit), args))
+  lapply(as_branch_list(fit), function(f) {
+    do.call(adjust_gene, c(list(fit = f), args))
+  })
 }
 
 as_branch_list <- function(x) {
@@ -136,6 +155,13 @@ as_branch_list <- function(x) {
   list(x)
 }
 
+# A branch holds one bundle's worth of results, so drop that level to get back
+# to one element per gene. Branches come back in bundle order and bundles keep
+# gene order, so this lines up with `gene_id`.
+collect_branches <- function(x) {
+  do.call(c, unname(lapply(as_branch_list(x), as_branch_list)))
+}
+
 collect_brmde_hpc <- function(input_hpc) {
   store <- input_hpc$initialisation$store
   gene_id <- unlist(
@@ -145,17 +171,17 @@ collect_brmde_hpc <- function(input_hpc) {
   out <- tibble::tibble(.feature = as.character(gene_id))
 
   if ("brms_fit" %in% names(input_hpc)) {
-    out$brms_fit <- as_branch_list(
+    out$brms_fit <- collect_branches(
       targets::tar_read_raw("brms_fit", store = store)
     )
   }
   if ("hypothesis_tbl" %in% names(input_hpc)) {
-    out$hypothesis <- as_branch_list(
+    out$hypothesis <- collect_branches(
       targets::tar_read_raw("hypothesis_tbl", store = store)
     )
   }
   if ("adjust_tbl" %in% names(input_hpc)) {
-    out$adjust <- as_branch_list(
+    out$adjust <- collect_branches(
       targets::tar_read_raw("adjust_tbl", store = store)
     )
   }
@@ -361,10 +387,33 @@ brmDE <- function(.data,
 #' Prior constants derived from each gene are passed to Stan as data, so every
 #' gene generates identical Stan code and cmdstanr compiles it at most once per
 #' worker process rather than once per gene.
+#' @param bundle Number of genes to fit per target. `1` (default) gives one
+#'   target per gene. A larger value fits that many genes sequentially inside
+#'   one target, which is how you stop tens of thousands of genes from
+#'   swamping an HPC scheduler with tiny jobs. See *Bundling* below.
 #' @param target_output Name of the targets output.
 #' @param ... Passed to [estimate_gene()] (e.g. `family`, `chains`, `iter`).
 #'
 #' @return The updated `tidytargets` pipeline.
+#'
+#' @section Bundling:
+#' One target per gene gives the scheduler tens of thousands of jobs whose
+#' queueing cost rivals the fit itself. `bundle` puts that many genes in each
+#' fit target instead, and [hypothesis()] and [adjust()] inherit the coarser
+#' branching because they map over the fit target. The result of
+#' [tt_evaluate()] is unchanged: one row per gene, in the same order.
+#'
+#' Size `bundle` against one job rather than against the gene count, since
+#' that is what it controls.
+#'
+#' * A bundle is fitted sequentially in one worker, so it needs about `bundle`
+#'   times the walltime of a single fit.
+#' * A bundle is one `.rds` holding `bundle` fits, and it is read back into
+#'   the main process, so the size of a `brmsfit` is what limits how far you
+#'   can push this.
+#' * Invalidation is per bundle. One gene failing loses its bundle, and
+#'   changing the gene set reshuffles bundle membership and refits everything.
+#'   Leave `bundle` at `1` when you rely on incremental reruns.
 #'
 #' @export
 estimate <- function(input_hpc,
@@ -401,9 +450,11 @@ estimate.tidytargets <- function(input_hpc,
                             offset,
                             dispersion = NULL,
                             dispersion_degrees_freedom = NULL,
+                            bundle = 1L,
                             target_output = "brms_fit",
                             ...) {
   offset <- check_offset_name(offset)
+  bundle <- check_bundle(bundle)
   if (!is.null(dispersion)) {
     dispersion <- check_dispersion_name(dispersion)
   }
@@ -453,12 +504,30 @@ estimate.tidytargets <- function(input_hpc,
       deployment = "main"
     )
 
+  # The branch count is whatever this target's list is long, so bundling is
+  # just a regrouping of the gene ids upstream of the fit. At bundle = 1 that
+  # regrouping is the identity, and leaving the target out keeps the graph
+  # (and so the stored hashes) as it was before bundling existed.
+  feature_target <- "gene_id"
+  if (bundle > 1L) {
+    feature_target <- "gene_bundle"
+    pipeline <- pipeline |>
+      tidytargets::tt_single(
+        target_output = feature_target,
+        user_function = bundle_gene_ids |> quote(),
+        ids = "gene_id" |> tidytargets::is_target(),
+        bundle = bundle,
+        iterate = "map",
+        deployment = "main"
+      )
+  }
+
   pipeline |>
     tidytargets::tt_iterate(
       target_output = target_output,
       user_function = estimate_gene_from_se |> quote(),
       se = "se_input" |> tidytargets::is_target(),
-      feature_id = "gene_id" |> tidytargets::is_target(),
+      feature_id = feature_target |> tidytargets::is_target(),
       formula_abundance = "formula_abundance_text" |> tidytargets::is_target(),
       formula_dispersion = "formula_dispersion_text" |> tidytargets::is_target(),
       args = args_target |> tidytargets::is_target()

@@ -78,6 +78,8 @@ se |>
 
 Printing that object runs the pipeline (`print` calls `tt_evaluate()`, as in tidytargets).
 
+By default each gene is its own target. At transcriptome scale that can swamp an HPC scheduler with tiny jobs, so `estimate(bundle = 100)` fits 100 genes per target instead; the output is unchanged, one row per gene.
+
 See the package vignette for the full walkthrough, including both shape-prior options:
 
 ```r

@@ -33,6 +33,18 @@ check_degrees_freedom_name <- function(dispersion_degrees_freedom) {
   check_column_name(dispersion_degrees_freedom, "dispersion_degrees_freedom")
 }
 
+check_bundle <- function(bundle) {
+  if (!is.numeric(bundle) || length(bundle) != 1L || !is.finite(bundle) ||
+    bundle < 1 || bundle != trunc(bundle)) {
+    stop(
+      "`bundle` must be a single positive whole number of genes per target; ",
+      "1 fits one gene per target.",
+      call. = FALSE
+    )
+  }
+  as.integer(bundle)
+}
+
 check_shape_prior <- function(shape_prior) {
   if (!is.character(shape_prior) || length(shape_prior) < 1L) {
     stop('`shape_prior` must be "student_t" or "gamma".', call. = FALSE)

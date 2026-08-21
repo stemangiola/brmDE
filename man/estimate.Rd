@@ -33,6 +33,7 @@ estimate(
   offset,
   dispersion = NULL,
   dispersion_degrees_freedom = NULL,
+  bundle = 1L,
   target_output = "brms_fit",
   ...
 )
@@ -58,6 +59,11 @@ freedom column written alongside it by \code{\link[=estimate_dispersion]{estimat
 
 \item{...}{Passed to \code{\link[=estimate_gene]{estimate_gene()}} (e.g. \code{family}, \code{chains}, \code{iter}).}
 
+\item{bundle}{Number of genes to fit per target. \code{1} (default) gives one
+target per gene. A larger value fits that many genes sequentially inside
+one target, which is how you stop tens of thousands of genes from
+swamping an HPC scheduler with tiny jobs. See \emph{Bundling} below.}
+
 \item{target_output}{Name of the targets output.}
 }
 \value{
@@ -80,3 +86,25 @@ Prior constants derived from each gene are passed to Stan as data, so every
 gene generates identical Stan code and cmdstanr compiles it at most once per
 worker process rather than once per gene.
 }
+\section{Bundling}{
+
+One target per gene gives the scheduler tens of thousands of jobs whose
+queueing cost rivals the fit itself. \code{bundle} puts that many genes in each
+fit target instead, and \code{\link[=hypothesis]{hypothesis()}} and \code{\link[=adjust]{adjust()}} inherit the coarser
+branching because they map over the fit target. The result of
+\code{\link[=tt_evaluate]{tt_evaluate()}} is unchanged: one row per gene, in the same order.
+
+Size \code{bundle} against one job rather than against the gene count, since
+that is what it controls.
+\itemize{
+\item A bundle is fitted sequentially in one worker, so it needs about \code{bundle}
+times the walltime of a single fit.
+\item A bundle is one \code{.rds} holding \code{bundle} fits, and it is read back into
+the main process, so the size of a \code{brmsfit} is what limits how far you
+can push this.
+\item Invalidation is per bundle. One gene failing loses its bundle, and
+changing the gene set reshuffles bundle membership and refits everything.
+Leave \code{bundle} at \code{1} when you rely on incremental reruns.
+}
+}
+

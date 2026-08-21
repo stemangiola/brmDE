@@ -209,6 +209,29 @@ pipeline <- se |>
 pipeline
 ```
 
+## Bundling genes into fewer jobs
+
+At transcriptome scale, if the sample size is small and each gene estimation is quick, the scheduler must handle tens of thousands of jobs whose queueing cost can rival the fits themselves. `bundle` is how many genes `estimate()` puts in each fit target, fitted in sequence; `1`, the default, is one target per gene. `hypothesis()` and `adjust()` map over the fit target, so they inherit the coarser branching without being told about it, and the result is still one row per gene in the same order.
+On the other hand, if the sample size is large and each gene estimation is slow, you should not bundle as you risk less that the failure of one gene would compromise the whole bundle.
+
+```{r bundle, eval = FALSE}
+pipeline <- se |>
+  brmDE(
+    store = "/path/to/brmde_store",
+    computing_resources = crew_controller_slurm(workers = 100)
+  ) |>
+  estimate(
+    ~ dex + (1 | cell),
+    offset = "offset",
+    dispersion = "dispersion",
+    dispersion_degrees_freedom = "dispersion_degrees_freedom",
+    bundle = 100    # 20,000 genes become 200 jobs of 100 fits each
+  ) |>
+  hypothesis("dextrt = 0")
+```
+
+Pick `bundle` against a single job rather than against the gene count, because that is exactly what it fixes: a job takes about `bundle` times as long as one fit and lands on disk as a single `.rds` holding `bundle` `brmsfit` objects, whether you are running 200 genes or 20,000. Bundling also coarsens `targets`' bookkeeping. A gene that fails takes its bundle with it, and changing the gene set reshuffles which genes share a bundle, so everything refits. Leave `bundle` at `1` when you are iterating on a gene set and relying on incremental reruns.
+
 # What the pipeline writes
 
 | Step | Column / target | Role |

@@ -134,6 +134,146 @@ test_that("estimate requires an offset column name", {
   )
 })
 
+test_that("bundle regroups the genes into fewer fit targets", {
+  skip_if_not_installed("tidytargets")
+  skip_if_not_installed("targets")
+
+  se <- airway_for_hpc()
+  stores <- character(0)
+  on.exit(
+    for (s in stores) {
+      unlink(s, recursive = TRUE)
+      unlink(paste0(s, ".R"))
+      unlink(paste0(s, "_input"), recursive = TRUE)
+    },
+    add = TRUE
+  )
+
+  script_for <- function(...) {
+    store <- tempfile("brmde_bundle_")
+    stores <<- c(stores, store)
+    se |>
+      brmDE(store = store, features = rownames(se)[1:6]) |>
+      estimate(~dex, offset = "offset", ...) |>
+      hypothesis("dextrt = 0")
+    # The store path is baked into the header, so blank it out before compared
+    # scripts can be expected to match.
+    gsub(basename(store), "STORE", readLines(paste0(store, ".R")), fixed = TRUE)
+  }
+
+  plain <- script_for()
+  bundled <- script_for(bundle = 3)
+
+  # The default is the graph as it was before bundling existed: one fit target
+  # per gene, and no extra target in between.
+  expect_false(any(grepl("gene_bundle", plain, fixed = TRUE)))
+  expect_true(any(grepl('other_arguments_to_map = "gene_id"', plain, fixed = TRUE)))
+  expect_identical(script_for(bundle = 1), plain)
+
+  # With bundling the fits map over the bundles instead, and `bundle` is in
+  # the command so that changing it invalidates the fits.
+  expect_true(any(grepl('target_output = "gene_bundle"', bundled, fixed = TRUE)))
+  expect_true(any(grepl('other_arguments_to_map = "gene_bundle"', bundled, fixed = TRUE)))
+  expect_true(any(grepl("bundle = 3L", bundled, fixed = TRUE)))
+
+  # hypothesis() maps over the fit target, so it inherits the coarser branching.
+  expect_true(any(grepl('other_arguments_to_map = "brms_fit"', bundled, fixed = TRUE)))
+})
+
+test_that("bundle_gene_ids groups genes by size and keeps their order", {
+  ids <- as.list(paste0("g", 1:10))
+
+  expect_identical(unlist(bundle_gene_ids(ids, 4)), unlist(ids))
+  # Bundles are `bundle` genes each, so only the last one is a remainder.
+  expect_identical(lengths(bundle_gene_ids(ids, 4)), c(4L, 4L, 2L))
+  expect_identical(lengths(bundle_gene_ids(ids, 5)), c(5L, 5L))
+  # The default is one target per gene.
+  expect_identical(lengths(bundle_gene_ids(ids, 1)), rep(1L, 10))
+  # A bundle bigger than the gene set is one target, not an empty one.
+  expect_identical(lengths(bundle_gene_ids(ids, 50)), 10L)
+})
+
+test_that("bundle must be a positive whole number", {
+  skip_if_not_installed("tidytargets")
+  skip_if_not_installed("targets")
+
+  se <- airway_for_hpc()
+  store <- tempfile("brmde_nbundles_")
+  on.exit(
+    {
+      unlink(store, recursive = TRUE)
+      unlink(paste0(store, ".R"))
+      unlink(paste0(store, "_input"), recursive = TRUE)
+    },
+    add = TRUE
+  )
+  pipeline <- brmDE(se, store = store, features = c("ENSG00000120129"))
+
+  expect_error(estimate(pipeline, ~dex, offset = "offset", bundle = 0), "bundle")
+  expect_error(estimate(pipeline, ~dex, offset = "offset", bundle = 2.5), "bundle")
+  expect_error(estimate(pipeline, ~dex, offset = "offset", bundle = c(1, 2)), "bundle")
+  expect_error(estimate(pipeline, ~dex, offset = "offset", bundle = NULL), "bundle")
+})
+
+test_that("bundled genes give one row per gene, as unbundled ones do", {
+  skip_on_cran()
+  skip_if_not_installed("tidytargets")
+  skip_if_no_cmdstan()
+  skip_if_not_installed("targets")
+
+  se <- airway_for_hpc()
+  features <- c(
+    "ENSG00000120129",
+    setdiff(rownames(se), "ENSG00000120129")[1:3]
+  )
+
+  store <- tempfile("brmde_bundle_eval_")
+  on.exit(
+    {
+      unlink(store, recursive = TRUE)
+      unlink(paste0(store, ".R"))
+      unlink(paste0(store, "_input"), recursive = TRUE)
+    },
+    add = TRUE
+  )
+
+  out <- suppressWarnings(
+    se |>
+      brmDE(features = features, store = store) |>
+      estimate(
+        ~dex,
+        offset = "offset",
+        dispersion = "dispersion",
+        dispersion_degrees_freedom = "dispersion_degrees_freedom",
+        bundle = 2,
+        family = brms::negbinomial(),
+        chains = 1,
+        iter = 200,
+        warmup = 100,
+        cores = 1,
+        backend = "cmdstanr",
+        refresh = 0,
+        silent = 2
+      ) |>
+      hypothesis("dextrt = 0") |>
+      tt_evaluate()
+  )
+
+  # Four genes, but only two fit targets were built.
+  expect_length(targets::tar_read_raw("brms_fit", store = store), 2L)
+
+  expect_equal(out$.feature, features)
+  expect_true(all(vapply(out$brms_fit, inherits, logical(1), "brmsfit")))
+  expect_true(all(vapply(out$hypothesis, inherits, logical(1), "tbl_df")))
+
+  # The fits must still line up with the genes after the bundles are unpacked.
+  counts <- SummarizedExperiment::assay(se, "counts")
+  expect_equal(
+    lapply(out$brms_fit, function(f) as.numeric(f$data$counts)),
+    lapply(features, function(g) as.numeric(counts[g, ]))
+  )
+})
+
 test_that("estimate |> hypothesis |> adjust evaluate as one pipeline", {
   skip_on_cran()
   skip_if_not_installed("tidytargets")
