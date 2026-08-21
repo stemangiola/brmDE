@@ -5,7 +5,7 @@
 \alias{brmDE-package}
 \title{brmDE: Mixed-Effect Modelling for Differential Gene Expression}
 \description{
-Mixed-effect modelling for differential gene expression analyses, based on Bayesian regression through brms. Fit, test, and adjust one gene at a time; an HPCell pipeline composes estimate, hypothesis, and adjust onto the same targets graph.
+Mixed-effect modelling for differential gene expression analyses, based on Bayesian regression through brms. Fit, test, and adjust one gene at a time; a tidytargets pipeline composes estimate, hypothesis, and adjust onto the same targets graph.
 }
 \seealso{
 Useful links:

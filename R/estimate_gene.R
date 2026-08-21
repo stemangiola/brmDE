@@ -14,7 +14,7 @@
 #' `SummarizedExperiment` included - into each stored `brmsfit`, once per gene.
 #' A formula referring to a local variable (`~ poly(dose, k)` with a local `k`)
 #' will therefore not resolve it; promote such values to arguments or to the
-#' global environment. The HPCell pipeline has always behaved this way, because
+#' global environment. The targets pipeline has always behaved this way, because
 #' formulas make a round trip through disk as text.
 #'
 #' @param data A data frame with one row per sample, or a

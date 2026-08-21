@@ -7,7 +7,7 @@ Authors@R: c(
     )
 Description: Mixed-effect modelling for differential gene expression
     analyses, based on Bayesian regression through brms. Fit, test, and
-    adjust one gene at a time; an HPCell pipeline composes estimate,
+    adjust one gene at a time; a tidytargets pipeline composes estimate,
     hypothesis, and adjust onto the same targets graph.
 License: GPL-3
 Encoding: UTF-8
@@ -22,7 +22,7 @@ Imports:
     brms,
     dplyr,
     glue,
-    HPCell,
+    tidytargets,
     instantiate (>= 0.2.3),
     parallel,
     rlang,
@@ -47,7 +47,7 @@ Suggests:
 VignetteBuilder: knitr
 SystemRequirements: CmdStan (https://mc-stan.org/users/interfaces/cmdstan), C++14
 Remotes:
-    MangiolaLaboratory/HPCell@ed763c6f53cfedf63d3a3353ec5ffcfd09bfe0e6
+    stemangiola/tidytargets
 Additional_repositories: https://stan-dev.r-universe.dev
 Config/testthat/edition: 3
 URL: https://github.com/MangiolaLaboratory

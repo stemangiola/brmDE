@@ -1,9 +1,9 @@
-# HPCell grammar wrappers. The gene-wise engines stay in estimate_gene(),
-# hypothesis_gene(), and adjust_gene(); these methods only append them to an
-# HPCell targets graph via hpc_single() / hpc_iterate().
+# tidytargets grammar wrappers. The gene-wise engines stay in estimate_gene(),
+# hypothesis_gene(), and adjust_gene(); these methods only append them to a
+# tidytargets graph via tt_single() / tt_iterate().
 
 as_brmde_hpc <- function(x) {
-  class(x) <- unique(c("brmDE_hpc", "HPCell", class(x)))
+  class(x) <- unique(c("brmDE_hpc", "tidytargets", class(x)))
   x
 }
 
@@ -27,7 +27,7 @@ write_brmde_hpc_header <- function(script,
                                    workspace_on_error) {
   expr <- substitute(
     {
-      library(HPCell)
+      library(tidytargets)
       library(brmDE)
       library(targets)
 
@@ -162,13 +162,13 @@ collect_brmde_hpc <- function(input_hpc) {
   out
 }
 
-#' Start a gene-wise HPCell pipeline
+#' Start a gene-wise tidytargets pipeline
 #'
-#' Analogue of HPCell's [HPCell::initialise_hpc()]: writes the targets
+#' Analogue of tidytargets' [tidytargets::tt_initialise()]: writes the targets
 #' header (`target_list`) and the shared steps (load SE, gene ids). Later
 #' calls to [estimate()], [hypothesis()], and [adjust()] append
-#' `hpc_iterate()` branches onto the same graph. Printing the object (or
-#' calling [evaluate_hpc()]) runs the pipeline, as in HPCell.
+#' `tt_iterate()` branches onto the same graph. Printing the object (or
+#' calling [tt_evaluate()]) runs the pipeline, as in tidytargets.
 #'
 #' The pipeline is gene-wise only. Anything estimated across the whole matrix,
 #' namely the library size offset and the edgeR dispersion, belongs upstream of
@@ -192,13 +192,13 @@ collect_brmde_hpc <- function(input_hpc) {
 #'   *SLURM* for an example.
 #' @param debug_step Optional target name for `tar_option_set(debug = )`.
 #' @param callr_function Passed to [targets::tar_make()] by
-#'   [evaluate_hpc()]. `NULL` (default) runs in the current session.
+#'   [tt_evaluate()]. `NULL` (default) runs in the current session.
 #' @param packages Character vector of packages loaded in workers.
 #' @param update,garbage_collection,workspace_on_error Passed through
-#'   to `tar_option_set()` / `tar_cue()` as in HPCell.
+#'   to `tar_option_set()` / `tar_cue()` as in tidytargets.
 #' @param verbosity Reporter passed to [targets::tar_make()].
 #'
-#' @return An `HPCell` pipeline object (`brmDE_hpc`).
+#' @return A `tidytargets` pipeline object (`brmDE_hpc`).
 #'
 #' @examples
 #' \dontrun{
@@ -246,7 +246,7 @@ brmDE <- function(.data,
                       debug_step = NULL,
                       callr_function = NULL,
                       packages = c(
-                        "HPCell",
+                        "tidytargets",
                         "brmDE",
                         "SummarizedExperiment",
                         "brms",
@@ -263,8 +263,8 @@ brmDE <- function(.data,
     stop("`.data` has no genes.", call. = FALSE)
   }
   features <- check_features(features)
-  if (!requireNamespace("HPCell", quietly = TRUE)) {
-    stop("Install HPCell to build the pipeline.", call. = FALSE)
+  if (!requireNamespace("tidytargets", quietly = TRUE)) {
+    stop("Install tidytargets to build the pipeline.", call. = FALSE)
   }
 
   dir.create(store, showWarnings = FALSE, recursive = TRUE)
@@ -308,22 +308,22 @@ brmDE <- function(.data,
   input_hpc |>
     # Cheap setup targets stay on the main process; only gene-wise branches
     # go through the crew controller.
-    HPCell::hpc_single(
+    tidytargets::tt_single(
       "file_se",
       se_rds,
       format = "file",
       deployment = "main"
     ) |>
-    HPCell::hpc_single(
+    tidytargets::tt_single(
       target_output = "se_input",
       user_function = readRDS |> quote(),
-      file = "file_se" |> HPCell::is_target(),
+      file = "file_se" |> tidytargets::is_target(),
       deployment = "main"
     ) |>
-    HPCell::hpc_single(
+    tidytargets::tt_single(
       target_output = "gene_id",
       user_function = gene_ids_for_hpc |> quote(),
-      se = "se_input" |> HPCell::is_target(),
+      se = "se_input" |> tidytargets::is_target(),
       features = features,
       iterate = "map",
       deployment = "main"
@@ -331,12 +331,12 @@ brmDE <- function(.data,
     as_brmde_hpc()
 }
 
-#' Estimate genes on an HPCell pipeline
+#' Estimate genes on a tidytargets pipeline
 #'
-#' Appends an [HPCell::hpc_iterate()] step that calls [estimate_gene()] once
+#' Appends a [tidytargets::tt_iterate()] step that calls [estimate_gene()] once
 #' per gene.
 #'
-#' @param input_hpc An `HPCell` / `brmDE_hpc` pipeline from [brmDE()].
+#' @param input_hpc A `tidytargets` / `brmDE_hpc` pipeline from [brmDE()].
 #' @param formula_abundance Model for the mean, passed to [estimate_gene()].
 #' @param formula_dispersion One-sided model for the negative binomial shape,
 #'   passed to [estimate_gene()]. `~1` by default.
@@ -364,7 +364,7 @@ brmDE <- function(.data,
 #' @param target_output Name of the targets output.
 #' @param ... Passed to [estimate_gene()] (e.g. `family`, `chains`, `iter`).
 #'
-#' @return The updated `HPCell` pipeline.
+#' @return The updated `tidytargets` pipeline.
 #'
 #' @export
 estimate <- function(input_hpc,
@@ -395,7 +395,7 @@ estimate.default <- function(input_hpc,
 
 #' @rdname estimate
 #' @export
-estimate.HPCell <- function(input_hpc,
+estimate.tidytargets <- function(input_hpc,
                             formula_abundance,
                             formula_dispersion = ~1,
                             offset,
@@ -434,19 +434,19 @@ estimate.HPCell <- function(input_hpc,
   # invalidates the fits that depend on it. They only assemble small objects, so
   # they run on main.
   pipeline <- input_hpc |>
-    HPCell::hpc_single(
+    tidytargets::tt_single(
       target_output = "formula_abundance_text",
       user_function = identity |> quote(),
       x = formula_text(formula_abundance),
       deployment = "main"
     ) |>
-    HPCell::hpc_single(
+    tidytargets::tt_single(
       target_output = "formula_dispersion_text",
       user_function = identity |> quote(),
       x = formula_text(formula_dispersion),
       deployment = "main"
     ) |>
-    HPCell::hpc_single(
+    tidytargets::tt_single(
       target_output = args_target,
       user_function = identity |> quote(),
       x = call("quote", args),
@@ -454,34 +454,34 @@ estimate.HPCell <- function(input_hpc,
     )
 
   pipeline |>
-    HPCell::hpc_iterate(
+    tidytargets::tt_iterate(
       target_output = target_output,
       user_function = estimate_gene_from_se |> quote(),
-      se = "se_input" |> HPCell::is_target(),
-      feature_id = "gene_id" |> HPCell::is_target(),
-      formula_abundance = "formula_abundance_text" |> HPCell::is_target(),
-      formula_dispersion = "formula_dispersion_text" |> HPCell::is_target(),
-      args = args_target |> HPCell::is_target()
+      se = "se_input" |> tidytargets::is_target(),
+      feature_id = "gene_id" |> tidytargets::is_target(),
+      formula_abundance = "formula_abundance_text" |> tidytargets::is_target(),
+      formula_dispersion = "formula_dispersion_text" |> tidytargets::is_target(),
+      args = args_target |> tidytargets::is_target()
     ) |>
     as_brmde_hpc()
 }
 
-#' Hypothesis tests on an HPCell pipeline
+#' Hypothesis tests on a tidytargets pipeline
 #'
-#' Appends an [HPCell::hpc_iterate()] step that calls [hypothesis_gene()]
+#' Appends a [tidytargets::tt_iterate()] step that calls [hypothesis_gene()]
 #' on each [estimate()] fit. This is an S3 method for
 #' [brms::hypothesis()].
 #'
-#' @param x An `HPCell` pipeline from [brmDE()].
+#' @param x A `tidytargets` pipeline from [brmDE()].
 #' @param hypothesis Hypothesis strings passed to [hypothesis_gene()].
 #' @param target_input Name of the upstream fit target.
 #' @param target_output Name of the targets output.
 #' @param ... Passed to [hypothesis_gene()].
 #'
-#' @return The updated `HPCell` pipeline.
+#' @return The updated `tidytargets` pipeline.
 #'
 #' @exportS3Method brms::hypothesis
-hypothesis.HPCell <- function(x,
+hypothesis.tidytargets <- function(x,
                               hypothesis,
                               target_input = "brms_fit",
                               target_output = "hypothesis_tbl",
@@ -502,33 +502,33 @@ hypothesis.HPCell <- function(x,
   ))
 
   x |>
-    HPCell::hpc_single(
+    tidytargets::tt_single(
       target_output = args_target,
       user_function = identity |> quote(),
       x = call("quote", args),
       deployment = "main"
     ) |>
-    HPCell::hpc_iterate(
+    tidytargets::tt_iterate(
       target_output = target_output,
       user_function = hypothesis_gene_from_fit |> quote(),
-      fit = target_input |> HPCell::is_target(),
-      args = args_target |> HPCell::is_target()
+      fit = target_input |> tidytargets::is_target(),
+      args = args_target |> tidytargets::is_target()
     ) |>
     as_brmde_hpc()
 }
 
-#' Adjust genes on an HPCell pipeline
+#' Adjust genes on a tidytargets pipeline
 #'
-#' Appends an [HPCell::hpc_iterate()] step that calls [adjust_gene()] on
+#' Appends a [tidytargets::tt_iterate()] step that calls [adjust_gene()] on
 #' each [estimate()] fit.
 #'
-#' @param input_hpc An `HPCell` pipeline, or a `brmsfit`.
+#' @param input_hpc A `tidytargets` pipeline, or a `brmsfit`.
 #' @param nullify Covariates to nullify, passed to [adjust_gene()].
 #' @param target_input Name of the upstream fit target.
 #' @param target_output Name of the targets output.
 #' @param ... Passed to [adjust_gene()].
 #'
-#' @return The updated `HPCell` pipeline, or an adjustment tibble.
+#' @return The updated `tidytargets` pipeline, or an adjustment tibble.
 #'
 #' @export
 adjust <- function(input_hpc, ...) {
@@ -549,7 +549,7 @@ adjust.default <- function(input_hpc, ...) {
 
 #' @rdname adjust
 #' @export
-adjust.HPCell <- function(input_hpc,
+adjust.tidytargets <- function(input_hpc,
                           nullify = NULL,
                           target_input = "brms_fit",
                           target_output = "adjust_tbl",
@@ -570,24 +570,24 @@ adjust.HPCell <- function(input_hpc,
   ))
 
   input_hpc |>
-    HPCell::hpc_single(
+    tidytargets::tt_single(
       target_output = args_target,
       user_function = identity |> quote(),
       x = call("quote", args),
       deployment = "main"
     ) |>
-    HPCell::hpc_iterate(
+    tidytargets::tt_iterate(
       target_output = target_output,
       user_function = adjust_gene_from_fit |> quote(),
-      fit = target_input |> HPCell::is_target(),
-      args = args_target |> HPCell::is_target()
+      fit = target_input |> tidytargets::is_target(),
+      args = args_target |> tidytargets::is_target()
     ) |>
     as_brmde_hpc()
 }
 
 #' @export
-#' @importFrom HPCell evaluate_hpc
-HPCell::evaluate_hpc
+#' @importFrom tidytargets tt_evaluate
+tidytargets::tt_evaluate
 
 #' @export
 #' @importFrom brms hypothesis
@@ -611,31 +611,31 @@ localize_target_append <- function(script) {
   writeLines(lines, script)
 }
 
-#' @exportS3Method HPCell::evaluate_hpc
-evaluate_hpc.brmDE_hpc <- function(input_hpc) {
-  store <- input_hpc$initialisation$store
+#' @exportS3Method tidytargets::tt_evaluate
+tt_evaluate.brmDE_hpc <- function(tt_input) {
+  store <- tt_input$initialisation$store
   script <- paste0(store, ".R")
   localize_target_append(script)
   cat("target_list\n", file = script, append = TRUE)
 
-  reporter <- input_hpc$initialisation$verbosity
+  reporter <- tt_input$initialisation$verbosity
   make_args <- list(
     script = script,
     store = store,
-    callr_function = input_hpc$initialisation$callr_function
+    callr_function = tt_input$initialisation$callr_function
   )
   if (!is.null(reporter) && !identical(reporter, "undefined")) {
     make_args$reporter <- reporter
   }
   do.call(targets::tar_make, make_args)
 
-  collect_brmde_hpc(input_hpc)
+  collect_brmde_hpc(tt_input)
 }
 
 #' @rdname brmDE
 #' @export
 print.brmDE_hpc <- function(x, ...) {
   x |>
-    evaluate_hpc() |>
+    tt_evaluate() |>
     print(...)
 }

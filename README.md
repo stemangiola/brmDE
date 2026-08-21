@@ -1,7 +1,7 @@
 # brmDE
 
 Mixed-effect modelling for differential gene expression analyses, based on Bayesian regression through [brms](https://paul-buerkner.github.io/brms/).
-Each gene is fit with an arbitrary formula and a precomputed offset; hypothesis tests and covariate adjustment follow, including as an HPCell `targets` pipeline.
+Each gene is fit with an arbitrary formula and a precomputed offset; hypothesis tests and covariate adjustment follow, including as a [tidytargets](https://github.com/stemangiola/tidytargets) `targets` pipeline.
 
 The archived [HPCell](https://github.com/MangiolaLaboratory/HPCell) tree and the immuneBodyMap `dynamic_tar_script.R` are **not** part of this package.
 
@@ -13,8 +13,8 @@ The archived [HPCell](https://github.com/MangiolaLaboratory/HPCell) tree and the
 | `hypothesis_gene()` | Posterior hypothesis tests on that fit |
 | `adjust_gene()` | Residual-plus-fitted adjustment, dropping nuisance covariates |
 | `estimate_dispersion()` | edgeR tagwise/trended dispersion on the full SE (`rowData`) |
-| `brmDE()` | Start an [HPCell](https://github.com/MangiolaLaboratory/HPCell) targets pipeline (`initialise_hpc()` analogue) |
-| `estimate()` / `hypothesis()` / `adjust()` | `hpc_iterate()` steps on that same graph |
+| `brmDE()` | Start a [tidytargets](https://github.com/stemangiola/tidytargets) pipeline (`tt_initialise()` analogue) |
+| `estimate()` / `hypothesis()` / `adjust()` | `tt_iterate()` steps on that same graph |
 
 ```r
 library(brmDE)
@@ -54,7 +54,7 @@ Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offs
 Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))
 ```
 
-To run many genes as **one** HPCell pipeline. The pipeline fits genes and nothing else, so the two whole-matrix quantities it consumes — the offset and the dispersion — are prepared first:
+To run many genes as **one** tidytargets pipeline. The pipeline fits genes and nothing else, so the two whole-matrix quantities it consumes — the offset and the dispersion — are prepared first:
 
 ```r
 data("airway", package = "airway")
@@ -76,7 +76,7 @@ se |>
   adjust(nullify = "dex")
 ```
 
-Printing that object runs the pipeline (`print` calls `evaluate_hpc()`, as in HPCell).
+Printing that object runs the pipeline (`print` calls `tt_evaluate()`, as in tidytargets).
 
 See the package vignette for the full walkthrough, including both shape-prior options:
 

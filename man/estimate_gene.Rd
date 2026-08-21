@@ -155,7 +155,7 @@ function would otherwise serialise that whole frame - the
 \code{SummarizedExperiment} included - into each stored \code{brmsfit}, once per gene.
 A formula referring to a local variable (\code{~ poly(dose, k)} with a local \code{k})
 will therefore not resolve it; promote such values to arguments or to the
-global environment. The HPCell pipeline has always behaved this way, because
+global environment. The targets pipeline has always behaved this way, because
 formulas make a round trip through disk as text.
 }
 \examples{

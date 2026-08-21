@@ -3,7 +3,7 @@
 \name{brmDE}
 \alias{brmDE}
 \alias{print.brmDE_hpc}
-\title{Start a gene-wise HPCell pipeline}
+\title{Start a gene-wise tidytargets pipeline}
 \usage{
 brmDE(
   .data,
@@ -13,7 +13,7 @@ brmDE(
   computing_resources = NULL,
   debug_step = NULL,
   callr_function = NULL,
-  packages = c("HPCell", "brmDE", "SummarizedExperiment", "brms", "tibble"),
+  packages = c("tidytargets", "brmDE", "SummarizedExperiment", "brms", "tibble"),
   update = "thorough",
   garbage_collection = TRUE,
   workspace_on_error = FALSE,
@@ -47,24 +47,24 @@ targets (default). On SLURM, use
 \item{debug_step}{Optional target name for \code{tar_option_set(debug = )}.}
 
 \item{callr_function}{Passed to \code{\link[targets:tar_make]{targets::tar_make()}} by
-\code{\link[=evaluate_hpc]{evaluate_hpc()}}. \code{NULL} (default) runs in the current session.}
+\code{\link[=tt_evaluate]{tt_evaluate()}}. \code{NULL} (default) runs in the current session.}
 
 \item{packages}{Character vector of packages loaded in workers.}
 
 \item{update, garbage_collection, workspace_on_error}{Passed through
-to \code{tar_option_set()} / \code{tar_cue()} as in HPCell.}
+to \code{tar_option_set()} / \code{tar_cue()} as in tidytargets.}
 
 \item{verbosity}{Reporter passed to \code{\link[targets:tar_make]{targets::tar_make()}}.}
 }
 \value{
-An \code{HPCell} pipeline object (\code{brmDE_hpc}).
+A \code{tidytargets} pipeline object (\code{brmDE_hpc}).
 }
 \description{
-Analogue of HPCell's \code{\link[HPCell:initialise_hpc]{HPCell::initialise_hpc()}}: writes the targets
+Analogue of tidytargets' \code{\link[tidytargets:tt_initialise]{tidytargets::tt_initialise()}}: writes the targets
 header (\code{target_list}) and the shared steps (load SE, gene ids). Later
 calls to \code{\link[=estimate]{estimate()}}, \code{\link[=hypothesis]{hypothesis()}}, and \code{\link[=adjust]{adjust()}} append
-\code{hpc_iterate()} branches onto the same graph. Printing the object (or
-calling \code{\link[=evaluate_hpc]{evaluate_hpc()}}) runs the pipeline, as in HPCell.
+\code{tt_iterate()} branches onto the same graph. Printing the object (or
+calling \code{\link[=tt_evaluate]{tt_evaluate()}}) runs the pipeline, as in tidytargets.
 }
 \details{
 The pipeline is gene-wise only. Anything estimated across the whole matrix,

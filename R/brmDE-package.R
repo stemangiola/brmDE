@@ -2,6 +2,6 @@
 "_PACKAGE"
 
 #' @importFrom rlang .data
-#' @importFrom HPCell hpc_iterate hpc_single is_target evaluate_hpc
+#' @importFrom tidytargets tt_iterate tt_single is_target tt_evaluate
 #' @importFrom brms hypothesis
 NULL

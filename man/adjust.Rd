@@ -3,14 +3,14 @@
 \name{adjust}
 \alias{adjust}
 \alias{adjust.default}
-\alias{adjust.HPCell}
-\title{Adjust genes on an HPCell pipeline}
+\alias{adjust.tidytargets}
+\title{Adjust genes on a tidytargets pipeline}
 \usage{
 adjust(input_hpc, ...)
 
 \method{adjust}{default}(input_hpc, ...)
 
-\method{adjust}{HPCell}(
+\method{adjust}{tidytargets}(
   input_hpc,
   nullify = NULL,
   target_input = "brms_fit",
@@ -19,7 +19,7 @@ adjust(input_hpc, ...)
 )
 }
 \arguments{
-\item{input_hpc}{An \code{HPCell} pipeline, or a \code{brmsfit}.}
+\item{input_hpc}{A \code{tidytargets} pipeline, or a \code{brmsfit}.}
 
 \item{...}{Passed to \code{\link[=adjust_gene]{adjust_gene()}}.}
 
@@ -30,9 +30,9 @@ adjust(input_hpc, ...)
 \item{target_output}{Name of the targets output.}
 }
 \value{
-The updated \code{HPCell} pipeline, or an adjustment tibble.
+The updated \code{tidytargets} pipeline, or an adjustment tibble.
 }
 \description{
-Appends an \code{\link[HPCell:hpc_iterate]{HPCell::hpc_iterate()}} step that calls \code{\link[=adjust_gene]{adjust_gene()}} on
+Appends a \code{\link[tidytargets:tt_iterate]{tidytargets::tt_iterate()}} step that calls \code{\link[=adjust_gene]{adjust_gene()}} on
 each \code{\link[=estimate]{estimate()}} fit.
 }

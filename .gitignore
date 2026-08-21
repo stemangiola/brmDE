@@ -20,3 +20,5 @@ vignettes/brmDE.html
 
 # Local development scratch: benchmarks, profiling, throwaway scripts
 dev/
+temp/
+.DS_Store

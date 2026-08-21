@@ -3,8 +3,8 @@
 \name{estimate}
 \alias{estimate}
 \alias{estimate.default}
-\alias{estimate.HPCell}
-\title{Estimate genes on an HPCell pipeline}
+\alias{estimate.tidytargets}
+\title{Estimate genes on a tidytargets pipeline}
 \usage{
 estimate(
   input_hpc,
@@ -26,7 +26,7 @@ estimate(
   ...
 )
 
-\method{estimate}{HPCell}(
+\method{estimate}{tidytargets}(
   input_hpc,
   formula_abundance,
   formula_dispersion = ~1,
@@ -38,7 +38,7 @@ estimate(
 )
 }
 \arguments{
-\item{input_hpc}{An \code{HPCell} / \code{brmDE_hpc} pipeline from \code{\link[=brmDE]{brmDE()}}.}
+\item{input_hpc}{A \code{tidytargets} / \code{brmDE_hpc} pipeline from \code{\link[=brmDE]{brmDE()}}.}
 
 \item{formula_abundance}{Model for the mean, passed to \code{\link[=estimate_gene]{estimate_gene()}}.}
 
@@ -61,10 +61,10 @@ freedom column written alongside it by \code{\link[=estimate_dispersion]{estimat
 \item{target_output}{Name of the targets output.}
 }
 \value{
-The updated \code{HPCell} pipeline.
+The updated \code{tidytargets} pipeline.
 }
 \description{
-Appends an \code{\link[HPCell:hpc_iterate]{HPCell::hpc_iterate()}} step that calls \code{\link[=estimate_gene]{estimate_gene()}} once
+Appends a \code{\link[tidytargets:tt_iterate]{tidytargets::tt_iterate()}} step that calls \code{\link[=estimate_gene]{estimate_gene()}} once
 per gene.
 }
 \details{

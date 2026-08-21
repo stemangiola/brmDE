@@ -1,5 +1,5 @@
-test_that("estimate, hypothesis, and adjust append to one HPCell script", {
-  skip_if_not_installed("HPCell")
+test_that("estimate, hypothesis, and adjust append to one tidytargets script", {
+  skip_if_not_installed("tidytargets")
   skip_if_not_installed("targets")
 
   se <- airway_for_hpc()
@@ -22,14 +22,14 @@ test_that("estimate, hypothesis, and adjust append to one HPCell script", {
     adjust(nullify = "dex")
 
   expect_s3_class(pipeline, "brmDE_hpc")
-  expect_s3_class(pipeline, "HPCell")
+  expect_s3_class(pipeline, "tidytargets")
   expect_true("brms_fit" %in% names(pipeline))
   expect_true("hypothesis_tbl" %in% names(pipeline))
   expect_true("adjust_tbl" %in% names(pipeline))
 
   lines <- readLines(paste0(store, ".R"))
   script <- paste(lines, collapse = "\n")
-  expect_match(script, "hpc_internal")
+  expect_match(script, "tt_factory")
   # Arguments are targets, so targets invalidates the fits when they change and
   # no worker reads them off disk. Only the input object itself is a file.
   expect_match(script, 'target_output = "brms_fit_args"')
@@ -53,7 +53,7 @@ test_that("estimate, hypothesis, and adjust append to one HPCell script", {
 })
 
 test_that("changed arguments change the targets script, unchanged ones do not", {
-  skip_if_not_installed("HPCell")
+  skip_if_not_installed("tidytargets")
   skip_if_not_installed("targets")
 
   se <- airway_for_hpc()
@@ -113,7 +113,7 @@ test_that("brmDE features must be a character vector", {
 })
 
 test_that("estimate requires an offset column name", {
-  skip_if_not_installed("HPCell")
+  skip_if_not_installed("tidytargets")
   skip_if_not_installed("targets")
 
   se <- airway_for_hpc()
@@ -136,7 +136,7 @@ test_that("estimate requires an offset column name", {
 
 test_that("estimate |> hypothesis |> adjust evaluate as one pipeline", {
   skip_on_cran()
-  skip_if_not_installed("HPCell")
+  skip_if_not_installed("tidytargets")
   skip_if_no_cmdstan()
   skip_if_not_installed("targets")
 
@@ -174,7 +174,7 @@ test_that("estimate |> hypothesis |> adjust evaluate as one pipeline", {
       ) |>
       hypothesis("dextrt = 0") |>
       adjust(nullify = "dex") |>
-      evaluate_hpc()
+      tt_evaluate()
   )
 
   expect_equal(out$.feature, "ENSG00000120129")

@@ -3,7 +3,7 @@
 \docType{import}
 \name{reexports}
 \alias{reexports}
-\alias{evaluate_hpc}
+\alias{tt_evaluate}
 \alias{hypothesis}
 \title{Objects exported from other packages}
 \keyword{internal}
@@ -12,8 +12,8 @@ These objects are imported from other packages. Follow the links
 below to see their documentation.
 
 \describe{
-  \item{HPCell}{\code{\link[HPCell:evaluate_hpc]{evaluate_hpc()}}}
-
   \item{brms}{\code{\link[brms:hypothesis]{hypothesis()}}}
+
+  \item{tidytargets}{\code{\link[tidytargets:tt_evaluate]{tt_evaluate()}}}
 }}
 
