@@ -17,12 +17,12 @@ biocViews: AssayDomain, Infrastructure, RNASeq, DifferentialExpression,
     Transcription, Transcriptomics
 Roxygen: list(markdown = TRUE)
 Depends:
-    R (>= 4.6.0)
+    R (>= 4.6.0),
+    tidytargets
 Imports:
     brms,
     dplyr,
     glue,
-    tidytargets,
     instantiate (>= 0.2.3),
     parallel,
     rlang,
