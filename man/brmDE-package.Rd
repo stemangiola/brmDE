@@ -3,9 +3,9 @@
 \docType{package}
 \name{brmDE-package}
 \alias{brmDE-package}
-\title{brmDE: Gene-wise Bayesian Differential Expression with brms}
+\title{brmDE: Mixed-Effect Modelling for Differential Gene Expression}
 \description{
-Fit, test, and adjust one gene at a time using brms count models. An HPCell pipeline composes estimate, hypothesis, and adjust onto the same targets graph.
+Mixed-effect modelling for differential gene expression analyses, based on Bayesian regression through brms. Fit, test, and adjust one gene at a time; an HPCell pipeline composes estimate, hypothesis, and adjust onto the same targets graph.
 }
 \seealso{
 Useful links:

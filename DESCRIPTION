@@ -1,13 +1,14 @@
 Package: brmDE
-Title: Gene-wise Bayesian Differential Expression with brms
+Title: Mixed-Effect Modelling for Differential Gene Expression
 Version: 0.0.1
 Authors@R: c(
     person("Stefano", "Mangiola", email = "mangiolastefano@gmail.com",
            role = c("aut", "cre"))
     )
-Description: Fit, test, and adjust one gene at a time using brms count
-    models. An HPCell pipeline composes estimate, hypothesis, and adjust
-    onto the same targets graph.
+Description: Mixed-effect modelling for differential gene expression
+    analyses, based on Bayesian regression through brms. Fit, test, and
+    adjust one gene at a time; an HPCell pipeline composes estimate,
+    hypothesis, and adjust onto the same targets graph.
 License: GPL-3
 Encoding: UTF-8
 Biarch: true

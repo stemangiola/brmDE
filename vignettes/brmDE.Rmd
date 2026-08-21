@@ -1,9 +1,9 @@
 ---
-title: "Gene-wise Bayesian DE with brmDE"
+title: "Mixed-effect modelling for differential gene expression with brmDE"
 author: "Stefano Mangiola"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Gene-wise Bayesian DE with brmDE}
+  %\VignetteIndexEntry{Mixed-effect modelling for differential gene expression with brmDE}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -19,7 +19,7 @@ run_vignette <- instantiate::stan_cmdstan_exists()
 
 # Overview
 
-`brmDE` fits one gene at a time with [brms](https://paul-buerkner.github.io/brms/), then composes those fits into an [HPCell](https://github.com/MangiolaLaboratory/HPCell) `targets` pipeline. The typical flow is:
+`brmDE` does mixed-effect modelling for differential gene expression analyses, based on Bayesian regression through [brms](https://paul-buerkner.github.io/brms/). Each gene is fit on its own, then those fits compose into an [HPCell](https://github.com/MangiolaLaboratory/HPCell) `targets` pipeline. The typical flow is:
 
 1. scale with TMM (`tidybulk::scale_abundance()`) and set `offset = log(1 / multiplier)`
 2. estimate edgeR **dispersion** once on the full matrix (`estimate_dispersion()`)

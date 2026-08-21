@@ -1,7 +1,7 @@
 # brmDE
 
-Gene-wise Bayesian differential expression with [brms](https://paul-buerkner.github.io/brms/).
-This package is the engine for a later `targets` pipeline: one gene in, a precomputed offset, an arbitrary formula, then estimate / hypothesis / adjust.
+Mixed-effect modelling for differential gene expression analyses, based on Bayesian regression through [brms](https://paul-buerkner.github.io/brms/).
+Each gene is fit with an arbitrary formula and a precomputed offset; hypothesis tests and covariate adjustment follow, including as an HPCell `targets` pipeline.
 
 The archived [HPCell](https://github.com/MangiolaLaboratory/HPCell) tree and the immuneBodyMap `dynamic_tar_script.R` are **not** part of this package.
 
