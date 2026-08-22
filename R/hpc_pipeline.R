@@ -170,11 +170,9 @@ collect_brmde_hpc <- function(input_hpc) {
   )
   out <- tibble::tibble(.feature = as.character(gene_id))
 
-  if ("brms_fit" %in% names(input_hpc)) {
-    out$brms_fit <- collect_branches(
-      targets::tar_read_raw("brms_fit", store = store)
-    )
-  }
+  # Twenty thousand brmsfit objects do not fit in one table, so estimate()
+  # contributes the gene column alone. The fits stay in the store; read one
+  # with targets::tar_read(brms_fit, branches = i, store = store).
   if ("hypothesis_tbl" %in% names(input_hpc)) {
     out$hypothesis <- collect_branches(
       targets::tar_read_raw("hypothesis_tbl", store = store)
@@ -398,6 +396,17 @@ brmDE <- function(.data,
 #' @param ... Passed to [estimate_gene()] (e.g. `family`, `chains`, `iter`).
 #'
 #' @return The updated `tidytargets` pipeline.
+#'
+#' @section Where the fits are:
+#' A `brmsfit` carries its draws and its data, so at 20,000 genes the fits are
+#' far too large to be gathered into one table, and gathering them would undo
+#' the point of having a store. [estimate()] therefore contributes the gene
+#' column alone; what makes the result worth reading is [hypothesis()], whose
+#' per-contrast statistics and convergence are small enough to hold for every
+#' gene at once (see [hypothesis_gene()]). The fits stay in the store. Read
+#' one with `targets::tar_read(brms_fit, branches = i, store = store)`, using
+#' the same `store` you passed to [brmDE()]; with `bundle = 1` the branch
+#' index is the gene's row in the result.
 #'
 #' @section Bundling:
 #' One target per gene gives the scheduler tens of thousands of jobs whose
