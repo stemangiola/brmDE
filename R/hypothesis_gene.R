@@ -24,7 +24,20 @@
 #' @param ... Additional arguments passed to [brms::hypothesis()].
 #'
 #' @return A tibble with `component`, `group`, `hypothesis`, `estimate`,
-#'   interval, and posterior probability columns.
+#'   interval, and posterior probability columns, followed by the convergence
+#'   of each contrast.
+#'
+#' @details
+#' Each row carries its own `rhat`, `ess_bulk`, and `mcse`, which
+#' [posterior::summarise_draws()] computes from the draws of that contrast
+#' rather than from the parameters it was built from ([brms::hypothesis()]
+#' returns those draws but no diagnostics for them).
+#' The contrast is the quantity being reported, and it commonly mixes better
+#' than its parts: a random-effect level that drifts between chains cancels in
+#' a difference of levels. `mcse` is the Monte Carlo error of `estimate`, in
+#' its units and for the same functional `robust` selects, so it can be read
+#' against the width of the interval; `ess_bulk` is the more informative of
+#' the two at the few hundred draws a gene-wise fit is usually given.
 #'
 #' @examples
 #' \dontrun{
@@ -57,6 +70,8 @@ hypothesis_gene <- function(fit,
     stop("`hypothesis` is required.", call. = FALSE)
   }
 
+  # Expand the tissue-style shortcut into one equation per random-intercept
+  # level, and default to class "r" so brms looks in the random effects.
   vs_rest <- length(hypothesis) == 1L && identical(hypothesis, "random_vs_rest")
   if (vs_rest) {
     if (is.null(grouping)) {
@@ -73,18 +88,11 @@ hypothesis_gene <- function(fit,
     if (is.null(class)) {
       class <- "r"
     }
-    hyp <- brms::hypothesis(
-      fit,
-      hypothesis,
-      class = class,
-      robust = robust,
-      alpha = alpha,
-      ...
-    )
-    return(tidy_hypothesis(hyp, component = "random", grouping_label = grouping))
   }
 
-  run_one <- function(scope, component, grouping_label, group_arg) {
+  # Build the brms call by hand so NULL class/group are omitted rather than
+  # passed through, and so `...` can still override any named argument.
+  run_one <- function(scope, group_arg) {
     args <- list(
       x = fit,
       hypothesis = hypothesis,
@@ -98,16 +106,40 @@ hypothesis_gene <- function(fit,
     }
     dots <- list(...)
     args[names(dots)] <- dots
-    hyp <- do.call(brms::hypothesis, args)
-    tidy_hypothesis(hyp, component = component, grouping_label = grouping_label)
+    do.call(brms::hypothesis, args)
   }
 
-  out <- run_one("standard", "fixed", "population", NULL)
+  # Population-level tests always run. With `group`, also test the same
+  # equations at the group-specific (fixed + random) coefficients.
+  hyps <- list(run_one("standard", NULL))
+  components <- if (vs_rest) "random" else "fixed"
+  grouping_labels <- if (vs_rest) grouping else "population"
   if (!is.null(group) && !vs_rest) {
-    out <- dplyr::bind_rows(
-      out,
-      run_one("coef", "total", group, group)
-    )
+    hyps <- c(hyps, list(run_one("coef", group)))
+    components <- c(components, "total")
+    grouping_labels <- c(grouping_labels, group)
   }
-  out
+
+  # One tidy pass: rename brms columns, then attach contrast-level rhat,
+  # ess_bulk and mcse. The chain count is all that flattening of hyp$samples
+  # loses, and the fit is still here.
+  n_chains <- brms::nchains(fit)
+  dplyr::bind_rows(Map(function(hyp, component, grouping_label) {
+    tbl <- tibble::as_tibble(hyp$hypothesis)
+    if (!nrow(tbl)) {
+      return(tbl)
+    }
+    out <- dplyr::transmute(
+      tbl,
+      component = component,
+      group = if ("Group" %in% names(tbl)) .data$Group else grouping_label,
+      hypothesis = .data$Hypothesis,
+      estimate = .data$Estimate,
+      ci_lower = .data$CI.Lower,
+      ci_upper = .data$CI.Upper,
+      post_prob = if ("Post.Prob" %in% names(tbl)) .data$Post.Prob else NA_real_,
+      evid_ratio = if ("Evid.Ratio" %in% names(tbl)) .data$Evid.Ratio else NA_real_
+    )
+    dplyr::bind_cols(out, contrast_diagnostics(hyp, n_chains, robust = robust))
+  }, hyps, components, grouping_labels))
 }

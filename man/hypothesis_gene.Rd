@@ -40,7 +40,8 @@ effects).}
 }
 \value{
 A tibble with \code{component}, \code{group}, \code{hypothesis}, \code{estimate},
-interval, and posterior probability columns.
+interval, and posterior probability columns, followed by the convergence
+of each contrast.
 }
 \description{
 Thin wrapper around \code{\link[brms:hypothesis]{brms::hypothesis()}} that returns a tidy table. Pass
@@ -52,6 +53,17 @@ pipeline).
 \details{
 When \code{group} is set, both population-level (\code{scope = "standard"}) and
 group-specific (\code{scope = "coef"}) tests are returned.
+
+Each row carries its own \code{rhat}, \code{ess_bulk}, and \code{mcse}, which
+\code{\link[posterior:summarise_draws]{posterior::summarise_draws()}} computes from the draws of that contrast
+rather than from the parameters it was built from (\code{\link[brms:hypothesis]{brms::hypothesis()}}
+returns those draws but no diagnostics for them).
+The contrast is the quantity being reported, and it commonly mixes better
+than its parts: a random-effect level that drifts between chains cancels in
+a difference of levels. \code{mcse} is the Monte Carlo error of \code{estimate}, in
+its units and for the same functional \code{robust} selects, so it can be read
+against the width of the interval; \code{ess_bulk} is the more informative of
+the two at the few hundred draws a gene-wise fit is usually given.
 }
 \examples{
 \dontrun{

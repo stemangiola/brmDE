@@ -260,16 +260,28 @@ test_that("bundled genes give one row per gene, as unbundled ones do", {
   )
 
   # Four genes, but only two fit targets were built.
-  expect_length(targets::tar_read_raw("brms_fit", store = store), 2L)
+  branches <- targets::tar_read_raw("brms_fit", store = store)
+  expect_length(branches, 2L)
+  fits <- unlist(branches, recursive = FALSE)
+  expect_true(all(vapply(fits, inherits, logical(1), "brmsfit")))
 
   expect_equal(out$.feature, features)
-  expect_true(all(vapply(out$brms_fit, inherits, logical(1), "brmsfit")))
   expect_true(all(vapply(out$hypothesis, inherits, logical(1), "tbl_df")))
 
-  # The fits must still line up with the genes after the bundles are unpacked.
+  # estimate() contributes the gene column and nothing else: the fits are far
+  # too large to gather, and the statistics that make the run readable are the
+  # hypothesis ones.
+  expect_named(out, c(".feature", "hypothesis"))
+  expect_true(all(vapply(
+    out$hypothesis,
+    function(h) all(c("rhat", "ess_bulk", "mcse") %in% names(h)),
+    logical(1)
+  )))
+
+  # Bundles keep gene order, so unpacking them lines the fits up with `.feature`.
   counts <- SummarizedExperiment::assay(se, "counts")
   expect_equal(
-    lapply(out$brms_fit, function(f) as.numeric(f$data$counts)),
+    lapply(fits, function(f) as.numeric(f$data$counts)),
     lapply(features, function(g) as.numeric(counts[g, ]))
   )
 })
@@ -318,7 +330,11 @@ test_that("estimate |> hypothesis |> adjust evaluate as one pipeline", {
   )
 
   expect_equal(out$.feature, "ENSG00000120129")
-  expect_s3_class(out$brms_fit[[1]], "brmsfit")
+  expect_false("brms_fit" %in% names(out))
+  expect_s3_class(
+    targets::tar_read_raw("brms_fit", branches = 1L, store = store)[[1]],
+    "brmsfit"
+  )
   expect_s3_class(out$hypothesis[[1]], "tbl_df")
   expect_s3_class(out$adjust[[1]], "tbl_df")
   expect_true("adjusted___Estimate" %in% names(out$adjust[[1]]) ||

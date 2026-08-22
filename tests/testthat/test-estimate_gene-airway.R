@@ -152,3 +152,54 @@ test_that("estimate_gene default ZINB priors work on one airway gene", {
   expect_equal(fit$family$family, "zero_inflated_negbinomial")
   expect_true("b_dextrt" %in% brms::variables(fit))
 })
+
+test_that("hypothesis_gene reports the convergence of each contrast", {
+  skip_on_cran()
+  skip_if_no_cmdstan()
+
+  se <- airway_one_gene("ENSG00000120129")
+
+  fit <- estimate_gene(
+    se,
+    formula_abundance = ~ dex + (1 | cell),
+    family = brms::negbinomial(),
+    offset = "offset",
+    chains = 2,
+    iter = 300,
+    warmup = 150,
+    cores = 1,
+    backend = "cmdstanr",
+    refresh = 0,
+    silent = 2
+  )
+
+  hyp <- hypothesis_gene(fit, c("dextrt = 0", "Intercept > 0"))
+  expect_equal(nrow(hyp), 2L)
+  expect_true(all(c("rhat", "ess_bulk", "mcse") %in% names(hyp)))
+  expect_true(all(is.finite(hyp$rhat)))
+  expect_true(all(hyp$ess_bulk > 0))
+
+  # The diagnostics belong to the contrast, so the first row's are those of
+  # b_dextrt itself: that hypothesis is the parameter, unchanged. Which also
+  # says the chains were recovered from brms' flattened draws correctly, since
+  # every one of these statistics depends on which chain a draw came from.
+  draws <- posterior::subset_draws(
+    posterior::as_draws_array(fit),
+    variable = "b_dextrt"
+  )
+  reference <- posterior::summarise_draws(
+    draws,
+    "rhat",
+    "ess_bulk",
+    "mcse_median",
+    "median"
+  )
+  expect_equal(hyp$rhat[[1]], reference$rhat)
+  expect_equal(hyp$ess_bulk[[1]], reference$ess_bulk)
+  # robust = TRUE by default, so `mcse` is that of the median it reports.
+  expect_equal(hyp$mcse[[1]], reference$mcse_median)
+  expect_equal(hyp$estimate[[1]], reference$median)
+
+  # The two contrasts are different quantities and get their own numbers.
+  expect_false(hyp$rhat[[1]] == hyp$rhat[[2]])
+})

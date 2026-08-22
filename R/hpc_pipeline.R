@@ -198,6 +198,14 @@ collect_brmde_hpc <- function(input_hpc) {
 #' namely the library size offset and the dispersion, belongs upstream of
 #' [brmDE()] and arrives as ordinary `colData` / `rowData` columns.
 #'
+#' Running the pipeline gives one row per gene. [estimate()] contributes the
+#' gene column; [hypothesis()] and [adjust()] add their tables, the first of
+#' them carrying the convergence of each contrast. The fits are not in that
+#' result, because a transcriptome's worth of `brmsfit` objects will not fit
+#' in one table: they stay in the store. Read one with
+#' `targets::tar_read(brms_fit, branches = i, store = store)`, using the same
+#' `store` you passed to [brmDE()]. See *Where the fits are* in [estimate()].
+#'
 #' @param .data A `SummarizedExperiment` that already carries a library size
 #'   offset in `colData` and dispersion in `rowData`. Neither is
 #'   computed here: both are whole-matrix quantities, so derive them before
@@ -552,6 +560,11 @@ estimate.tidytargets <- function(input_hpc,
 #' Appends a [tidytargets::tt_iterate()] step that calls [hypothesis_gene()]
 #' on each [estimate()] fit. This is an S3 method for
 #' [brms::hypothesis()].
+#'
+#' Each gene's table holds the posterior statistics for every contrast and the
+#' convergence of that contrast's own draws, so this is where a run of 20,000
+#' genes becomes something you can read: it is small enough to return in full,
+#' while the fits stay in the store. See [hypothesis_gene()] for the columns.
 #'
 #' @param x A `tidytargets` pipeline from [brmDE()].
 #' @param hypothesis Hypothesis strings passed to [hypothesis_gene()].

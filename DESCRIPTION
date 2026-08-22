@@ -25,6 +25,7 @@ Imports:
     glue,
     instantiate (>= 0.2.3),
     parallel,
+    posterior,
     rlang,
     stats,
     stringr,

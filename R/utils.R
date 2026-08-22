@@ -763,20 +763,33 @@ nullify_newdata <- function(data, nullify = NULL, offset = "offset", offset_valu
   newdata
 }
 
-tidy_hypothesis <- function(hyp, component, grouping_label) {
-  tbl <- tibble::as_tibble(hyp$hypothesis)
-  if (!nrow(tbl)) {
-    return(tbl)
-  }
-  dplyr::transmute(
-    tbl,
-    component = component,
-    group = if ("Group" %in% names(tbl)) .data$Group else grouping_label,
-    hypothesis = .data$Hypothesis,
-    estimate = .data$Estimate,
-    ci_lower = .data$CI.Lower,
-    ci_upper = .data$CI.Upper,
-    post_prob = if ("Post.Prob" %in% names(tbl)) .data$Post.Prob else NA_real_,
-    evid_ratio = if ("Evid.Ratio" %in% names(tbl)) .data$Evid.Ratio else NA_real_
+# Rhat, ESS and MCSE describe a quantity rather than a model, and the quantity
+# a row reports is the contrast, so they belong here beside the estimate whose
+# reliability they bound rather than in a table of parameters nobody asked
+# about. The parameters a contrast is built from routinely mix worse than the
+# contrast does, since a level that drifts between chains often cancels in the
+# difference.
+#
+# `mcse` is the Monte Carlo error of `estimate`, so it follows `robust` to the
+# same functional the estimate reports, and being in the units of the estimate
+# it can be read against the interval width.
+#
+# brms computes no diagnostics of its own for a hypothesis, but it does hand
+# back the draws: `hyp$samples` holds each contrast evaluated over the fit's
+# draws, one column per row of `hyp$hypothesis`, flattened chain after chain.
+# The chain count is the only thing that flattening loses, and with it the
+# contrasts are a random variable posterior diagnoses like any parameter.
+contrast_diagnostics <- function(hyp, n_chains, robust) {
+  contrast <- posterior::rvar(as.matrix(hyp$samples), nchains = n_chains)
+
+  mcse <- if (isTRUE(robust)) "mcse_median" else "mcse_mean"
+  summary <- posterior::summarise_draws(
+    posterior::draws_rvars(contrast = contrast),
+    "rhat", "ess_bulk", mcse
+  )
+  tibble::tibble(
+    rhat = summary$rhat,
+    ess_bulk = summary$ess_bulk,
+    mcse = summary[[mcse]]
   )
 }

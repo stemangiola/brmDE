@@ -31,3 +31,9 @@ Appends a \code{\link[tidytargets:tt_iterate]{tidytargets::tt_iterate()}} step t
 on each \code{\link[=estimate]{estimate()}} fit. This is an S3 method for
 \code{\link[brms:hypothesis]{brms::hypothesis()}}.
 }
+\details{
+Each gene's table holds the posterior statistics for every contrast and the
+convergence of that contrast's own draws, so this is where a run of 20,000
+genes becomes something you can read: it is small enough to return in full,
+while the fits stay in the store. See \code{\link[=hypothesis_gene]{hypothesis_gene()}} for the columns.
+}

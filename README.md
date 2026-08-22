@@ -77,6 +77,8 @@ se |>
 
 Printing that object runs the pipeline (`print` calls `tt_evaluate()`, as in tidytargets).
 
+The result is one row per gene. `estimate()` contributes the gene column, and `hypothesis()` the statistics worth returning for all of them: each contrast's posterior summary together with the convergence of that contrast's own draws (`rhat`, `ess_bulk`, `mcse`). The fits are not in the table — twenty thousand `brmsfit` objects will not fit in one — but they are in the targets store: `targets::tar_read(brms_fit, branches = i, store = store)` reads branch `i` (the gene's row, when `bundle = 1`).
+
 By default each gene is its own target. At transcriptome scale that can swamp an HPC scheduler with tiny jobs, so `estimate(bundle = 100)` fits 100 genes per target instead; the output is unchanged, one row per gene.
 
 See the package vignette for the full walkthrough, including both shape-prior options:

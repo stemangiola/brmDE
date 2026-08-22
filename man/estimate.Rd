@@ -89,6 +89,19 @@ Prior constants derived from each gene are passed to Stan as data, so every
 gene generates identical Stan code and cmdstanr compiles it at most once per
 worker process rather than once per gene.
 }
+\section{Where the fits are}{
+
+A \code{brmsfit} carries its draws and its data, so at 20,000 genes the fits are
+far too large to be gathered into one table, and gathering them would undo
+the point of having a store. \code{\link[=estimate]{estimate()}} therefore contributes the gene
+column alone; what makes the result worth reading is \code{\link[=hypothesis]{hypothesis()}}, whose
+per-contrast statistics and convergence are small enough to hold for every
+gene at once (see \code{\link[=hypothesis_gene]{hypothesis_gene()}}). The fits stay in the store. Read
+one with \code{targets::tar_read(brms_fit, branches = i, store = store)}, using
+the same \code{store} you passed to \code{\link[=brmDE]{brmDE()}}; with \code{bundle = 1} the branch
+index is the gene's row in the result.
+}
+
 \section{Bundling}{
 
 One target per gene gives the scheduler tens of thousands of jobs whose

@@ -70,6 +70,14 @@ calling \code{\link[=tt_evaluate]{tt_evaluate()}}) runs the pipeline, as in tidy
 The pipeline is gene-wise only. Anything estimated across the whole matrix,
 namely the library size offset and the dispersion, belongs upstream of
 \code{\link[=brmDE]{brmDE()}} and arrives as ordinary \code{colData} / \code{rowData} columns.
+
+Running the pipeline gives one row per gene. \code{\link[=estimate]{estimate()}} contributes the
+gene column; \code{\link[=hypothesis]{hypothesis()}} and \code{\link[=adjust]{adjust()}} add their tables, the first of
+them carrying the convergence of each contrast. The fits are not in that
+result, because a transcriptome's worth of \code{brmsfit} objects will not fit
+in one table: they stay in the store. Read one with
+\code{targets::tar_read(brms_fit, branches = i, store = store)}, using the same
+\code{store} you passed to \code{\link[=brmDE]{brmDE()}}. See \emph{Where the fits are} in \code{\link[=estimate]{estimate()}}.
 }
 \examples{
 \dontrun{
