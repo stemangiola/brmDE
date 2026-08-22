@@ -111,12 +111,14 @@
 #'   `prior` replaces that set entirely, so give every parameter you intend to
 #'   test a proper prior; brms cannot draw from a flat one, and point
 #'   hypotheses on a parameter with a flat prior report NA.
-#' @param sample_prior Passed to [brms::brm()]. `"yes"` (the default) draws
-#'   from the prior alongside the posterior, which is what lets
-#'   [hypothesis_gene()] report `post_prob` and `evid_ratio` for a point
-#'   hypothesis. The draws are taken in generated quantities, so they add no
-#'   sampling work. `"no"` omits them and leaves those two columns NA for
-#'   point hypotheses; one-sided hypotheses are unaffected either way.
+#' @param sample_prior Passed to [brms::brm()]. `"yes"` draws from the prior
+#'   alongside the posterior, which is what lets [hypothesis_gene()] report
+#'   `pH0` and `evid_ratio` for a point hypothesis such as
+#'   `"dextrt = 0"`. The draws cost no sampling work, being taken in generated
+#'   quantities, but they do enlarge every stored fit, which at transcriptome
+#'   scale is disk you would rather keep. The default `"no"` omits them, since
+#'   the default test in [hypothesis_gene()] is directional and needs no prior
+#'   draws. Set this to `"yes"` when you intend to ask for a Bayes factor.
 #' @param chains,iter,warmup MCMC settings. Defaults match the manuscript
 #'   pipeline (2 chains, 600 iterations, 400 warmup).
 #' @param backend Passed to [brms::brm()]. Default `"cmdstanr"`.
@@ -166,24 +168,25 @@ estimate_gene <- function(data,
                           family = NULL,
                           abundance = "counts",
                           prior = NULL,
-                          sample_prior = "yes",
+                          sample_prior = c("no", "yes", "only"),
                           chains = 2,
-                          iter = 600,
-                          warmup = 400,
-                          backend = "cmdstanr",
-                          cores = NULL,
+                          iter = 800,
+                          warmup = 300,
+                          backend = c("cmdstanr", "rstan"),
+                          cores = chains,
                           init = "gene",
                           sanitize_names = FALSE,
                           feature = NULL,
                           stanvars = NULL,
                           ...) {
+  backend <- match.arg(backend)
   if (identical(backend, "cmdstanr")) {
     check_and_install_cmdstanr()
   }
   offset <- check_offset_name(offset)
   shape_prior <- match.arg(shape_prior)
   shape_prior_df <- check_student_df(shape_prior_df)
-  sample_prior <- match.arg(sample_prior, c("yes", "no", "only"))
+  sample_prior <- match.arg(sample_prior)
   if (!is.null(dispersion)) {
     dispersion <- check_dispersion_name(dispersion)
   }

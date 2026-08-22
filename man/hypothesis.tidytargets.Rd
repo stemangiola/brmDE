@@ -15,7 +15,7 @@
 \arguments{
 \item{x}{A \code{tidytargets} pipeline from \code{\link[=brmDE]{brmDE()}}.}
 
-\item{hypothesis}{Hypothesis strings passed to \code{\link[=hypothesis_gene]{hypothesis_gene()}}.}
+\item{hypothesis}{Effects to test, passed to \code{\link[=hypothesis_gene]{hypothesis_gene()}}.}
 
 \item{target_input}{Name of the upstream fit target.}
 
@@ -30,4 +30,9 @@ The updated \code{tidytargets} pipeline.
 Appends a \code{\link[tidytargets:tt_iterate]{tidytargets::tt_iterate()}} step that calls \code{\link[=hypothesis_gene]{hypothesis_gene()}}
 on each \code{\link[=estimate]{estimate()}} fit. This is an S3 method for
 \code{\link[brms:hypothesis]{brms::hypothesis()}}.
+}
+\details{
+Collecting the pipeline adds an \code{fdr} column across genes when the tests
+took the directional route, which is the default. See
+\code{\link[=false_discovery_rate]{false_discovery_rate()}}.
 }

@@ -18,12 +18,12 @@ estimate_gene(
   family = NULL,
   abundance = "counts",
   prior = NULL,
-  sample_prior = "yes",
+  sample_prior = c("no", "yes", "only"),
   chains = 2,
-  iter = 600,
-  warmup = 400,
-  backend = "cmdstanr",
-  cores = NULL,
+  iter = 800,
+  warmup = 300,
+  backend = c("cmdstanr", "rstan"),
+  cores = chains,
   init = "gene",
   sanitize_names = FALSE,
   feature = NULL,
@@ -140,12 +140,14 @@ coefficients scaled by \code{coefficient_prior_scale}. Supplying your own
 test a proper prior; brms cannot draw from a flat one, and point
 hypotheses on a parameter with a flat prior report NA.}
 
-\item{sample_prior}{Passed to \code{\link[brms:brm]{brms::brm()}}. \code{"yes"} (the default) draws
-from the prior alongside the posterior, which is what lets
-\code{\link[=hypothesis_gene]{hypothesis_gene()}} report \code{post_prob} and \code{evid_ratio} for a point
-hypothesis. The draws are taken in generated quantities, so they add no
-sampling work. \code{"no"} omits them and leaves those two columns NA for
-point hypotheses; one-sided hypotheses are unaffected either way.}
+\item{sample_prior}{Passed to \code{\link[brms:brm]{brms::brm()}}. \code{"yes"} draws from the prior
+alongside the posterior, which is what lets \code{\link[=hypothesis_gene]{hypothesis_gene()}} report
+\code{pH0} and \code{evid_ratio} for a point hypothesis such as
+\code{"dextrt = 0"}. The draws cost no sampling work, being taken in generated
+quantities, but they do enlarge every stored fit, which at transcriptome
+scale is disk you would rather keep. The default \code{"no"} omits them, since
+the default test in \code{\link[=hypothesis_gene]{hypothesis_gene()}} is directional and needs no prior
+draws. Set this to \code{"yes"} when you intend to ask for a Bayes factor.}
 
 \item{chains, iter, warmup}{MCMC settings. Defaults match the manuscript
 pipeline (2 chains, 600 iterations, 400 warmup).}

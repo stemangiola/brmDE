@@ -737,58 +737,6 @@ prepare_gene_data <- function(data,
   )
 }
 
-# brms::variables() rather than the underlying stanfit summary: rstan attaches
-# its summary() to `stanfit` as an S4 method, which is not dispatched from
-# inside this namespace, so the summary route silently yielded no parameters at
-# all and every random_vs_rest contrast failed for want of levels.
-random_intercept_parameters <- function(fit, grouping, par = "Intercept") {
-  pattern <- paste0(
-    "^r_", grouping, "\\[.*,", par, "\\]$"
-  )
-  params <- brms::variables(fit)
-  params[grepl(pattern, params)]
-}
-
-random_intercept_vs_rest_from_names <- function(params,
-                                                grouping,
-                                                par = "Intercept") {
-  if (length(params) < 2L) {
-    stop(
-      "Need at least two '", grouping, "' levels to contrast each level ",
-      "against the rest.",
-      call. = FALSE
-    )
-  }
-
-  quoted <- paste0("`", sub("^r_", "", params), "`")
-  level_names <- sub(
-    paste0("^`", grouping, "\\[(.*),", par, "\\]`$"),
-    "\\1",
-    quoted
-  )
-
-  equations <- vapply(seq_along(quoted), function(i) {
-    this_param <- quoted[[i]]
-    other_params <- quoted[-i]
-    avg_expr <- paste0(
-      "(", paste(other_params, collapse = " + "), ")/",
-      length(other_params)
-    )
-    paste0(this_param, " - ", avg_expr, " = 0")
-  }, character(1))
-  stats::setNames(equations, level_names)
-}
-
-random_intercept_vs_rest_equations <- function(fit,
-                                               grouping,
-                                               par = "Intercept") {
-  random_intercept_vs_rest_from_names(
-    random_intercept_parameters(fit, grouping, par = par),
-    grouping = grouping,
-    par = par
-  )
-}
-
 nullify_newdata <- function(data, nullify = NULL, offset = "offset", offset_value = 0) {
   newdata <- data
   if (!is.null(offset) && offset %in% names(newdata)) {
@@ -809,20 +757,11 @@ nullify_newdata <- function(data, nullify = NULL, offset = "offset", offset_valu
   newdata
 }
 
-tidy_hypothesis <- function(hyp, component, grouping_label) {
-  tbl <- tibble::as_tibble(hyp$hypothesis)
-  if (!nrow(tbl)) {
-    return(tbl)
-  }
-  dplyr::transmute(
-    tbl,
-    component = component,
-    group = if ("Group" %in% names(tbl)) .data$Group else grouping_label,
-    hypothesis = .data$Hypothesis,
-    estimate = .data$Estimate,
-    ci_lower = .data$CI.Lower,
-    ci_upper = .data$CI.Upper,
-    post_prob = if ("Post.Prob" %in% names(tbl)) .data$Post.Prob else NA_real_,
-    evid_ratio = if ("Evid.Ratio" %in% names(tbl)) .data$Evid.Ratio else NA_real_
-  )
+
+split_rows <- function(x, sizes) {
+  ends <- cumsum(sizes)
+  starts <- ends - sizes + 1L
+  lapply(seq_along(sizes), function(i) {
+    if (sizes[[i]] == 0L) x[0, ] else x[starts[[i]]:ends[[i]], ]
+  })
 }

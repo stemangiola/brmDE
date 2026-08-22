@@ -52,7 +52,7 @@ test_that("default priors cover negbinomial as well as its zero-inflated form", 
   expect_true(all(nzchar(coefficient_prior_string(priors))))
 })
 
-test_that("a point hypothesis reports post_prob when priors were sampled", {
+test_that("a point hypothesis reports pH0 when priors were sampled", {
   skip_cmdstan()
 
   se <- airway_one_gene("ENSG00000120129")
@@ -62,6 +62,7 @@ test_that("a point hypothesis reports post_prob when priors were sampled", {
     family = brms::negbinomial(),
     abundance = "counts",
     offset = "offset",
+    sample_prior = "yes",
     chains = 2,
     iter = 1000,
     warmup = 500,
@@ -74,14 +75,18 @@ test_that("a point hypothesis reports post_prob when priors were sampled", {
   expect_true("prior_b" %in% brms::variables(fit))
 
   point <- hypothesis_gene(fit, "dextrt = 0")
-  expect_true(is.finite(point$post_prob))
+  expect_equal(point$test, "point")
+  expect_true(is.finite(point$pH0))
   expect_true(is.finite(point$evid_ratio))
 
-  one_sided <- hypothesis_gene(fit, "dextrt > 0")
-  expect_true(is.finite(one_sided$post_prob))
+  # brms reports the Bayes factor in favour of the null; evid_ratio is the
+  # odds against it, so the two are reciprocal.
+  brms_bf <- brms::hypothesis(fit, "dextrt = 0")$hypothesis$Evid.Ratio
+  expect_equal(point$evid_ratio, 1 / brms_bf, tolerance = 1e-6)
+  expect_equal(point$pH0, brms::hypothesis(fit, "dextrt = 0")$hypothesis$Post.Prob)
 })
 
-test_that("sample_prior = 'no' leaves a point hypothesis NA", {
+test_that("the default fit carries no prior draws, so a point hypothesis is NA", {
   skip_cmdstan()
 
   se <- airway_one_gene("ENSG00000120129")
@@ -91,7 +96,6 @@ test_that("sample_prior = 'no' leaves a point hypothesis NA", {
     family = brms::negbinomial(),
     abundance = "counts",
     offset = "offset",
-    sample_prior = "no",
     chains = 2,
     iter = 1000,
     warmup = 500,
@@ -103,15 +107,19 @@ test_that("sample_prior = 'no' leaves a point hypothesis NA", {
 
   expect_false(any(startsWith(brms::variables(fit), "prior_")))
   point <- hypothesis_gene(fit, "dextrt = 0")
-  expect_true(is.na(point$post_prob))
+  expect_true(is.na(point$pH0))
   expect_true(is.na(point$evid_ratio))
 
-  # A one-sided test needs only the posterior, so it is unaffected.
-  one_sided <- hypothesis_gene(fit, "dextrt > 0")
-  expect_true(is.finite(one_sided$post_prob))
+  # The effect size comes from the posterior, so it survives even when the
+  # probability cannot be computed.
+  expect_true(is.finite(point$log2_fold_change))
+
+  # The directional test needs only the posterior, which is why not storing
+  # prior draws is the default.
+  expect_true(is.finite(hypothesis_gene(fit, "dextrt")$pH0))
 })
 
-test_that("random_vs_rest finds its levels and reports estimates", {
+test_that("each cell intercept can be tested as its own hypothesis", {
   skip_cmdstan()
 
   se <- airway_one_gene("ENSG00000120129")
@@ -130,18 +138,12 @@ test_that("random_vs_rest finds its levels and reports estimates", {
     silent = 2
   )
 
-  levels <- brmDE:::random_intercept_parameters(fit, "cell")
-  expect_length(levels, length(levels(fit$data$cell)))
+  cells <- levels(fit$data$cell)
+  hyp <- paste0("`", "cell[", cells, ",Intercept]`")
+  out <- hypothesis_gene(fit, hyp, class = "r")
 
-  # These are point contrasts of group-level coefficients, which brms cannot
-  # give a Savage-Dickey ratio, so the estimate and interval are the answer.
-  out <- hypothesis_gene(
-    fit,
-    hypothesis = "random_vs_rest",
-    grouping = "cell",
-    class = "r"
-  )
-  expect_equal(nrow(out), length(levels))
+  expect_equal(nrow(out), length(cells))
   expect_true(all(is.finite(out$estimate)))
-  expect_true(all(is.na(out$post_prob)))
+  expect_true(all(is.finite(out$pH0)))
+  expect_equal(out$hypothesis, hyp)
 })

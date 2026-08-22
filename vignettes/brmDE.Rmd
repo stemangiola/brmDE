@@ -133,30 +133,44 @@ fit_t <- se |>
 adjust_gene(fit_t, re_formula = ~0)
 ```
 
-## Point and one-sided hypotheses
+## Hypothesis testing
 
-The form of the equation you give `hypothesis_gene()` decides how its `post_prob` and `evid_ratio` columns are obtained, and the two routes ask different things of the fit.
-
-A one-sided equation, `"dextrt > 0"`, is a tally: `post_prob` is the fraction of posterior draws with a positive coefficient, and `evid_ratio` is that fraction over its complement. Nothing but the posterior is involved.
-
-A point equation, `"dextrt = 0"`, is a Bayes factor computed by the Savage-Dickey density ratio: the posterior density at 0 divided by the prior density at 0. That needs draws from the prior as well as the posterior, so `estimate_gene()` passes `sample_prior = "yes"` to brms by default. Those draws are taken in Stan's generated quantities block, so they cost no sampling time, and they are what keeps the two columns from being `NA`. Every parameter under test also needs a prior that integrates to one, because brms cannot draw from a flat prior; this is why the default prior set is applied to plain `brms::negbinomial()` fits and not only to zero-inflated ones.
-
-If you are arriving from edgeR, this is the Bayesian counterpart of the likelihood-ratio test that `glmLRT()` gives you for the same coefficient. Both weigh a model with `dex` free against the same model with it held at 0, which is why both want the null to be a restriction of the alternative. The difference is what happens to the parameters: the likelihood-ratio test maximises the likelihood under each hypothesis and refers the ratio to a chi-square distribution to get a p-value, whereas the Bayes factor averages the likelihood over the prior and so needs no null distribution at all. `evid_ratio` is the analogue of the test statistic, with 1 meaning no evidence either way, and `post_prob` is its normalised form. Neither is a p-value, and nothing behind them controls a type-I error rate, so they are not to be thresholded at 0.05.
-
-Two properties of that ratio matter before you read a `post_prob` off a point test.
-
-**It depends on the prior scale, not only on the data.** Widening the prior on a coefficient thins prior mass at 0 and so moves the evidence towards the null however clear the data are. This is Lindley's paradox, and it is why `coefficient_prior_scale` defaults to `0.7`. A coefficient here sits behind a log link, so it is a natural-log fold change, and `0.7` is one log2 fold change: a doubling of expression, which is the order of the effects a DE analysis looks for. Multiples follow in log2 units, `1.4` being two log2 fold changes. Widen it deliberately when your effects are larger, and expect point tests to grow more conservative as you do.
-
-**It is a density estimate, so it needs draws.** The estimate and the interval stabilise long before a density at a single point does, so a short fit gives a usable `ci_lower`/`ci_upper` alongside a `post_prob` that moves from run to run. Around a thousand post-warmup draws is where it starts to hold still. The fits in this vignette are deliberately far shorter than that, in order to build quickly, so read their `post_prob` as illustration rather than as a result.
-
-Group-level coefficients are the one case no refit fixes. brms cannot sample their priors, so a point test on `class = "r"`, which is what `hypothesis = "random_vs_rest"` builds, reports `estimate` and the interval and leaves `post_prob` as `NA`.
+Name the effect on its own and `hypothesis_gene()` asks the question a DE analysis actually wants: is this effect big enough to care about, and which way does it go?
 
 ```{r one-gene-hypotheses, message = FALSE, warning = FALSE, eval = run_vignette}
-# Savage-Dickey Bayes factor against the point null.
-hypothesis_gene(fit_t, "dextrt = 0")
+# Is the dex effect bigger than one log2 fold change, and in which direction?
+hypothesis_gene(fit_t, "dextrt")
+```
 
-# Posterior probability of a positive effect, from the posterior alone.
-hypothesis_gene(fit_t, "dextrt > 0")
+`test_above_log2FC` is the size an effect has to beat, in log2 fold change units, so the default `1` asks for a doubling of expression and `2` for a quadrupling. `pH0` is the probability that the better supported side is wrong:
+
+\[
+p_{H0} = P(\text{effect too small}) + P(\text{effect runs the other way}) = 1 - \max(p_{+}, p_{-}).
+\]
+
+Both ways of being wrong are in that number, which is the point of splitting the sides. Testing `P(|effect| > threshold)` instead would add the two tails together, and a posterior sitting on zero with heavy tails has mass beyond the threshold on *both* sides at once — a large two-sided probability for an effect whose sign is not even determined. Counting the sides separately cannot make that mistake: `pH0` is at least 1/2 for any posterior symmetric about zero, whatever its tails, and climbs to 1 for a posterior lying entirely inside the threshold. Setting `test_above_log2FC = 0` tests only the sign and gives the local false sign rate.
+
+Which way the effect goes is left to `log2_fold_change`, with `p_positive` and `p_negative` giving the two sides separately. There is no direction label: a gene whose posterior sits entirely inside the threshold has both sides at zero and supports no direction at all, so labelling one would be inventing a claim the fit does not make.
+
+Because `pH0` is a probability rather than a test statistic, a false discovery rate follows by averaging: the expected number of false discoveries in a set of genes is the sum of their null probabilities, so the mean `pH0` over the genes you selected *is* the expected proportion of false discoveries among them. `false_discovery_rate()` sorts genes by `pH0` and reports that running mean, and pipelines add it as an `fdr` column. No null distribution and no p-values are involved, and since a cumulative mean of an ascending sequence is already monotone, no Benjamini-Hochberg step-up is needed either.
+
+One limit worth keeping in mind: `pH0` is counted from draws, so it cannot resolve below `1 / ndraws`. A `pH0` of 0 means "smaller than this fit can measure", and an `fdr` far below `1 / ndraws` is not supported by the draws behind it. The fits in this vignette are deliberately short in order to build quickly.
+
+## Group differences
+
+The same test applies to random intercepts. Airway has four cell lines; asking whether each cell's intercept exceeds one log2 fold change from the population mean is four hypotheses. `class = "r"` tells brms to look among the group-level coefficients.
+
+```{r one-gene-cells, message = FALSE, warning = FALSE, eval = run_vignette}
+hypothesis_gene(
+  fit_t,
+  c(
+    "`cell[N052611,Intercept]`",
+    "`cell[N061011,Intercept]`",
+    "`cell[N080611,Intercept]`",
+    "`cell[N61311,Intercept]`"
+  ),
+  class = "r"
+)
 ```
 
 # Full scalable pipeline
@@ -189,7 +203,7 @@ pipeline <- se |>
     refresh = 0,      # set for vignette build
     silent = 2        # set for vignette build
   ) |>
-  hypothesis("dextrt = 0") |>
+  hypothesis("dextrt") |>
   adjust(re_formula = ~0)
 
 # Runs the targets graph
@@ -227,7 +241,7 @@ pipeline <- se |>
     dispersion_degrees_freedom = "dispersion_degrees_freedom",
     family = brms::negbinomial()
   ) |>
-  hypothesis("dextrt = 0") |>
+  hypothesis("dextrt") |>
   adjust(re_formula = ~0)
 
 pipeline
@@ -251,7 +265,7 @@ pipeline <- se |>
     dispersion_degrees_freedom = "dispersion_degrees_freedom",
     bundle = 100    # 20,000 genes become 200 jobs of 100 fits each
   ) |>
-  hypothesis("dextrt = 0")
+  hypothesis("dextrt")
 ```
 
 Pick `bundle` against a single job rather than against the gene count, because that is exactly what it fixes: a job takes about `bundle` times as long as one fit and lands on disk as a single `.rds` holding `bundle` `brmsfit` objects, whether you are running 200 genes or 20,000. Bundling also coarsens `targets`' bookkeeping. A gene that fails takes its bundle with it, and changing the gene set reshuffles which genes share a bundle, so everything refits. Leave `bundle` at `1` when you are iterating on a gene set and relying on incremental reruns.
@@ -263,7 +277,7 @@ Pick `bundle` against a single job rather than against the gene count, because t
 | tidybulk / tidySE, before `brmDE()` | `colData` `"multiplier"`, `"offset"` | TMM scale factor and `log(1 / multiplier)` |
 | `estimate_dispersion()`, before `brmDE()` | `rowData` `"dispersion"`, `"dispersion_degrees_freedom"` | edgeR \(\phi_g\) and \(d_{\mathrm{eff}}\) |
 | `estimate()` → `estimate_gene()` | `brms_fit` per gene | posterior fit with shape prior from dispersion |
-| `hypothesis()` | hypothesis table | posterior tests |
+| `hypothesis()` | hypothesis table | `log2_fold_change` and `pH0` per gene, plus `fdr` across genes |
 | `adjust()` | adjusted residuals / fitted | dex kept; random intercepts dropped |
 
 # Dispersion priors at a glance
@@ -277,7 +291,7 @@ Pick `bundle` against a single job rather than against the gene count, because t
 
 # Abundance priors at a glance
 
-The default prior set applies whenever `prior` is left `NULL` and `family` is a negative binomial, zero-inflated or not. All of it is proper, which is what makes a point hypothesis testable.
+The default prior set applies whenever `prior` is left `NULL` and `family` is a negative binomial, zero-inflated or not.
 
 | Parameter | Prior | Set by |
 |-----------|-------|--------|
@@ -286,4 +300,4 @@ The default prior set applies whenever `prior` is left `NULL` and `family` is a 
 | `Intercept` of `shape` | `student_t(shape_prior_df, 0, scale)` | `dispersion_degrees_freedom`, `shape_prior_df` |
 | `shape` (scalar) | `gamma(d_eff/2, d_eff * dispersion/2)` | `shape_prior = "gamma"` |
 
-Passing your own `prior` replaces the whole set, so give every parameter you intend to test a proper prior of its own.
+Passing your own `prior` replaces the whole set.

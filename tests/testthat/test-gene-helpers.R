@@ -88,26 +88,6 @@ test_that("sanitize_names collapses repeated underscores", {
   expect_false("assay_groups___altered" %in% names(prepared$data))
 })
 
-test_that("random_intercept_vs_rest_from_names builds level-vs-rest contrasts", {
-  se <- airway_one_gene()
-  cells <- levels(se$cell)
-  params <- paste0("r_cell[", cells, ",Intercept]")
-  eq <- brmDE:::random_intercept_vs_rest_from_names(
-    params,
-    grouping = "cell"
-  )
-  expect_named(eq, cells)
-  expect_match(
-    eq[[cells[[1]]]],
-    sprintf("`cell\\[%s,Intercept\\]`", cells[[1]])
-  )
-  expect_match(eq[[cells[[1]]]], cells[[2]])
-  expect_no_match(
-    eq[[cells[[1]]]],
-    paste0(cells[[1]], ",Intercept].*", cells[[1]], ",Intercept")
-  )
-})
-
 test_that("nullify_newdata zeroes offset and NAs selected covariates", {
   dat <- airway_one_gene_tbl()
   out <- brmDE:::nullify_newdata(
