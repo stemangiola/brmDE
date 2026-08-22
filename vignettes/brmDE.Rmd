@@ -272,7 +272,7 @@ pipeline
 
 ## Bundling genes into fewer jobs
 
-At transcriptome scale, if the sample size is small and each gene estimation is quick, the scheduler must handle tens of thousands of jobs whose queueing cost can rival the fits themselves. `bundle` is how many genes `estimate()` puts in each fit target, fitted in sequence; `1`, the default, is one target per gene. `hypothesis()` and `adjust()` map over the fit target, so they inherit the coarser branching without being told about it, and the result is still one row per gene in the same order.
+At transcriptome scale, if the sample size is small and each gene estimation is quick, the scheduler must handle tens of thousands of jobs whose queueing cost can rival the fits themselves. `bundle` is how many genes `estimate()` puts in each fit target, fitted in sequence; the default `10` is ten genes per target, and `1` is one target per gene. `hypothesis()` and `adjust()` map over the fit target, so they inherit the coarser branching without being told about it, and the result is still one row per gene in the same order.
 On the other hand, if the sample size is large and each gene estimation is slow, you should not bundle as you risk less that the failure of one gene would compromise the whole bundle.
 
 ```{r bundle, eval = FALSE}

@@ -33,7 +33,7 @@ estimate(
   offset,
   dispersion = NULL,
   dispersion_degrees_freedom = NULL,
-  bundle = 1L,
+  bundle = 10L,
   target_output = "brms_fit",
   ...
 )
@@ -59,9 +59,9 @@ Default \code{NULL} uses a default Student-t SD of 1 on the log-shape intercept.
 
 \item{...}{Passed to \code{\link[=estimate_gene]{estimate_gene()}} (e.g. \code{family}, \code{chains}, \code{iter}).}
 
-\item{bundle}{Number of genes to fit per target. \code{1} (default) gives one
-target per gene. A larger value fits that many genes sequentially inside
-one target, which is how you stop tens of thousands of genes from
+\item{bundle}{Number of genes to fit per target. Default \code{10}. \code{1} gives
+one target per gene. A larger value fits that many genes sequentially
+inside one target, which is how you stop tens of thousands of genes from
 swamping an HPC scheduler with tiny jobs. See \emph{Bundling} below.}
 
 \item{target_output}{Name of the targets output.}

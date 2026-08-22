@@ -403,9 +403,9 @@ brmDE <- function(.data,
 #' Prior constants derived from each gene are passed to Stan as data, so every
 #' gene generates identical Stan code and cmdstanr compiles it at most once per
 #' worker process rather than once per gene.
-#' @param bundle Number of genes to fit per target. `1` (default) gives one
-#'   target per gene. A larger value fits that many genes sequentially inside
-#'   one target, which is how you stop tens of thousands of genes from
+#' @param bundle Number of genes to fit per target. Default `10`. `1` gives
+#'   one target per gene. A larger value fits that many genes sequentially
+#'   inside one target, which is how you stop tens of thousands of genes from
 #'   swamping an HPC scheduler with tiny jobs. See *Bundling* below.
 #' @param target_output Name of the targets output.
 #' @param ... Passed to [estimate_gene()] (e.g. `family`, `chains`, `iter`).
@@ -477,7 +477,7 @@ estimate.tidytargets <- function(input_hpc,
                             offset,
                             dispersion = NULL,
                             dispersion_degrees_freedom = NULL,
-                            bundle = 1L,
+                            bundle = 10L,
                             target_output = "brms_fit",
                             ...) {
   offset <- check_offset_name(offset)

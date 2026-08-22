@@ -161,14 +161,15 @@ test_that("bundle regroups the genes into fewer fit targets", {
     gsub(basename(store), "STORE", readLines(paste0(store, ".R")), fixed = TRUE)
   }
 
-  plain <- script_for()
+  unbundled <- script_for(bundle = 1)
   bundled <- script_for(bundle = 3)
 
-  # The default is the graph as it was before bundling existed: one fit target
+  # bundle = 1 is the graph as it was before bundling existed: one fit target
   # per gene, and no extra target in between.
-  expect_false(any(grepl("gene_bundle", plain, fixed = TRUE)))
-  expect_true(any(grepl('other_arguments_to_map = "gene_id"', plain, fixed = TRUE)))
-  expect_identical(script_for(bundle = 1), plain)
+  expect_false(any(grepl("gene_bundle", unbundled, fixed = TRUE)))
+  expect_true(any(grepl('other_arguments_to_map = "gene_id"', unbundled, fixed = TRUE)))
+  # The default bundles, so it is not that graph.
+  expect_true(any(grepl("gene_bundle", script_for(), fixed = TRUE)))
 
   # With bundling the fits map over the bundles instead, and `bundle` is in
   # the command so that changing it invalidates the fits.
@@ -187,7 +188,7 @@ test_that("bundle_gene_ids groups genes by size and keeps their order", {
   # Bundles are `bundle` genes each, so only the last one is a remainder.
   expect_identical(lengths(bundle_gene_ids(ids, 4)), c(4L, 4L, 2L))
   expect_identical(lengths(bundle_gene_ids(ids, 5)), c(5L, 5L))
-  # The default is one target per gene.
+  # bundle = 1 is one gene per target.
   expect_identical(lengths(bundle_gene_ids(ids, 1)), rep(1L, 10))
   # A bundle bigger than the gene set is one target, not an empty one.
   expect_identical(lengths(bundle_gene_ids(ids, 50)), 10L)
@@ -330,7 +331,7 @@ test_that("estimate |> hypothesis |> adjust evaluate as one pipeline", {
 
   expect_equal(out$.feature, "ENSG00000120129")
   # The fit is not in the result, but it is in the store. A branch holds a
-  # bundle, so reading one gives a list of fits even at the default bundle = 1.
+  # bundle, so reading one gives a list of fits even at bundle = 1.
   expect_false("brms_fit" %in% names(out))
   branch <- targets::tar_read_raw("brms_fit", branches = 1L, store = store)
   expect_s3_class(unlist(branch, recursive = FALSE)[[1]], "brmsfit")
