@@ -180,12 +180,15 @@ collect_brmde_hpc <- function(input_hpc) {
     out$hypothesis <- add_hypothesis_fdr(
       collect_branches(targets::tar_read_raw("hypothesis_tbl", store = store))
     )
+     out <- tidyr::unnest(out, cols = "hypothesis")
+
   }
   if ("adjust_tbl" %in% names(input_hpc)) {
     out$adjust <- collect_branches(
       targets::tar_read_raw("adjust_tbl", store = store)
     )
   }
+
   out
 }
 
@@ -201,9 +204,10 @@ collect_brmde_hpc <- function(input_hpc) {
 #' namely the library size offset and the dispersion, belongs upstream of
 #' [brmDE()] and arrives as ordinary `colData` / `rowData` columns.
 #'
-#' Running the pipeline gives one row per gene. [estimate()] contributes the
-#' gene column; [hypothesis()] and [adjust()] add their tables, the first of
-#' them carrying the convergence of each contrast. The fits are not in that
+#' Running the pipeline gives one row per gene and contrast. [estimate()]
+#' contributes the gene column; [hypothesis()] adds its columns inline, each
+#' carrying the convergence of that contrast, and [adjust()] its own table.
+#' The fits are not in that
 #' result, because a transcriptome's worth of `brmsfit` objects will not fit
 #' in one table: they stay in the store. Read one with
 #' `targets::tar_read(brms_fit, branches = i, store = store)`, using the same
@@ -564,10 +568,11 @@ estimate.tidytargets <- function(input_hpc,
 #' on each [estimate()] fit. This is an S3 method for
 #' [brms::hypothesis()].
 #'
-#' Each gene's table holds the posterior statistics for every contrast and the
-#' convergence of that contrast's own draws, so this is where a run of 20,000
-#' genes becomes something you can read: it is small enough to return in full,
-#' while the fits stay in the store. See [hypothesis_gene()] for the columns.
+#' Every contrast gets its posterior statistics and the convergence of its own
+#' draws, so this is where a run of 20,000 genes becomes something you can
+#' read: small enough to return in full, while the fits stay in the store.
+#' Collecting unnests these into the result, one row per gene and contrast.
+#' See [hypothesis_gene()] for the columns.
 #'
 #' Collecting the pipeline adds an `fdr` column across genes when the tests
 #' took the directional route, which is the default. That is the one quantity

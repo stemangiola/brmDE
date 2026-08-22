@@ -30,6 +30,7 @@ Imports:
     stats,
     stringr,
     tibble,
+    tidyr,
     targets,
     SummarizedExperiment
 Suggests:

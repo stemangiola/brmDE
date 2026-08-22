@@ -265,18 +265,17 @@ test_that("bundled genes give one row per gene, as unbundled ones do", {
   fits <- unname(unlist(branches, recursive = FALSE))
   expect_true(all(vapply(fits, inherits, logical(1), "brmsfit")))
 
+  # One hypothesis per gene here, so unnesting still leaves one row per gene.
   expect_equal(out$.feature, features)
-  expect_true(all(vapply(out$hypothesis, inherits, logical(1), "tbl_df")))
 
   # estimate() contributes the gene column and nothing else: the fits are far
   # too large to gather, and the statistics that make the run readable are the
-  # hypothesis ones.
-  expect_named(out, c(".feature", "hypothesis"))
-  expect_true(all(vapply(
-    out$hypothesis,
-    function(h) all(c("rhat", "ess_bulk", "mcse") %in% names(h)),
-    logical(1)
-  )))
+  # hypothesis ones, inline rather than in a list column.
+  expect_false("hypothesis_tbl" %in% names(out))
+  expect_true(
+    all(c("hypothesis", "pH0", "rhat", "ess_bulk", "mcse") %in% names(out))
+  )
+  expect_equal(out$hypothesis, rep("dextrt = 0", length(features)))
 
   # Bundles keep gene order, so unpacking them lines the fits up with `.feature`.
   counts <- SummarizedExperiment::assay(se, "counts")
@@ -335,7 +334,10 @@ test_that("estimate |> hypothesis |> adjust evaluate as one pipeline", {
   expect_false("brms_fit" %in% names(out))
   branch <- targets::tar_read_raw("brms_fit", branches = 1L, store = store)
   expect_s3_class(unlist(branch, recursive = FALSE)[[1]], "brmsfit")
-  expect_s3_class(out$hypothesis[[1]], "tbl_df")
+
+  # The hypothesis columns are inline; adjust stays a per-gene list column.
+  expect_equal(out$hypothesis, "dextrt = 0")
+  expect_true(is.finite(out$estimate))
   expect_s3_class(out$adjust[[1]], "tbl_df")
   expect_true("adjusted___Estimate" %in% names(out$adjust[[1]]) ||
     any(grepl("^adjusted___", names(out$adjust[[1]]))))
