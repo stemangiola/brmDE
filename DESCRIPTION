@@ -30,8 +30,7 @@ Imports:
     stringr,
     tibble,
     targets,
-    SummarizedExperiment,
-    edgeR
+    SummarizedExperiment
 Suggests:
     cmdstanr,
     parallelly,
@@ -41,7 +40,7 @@ Suggests:
     callr,
     knitr,
     rmarkdown,
-    tidybulk,
+    tidybulk (>= 2.3.2),
     tidySummarizedExperiment,
     testthat (>= 3.0.0)
 VignetteBuilder: knitr

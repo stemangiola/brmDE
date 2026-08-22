@@ -1,14 +1,3 @@
-test_that("estimate_dispersion writes a positive tagwise column on airway", {
-  skip_if_not_installed("edgeR")
-
-  se <- airway_se(n_genes = 150)
-  out <- estimate_dispersion(se, ~ dex + (1 | cell), abundance = "counts")
-  disp <- SummarizedExperiment::rowData(out)$dispersion
-  expect_equal(length(disp), nrow(se))
-  expect_true(all(is.finite(disp)))
-  expect_true(all(disp > 0))
-})
-
 default_zinb_priors <- function(data,
                                 abundance,
                                 offset,
@@ -38,29 +27,6 @@ stanvar_value <- function(stanvars, name) stanvars[[name]]$sdata
 make_default_zinb_stanvar <- function(name, ...) {
   stanvar_value(default_zinb_priors(...)$stanvars, name)
 }
-
-test_that("estimate_dispersion records d_eff = df.residual + prior.df", {
-  skip_if_not_installed("edgeR")
-
-  se <- airway_se(n_genes = 150)
-  out <- estimate_dispersion(se, ~ dex + (1 | cell), abundance = "counts")
-  d_eff <- SummarizedExperiment::rowData(out)$dispersion_degrees_freedom
-  expect_equal(length(d_eff), nrow(se))
-
-  # (1 | cell) enters the edgeR design as a fixed `cell`.
-  design <- stats::model.matrix(
-    ~ dex + cell,
-    data = droplevels(as.data.frame(SummarizedExperiment::colData(se)))
-  )
-  fit <- edgeR::estimateDisp(
-    SummarizedExperiment::assay(se, "counts"),
-    design = design
-  )
-  expect_equal(
-    unique(d_eff),
-    (ncol(se) - ncol(design)) + fit$prior.df
-  )
-})
 
 test_that("dispersion_log_sd is the trigamma SD, not the 2/d approximation", {
   # Var(log s^2) = trigamma(d/2) for s^2 ~ sigma^2 chi^2_d / d.
@@ -125,29 +91,6 @@ test_that("shape_intercept_scale rejects unusable degrees of freedom", {
       "finite and positive"
     )
   }
-})
-
-test_that("estimate_dispersion output column names are arguments", {
-  skip_if_not_installed("edgeR")
-
-  se <- airway_se(n_genes = 150)
-  out <- estimate_dispersion(
-    se,
-    ~ dex + (1 | cell),
-    abundance = "counts",
-    dispersion = "phi",
-    dispersion_degrees_freedom = "phi_deff"
-  )
-  rd <- SummarizedExperiment::rowData(out)
-  expect_true(all(c("phi", "phi_deff") %in% names(rd)))
-  expect_false(any(c("dispersion", "dispersion_degrees_freedom") %in% names(rd)))
-  expect_true(all(rd$phi > 0))
-  expect_length(unique(rd$phi_deff), 1L)
-
-  expect_error(
-    estimate_dispersion(se, ~dex, dispersion = "x", dispersion_degrees_freedom = "x"),
-    "different columns"
-  )
 })
 
 test_that("default_zinb_priors sets the shape intercept from d_eff", {
@@ -224,130 +167,6 @@ test_that("shape_prior_df changes both the df and the scale", {
 })
 
 labels_of <- function(formula) attr(stats::terms(formula), "term.labels")
-
-test_that("fixed_effects_formula turns random intercepts into fixed factors", {
-  # 1:group simplifies to group.
-  expect_equal(
-    labels_of(brmDE:::fixed_effects_formula(~ dex + (1 | cell))),
-    c("dex", "cell")
-  )
-  expect_equal(
-    labels_of(brmDE:::fixed_effects_formula(~ (1 | cell))),
-    "cell"
-  )
-  # An intercept-only formula still has nothing to put in the design.
-  expect_equal(labels_of(brmDE:::fixed_effects_formula(~1)), character(0))
-})
-
-test_that("fixed_effects_formula expands random slopes against the group", {
-  # (1 + f1:f2 | cell) is 1:cell + f1:f2:cell, i.e. cell + f1:f2:cell.
-  # terms() then orders each interaction by where its variables first appear,
-  # so the label comes back as cell:f1:f2.
-  expect_equal(
-    labels_of(brmDE:::fixed_effects_formula(~ dex + (1 + f1:f2 | cell))),
-    c("dex", "cell", "cell:f1:f2")
-  )
-  expect_equal(
-    labels_of(brmDE:::fixed_effects_formula(~ (dex | cell))),
-    c("cell", "cell:dex")
-  )
-  # No random intercept, so no bare grouping factor.
-  expect_equal(
-    labels_of(brmDE:::fixed_effects_formula(~ (0 + dex | cell))),
-    "dex:cell"
-  )
-  # `||` is the uncorrelated form of the same fixed structure.
-  expect_equal(
-    labels_of(brmDE:::fixed_effects_formula(~ (dex || cell))),
-    c("cell", "cell:dex")
-  )
-  # brms' (terms | ID | group) only ties posteriors together across
-  # distributional parameters; the fixed structure is that of (terms | group).
-  expect_equal(
-    labels_of(brmDE:::fixed_effects_formula(~ dex + (1 | p | cell))),
-    c("dex", "cell")
-  )
-  expect_equal(
-    labels_of(brmDE:::fixed_effects_formula(~ (dex | p | cell))),
-    c("cell", "cell:dex")
-  )
-  # Nested grouping expands the way a formula would.
-  expect_equal(
-    labels_of(brmDE:::fixed_effects_formula(~ (1 | donor / cell))),
-    c("donor", "donor:cell")
-  )
-})
-
-test_that("estimate_dispersion fails when the expanded design is saturated", {
-  skip_if_not_installed("edgeR")
-
-  se <- simulated_se()
-  # One level per sample, so `(1 | sid)` as a fixed effect uses up the design.
-  se$sid <- factor(colnames(se))
-  expect_error(
-    estimate_dispersion(se, ~ treatment + (1 | sid)),
-    "no residual degrees of freedom"
-  )
-  expect_error(
-    estimate_dispersion(se[, 0], ~treatment),
-    "no samples"
-  )
-})
-
-test_that("estimate_dispersion expands a random slope on a larger dataset", {
-  skip_if_not_installed("edgeR")
-
-  se <- simulated_se()
-  out <- estimate_dispersion(se, ~ treatment + (treatment | donor))
-  disp <- SummarizedExperiment::rowData(out)$dispersion
-  d_eff <- SummarizedExperiment::rowData(out)$dispersion_degrees_freedom
-  expect_true(all(is.finite(disp) & disp > 0))
-
-  # (treatment | donor) becomes donor + treatment:donor, so the design costs
-  # 12 of the 24 samples rather than the 2 a fixed-effects-only formula would.
-  design <- stats::model.matrix(
-    ~ treatment + donor + treatment:donor,
-    data = as.data.frame(SummarizedExperiment::colData(se))
-  )
-  expect_equal(ncol(design), 12L)
-  fit <- edgeR::estimateDisp(
-    SummarizedExperiment::assay(se, "counts"),
-    design = design
-  )
-  expect_equal(unique(d_eff), (ncol(se) - ncol(design)) + fit$prior.df)
-
-  # A random intercept alone spends fewer degrees of freedom than a slope.
-  d_eff_intercept <- SummarizedExperiment::rowData(
-    estimate_dispersion(se, ~ treatment + (1 | donor))
-  )$dispersion_degrees_freedom
-  expect_gt(unique(d_eff_intercept), unique(d_eff))
-})
-
-test_that("estimate_dispersion recovers the dispersion it was simulated with", {
-  skip_if_not_installed("edgeR")
-
-  se <- simulated_se()
-  out <- estimate_dispersion(se, ~ treatment + (1 | donor))
-  expect_gt(
-    stats::cor(
-      SummarizedExperiment::rowData(out)$dispersion,
-      SummarizedExperiment::rowData(out)$true_dispersion,
-      method = "spearman"
-    ),
-    0.6
-  )
-})
-
-test_that("fixed_effects_formula does not duplicate a term already fixed", {
-  expect_equal(
-    labels_of(brmDE:::fixed_effects_formula(~ cell + (1 | cell))),
-    "cell"
-  )
-})
-
-test_that("estimate_dispersion rejects non-SE input", {
-  expect_error(estimate_dispersion(mtcars, ~ dex), "SummarizedExperiment")
-})
 
 test_that("prepare_formula adds a shape offset from dispersion", {
   f <- brmDE:::prepare_formula(

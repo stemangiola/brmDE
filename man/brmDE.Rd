@@ -24,10 +24,10 @@ brmDE(
 }
 \arguments{
 \item{.data}{A \code{SummarizedExperiment} that already carries a library size
-offset in \code{colData} and edgeR dispersion in \code{rowData}. Neither is
+offset in \code{colData} and dispersion in \code{rowData}. Neither is
 computed here: both are whole-matrix quantities, so derive them before
 the pipeline (\code{tidybulk::scale_abundance()} taking \code{log(1 / multiplier)},
-and \code{\link[=estimate_dispersion]{estimate_dispersion()}}) and name the columns when you call
+and \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}) and name the columns when you call
 \code{\link[=estimate]{estimate()}}.}
 
 \item{abundance}{Count assay name.}
@@ -68,7 +68,7 @@ calling \code{\link[=tt_evaluate]{tt_evaluate()}}) runs the pipeline, as in tidy
 }
 \details{
 The pipeline is gene-wise only. Anything estimated across the whole matrix,
-namely the library size offset and the edgeR dispersion, belongs upstream of
+namely the library size offset and the dispersion, belongs upstream of
 \code{\link[=brmDE]{brmDE()}} and arrives as ordinary \code{colData} / \code{rowData} columns.
 }
 \examples{
@@ -78,7 +78,7 @@ data("airway", package = "airway")
 # Whole-matrix quantities are prepared before the gene-wise pipeline.
 se <- airway
 se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
-se <- estimate_dispersion(se, formula_abundance = ~ dex + (1 | cell))
+se <- tidybulk::estimate_dispersion(se, formula_abundance = ~ dex + cell)
 
 se |>
   brmDE(features = c("ENSG00000120129")) |>

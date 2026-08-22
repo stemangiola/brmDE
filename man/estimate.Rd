@@ -50,12 +50,12 @@ passed to \code{\link[=estimate_gene]{estimate_gene()}}. \code{~1} by default.}
 (the same argument as \code{\link[=estimate_gene]{estimate_gene()}}).}
 
 \item{dispersion}{Optional name of the \code{rowData} dispersion column, as
-written by \code{\link[=estimate_dispersion]{estimate_dispersion()}}. Default \code{NULL} puts a zero offset on
-the shape submodel (see \code{\link[=estimate_gene]{estimate_gene()}}).}
+written by \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}. Default \code{NULL} puts a zero
+offset on the shape submodel (see \code{\link[=estimate_gene]{estimate_gene()}}).}
 
 \item{dispersion_degrees_freedom}{Optional name of the effective degrees of
-freedom column written alongside it by \code{\link[=estimate_dispersion]{estimate_dispersion()}}. Default
-\code{NULL} uses a default Student-t SD of 1 on the log-shape intercept.}
+freedom column written alongside it by \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}.
+Default \code{NULL} uses a default Student-t SD of 1 on the log-shape intercept.}
 
 \item{...}{Passed to \code{\link[=estimate_gene]{estimate_gene()}} (e.g. \code{family}, \code{chains}, \code{iter}).}
 
@@ -75,12 +75,15 @@ per gene.
 }
 \details{
 Neither the offset nor the dispersion is computed here. Run
-\code{\link[=estimate_dispersion]{estimate_dispersion()}} on the whole object before \code{\link[=brmDE]{brmDE()}}, exactly as
-you compute the offset, so that both are ordinary columns of the input, then
-pass those column names here. Gene-wise fitting is the only thing this
-pipeline does. Omitting \code{dispersion} and/or \code{dispersion_degrees_freedom}
-is valid (zero shape offset, default prior SD) but computing and passing
-both is the preferred starting point.
+\code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}} on the whole object before \code{\link[=brmDE]{brmDE()}},
+exactly as you compute the offset, so that both are ordinary columns of the
+input, then pass those column names here. Gene-wise fitting is the only
+thing this pipeline does. The dispersion columns are a prior on the
+negative binomial shape (see \code{\link[=estimate_gene]{estimate_gene()}}): they inform each gene
+without fixing the posterior to the external estimate. Omitting
+\code{dispersion} and/or \code{dispersion_degrees_freedom} is valid (zero shape
+offset, default prior SD) but computing and passing both is the preferred
+starting point.
 
 Prior constants derived from each gene are passed to Stan as data, so every
 gene generates identical Stan code and cmdstanr compiles it at most once per

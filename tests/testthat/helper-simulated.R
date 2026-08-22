@@ -1,8 +1,7 @@
-# airway has only 8 samples, so `(treatment | donor)` exhausts the design once
-# estimate_dispersion() expands it into fixed effects. This synthetic negative
-# binomial dataset is wide enough to keep residual degrees of freedom there,
-# and records the dispersion it was generated with so estimates can be checked
-# against a known truth.
+# airway has only 8 samples, so `~ treatment * donor` exhausts the design.
+# This synthetic negative binomial dataset is wide enough to keep residual
+# degrees of freedom there, and records the dispersion it was generated with
+# so estimates can be checked against a known truth.
 simulated_se <- function(n_gene = 200,
                          n_donor = 6,
                          n_replicate = 2,

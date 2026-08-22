@@ -22,8 +22,8 @@ run_vignette <- instantiate::stan_cmdstan_exists()
 `brmDE` does mixed-effect modelling for differential gene expression analyses, based on Bayesian regression through [brms](https://paul-buerkner.github.io/brms/). Each gene is fit on its own, then those fits compose into a [tidytargets](https://github.com/stemangiola/tidytargets) `targets` pipeline. The typical flow is:
 
 1. scale with TMM (`tidybulk::scale_abundance()`) and set `offset = log(1 / multiplier)`
-2. estimate edgeR **dispersion** once on the full matrix (`estimate_dispersion()`)
-3. fit each gene with `estimate_gene()`, using the dispersion to inform the negative binomial shape prior
+2. estimate **dispersion** once on the full matrix (`tidybulk::estimate_dispersion()`)
+3. fit each gene with `estimate_gene()`, using that dispersion as a **prior** on the negative binomial shape — the gene's own counts can still pull the posterior away from it
 4. optionally run posterior **hypothesis** tests and **adjust** for nuisance covariates
 
 Step 1 happens outside `brmDE`. The package does no normalisation of its own: `brmDE()` and `estimate_gene()` both expect the offset column to be on the object already, so you stay in control of how library size is handled.
@@ -79,13 +79,13 @@ se <- airway |>
   # library size factor is the reciprocal of the multiplier
   mutate(offset = log(1 / multiplier))
 
-# Because the edgeR dispersion estimation (in the backend of the `estimate_dispersion` function)
-# cannot model mixed effect model, we do the next best thing
-# by adding the cell random effect to the formula_abundance as fixed effect
-# So `dex + (1|cell)` becomes `dex + cell` and `dex + (dex|cell)` becomes  `dex*cell`
-se <- se |> estimate_dispersion(formula_abundance = ~ dex + cell)
+# Because tidybulk::estimate_dispersion() uses edgeR, which has no mixed
+# models, write the fixed-effect analogue yourself:
+# `dex + (1|cell)` becomes `dex + cell` and `dex + (dex|cell)` becomes `dex*cell`.
+se <- se |> tidybulk::estimate_dispersion(formula_abundance = ~ dex + cell)
 
-# One rowData column per estimate, both named by arguments of the same name:
+# One rowData column per estimate, named by dispersion_column and
+# dispersion_degrees_freedom_column (defaults shown):
 #   dispersion                 = tagwise phi_g
 #   dispersion_degrees_freedom = d_eff = df.residual + prior.df
 head(as.data.frame(rowData(se)[, c("dispersion", "dispersion_degrees_freedom")]))
@@ -95,7 +95,7 @@ head(se$offset)
 
 ## Two formulas, and the offsets brmDE adds
 
-`formula_abundance` is the mean model. It is the same formula `estimate_dispersion()` gave to edgeR above, and it is where the library size offset goes.
+`formula_abundance` is the mean model. For the gene-wise fit it can include random effects; the library size offset goes here. For `tidybulk::estimate_dispersion()` you already wrote the fixed-effect analogue that edgeR can use.
 
 `formula_dispersion` is the model for the negative binomial shape, `~1` by default. It is where the edgeR dispersion offset goes.
 
@@ -106,11 +106,13 @@ Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offs
 Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))
 ```
 
-`dispersion` and `dispersion_degrees_freedom` both default to `NULL`. Leaving `dispersion` unset puts a zero offset on the shape submodel (the intercept is then `log(shape)` itself), which is useful when the sample size is large enough that an informative location from edgeR is unnecessary. Leaving `dispersion_degrees_freedom` unset gives the Student-t intercept a log-scale SD of 1, so the prior scale does not depend on previous tools. Computing both columns with `estimate_dispersion()` and passing their names, as below, is the preferred starting point.
+The edgeR columns are a **prior**, not a plug-in. `estimate_gene()` centres the negative binomial shape on `1/dispersion` and uses `dispersion_degrees_freedom` to set how tightly; the gene-wise likelihood is then free to move the posterior away from that location. That is the point of bringing a whole-matrix estimate in this way: it informs the fit when the gene is sparse, without locking the shape to edgeR if the counts disagree. How far a gene can diverge is the prior scale (`d_eff`) and the tail of `shape_prior` (Student-t is more permissive than gamma).
+
+`dispersion` and `dispersion_degrees_freedom` both default to `NULL`. Leaving `dispersion` unset puts a zero offset on the shape submodel (the intercept is then `log(shape)` itself), which is useful when the sample size is large enough that an informative location from edgeR is unnecessary. Leaving `dispersion_degrees_freedom` unset gives the Student-t intercept a log-scale SD of 1, so the prior scale does not depend on previous tools. Computing both columns with `tidybulk::estimate_dispersion()` and passing their names, as below, is the preferred starting point.
 
 ## Student-t shape prior (default)
 
-The default `shape_prior = "student_t"` builds the shape submodel from `formula_dispersion` and places a Student-t prior on its intercept. With `dispersion_degrees_freedom` passed in, the scale of that prior comes from `sqrt(trigamma(d_eff / 2))`. Because the dispersion enters as an offset on a log link, any terms you add to `formula_dispersion` describe departures from edgeR's per-gene estimate.
+The default `shape_prior = "student_t"` builds the shape submodel from `formula_dispersion` and places a Student-t prior on its intercept. With `dispersion_degrees_freedom` passed in, the scale of that prior comes from `sqrt(trigamma(d_eff / 2))`. Because the dispersion enters as an offset on a log link, any terms you add to `formula_dispersion` describe departures from edgeR's per-gene estimate, on top of the intercept's ability to leave that estimate when the data warrant it.
 
 ```{r one-gene-student, message = FALSE, warning = FALSE, eval = run_vignette}
 fit_t <- se |>
@@ -275,8 +277,8 @@ Pick `bundle` against a single job rather than against the gene count, because t
 | Step | Column / target | Role |
 |------|-----------------|------|
 | tidybulk / tidySE, before `brmDE()` | `colData` `"multiplier"`, `"offset"` | TMM scale factor and `log(1 / multiplier)` |
-| `estimate_dispersion()`, before `brmDE()` | `rowData` `"dispersion"`, `"dispersion_degrees_freedom"` | edgeR \(\phi_g\) and \(d_{\mathrm{eff}}\) |
-| `estimate()` → `estimate_gene()` | `brms_fit` per gene | posterior fit with shape prior from dispersion |
+| `tidybulk::estimate_dispersion()`, before `brmDE()` | `rowData` `"dispersion"`, `"dispersion_degrees_freedom"` | edgeR \(\phi_g\) and \(d_{\mathrm{eff}}\) |
+| `estimate()` → `estimate_gene()` | `brms_fit` per gene | posterior fit; edgeR dispersion is the shape prior, not a fixed value |
 | `hypothesis()` | hypothesis table | `log2_fold_change` and `pH0` per gene, plus `fdr` across genes |
 | `adjust()` | adjusted residuals / fitted | dex kept; random intercepts dropped |
 
@@ -287,7 +289,7 @@ Pick `bundle` against a single job rather than against the gene count, because t
 | `"student_t"` (default) | `shape ~ 1 + offset(log(1/dispersion))`, or `offset(0)` if `dispersion` is `NULL` | Student-t on the intercept; scale from `d_eff`, or log-scale SD 1 if `dispersion_degrees_freedom` is `NULL` |
 | `"gamma"` | scalar `shape` (no submodel) | `gamma(d_eff/2, d_eff * dispersion/2)` (needs both columns) |
 
-`prior.df` from `estimateDisp()` is shared across genes (unless `robust = TRUE` in edgeR). What varies per gene is the tagwise `dispersion` that sets the prior location.
+`prior.df` from `estimateDisp()` is shared across genes (unless `robust = TRUE` in edgeR). What varies per gene is the tagwise `dispersion` that sets the prior location. In either form the gene-wise counts update that prior: the posterior shape is not forced to equal `1/dispersion`.
 
 # Abundance priors at a glance
 

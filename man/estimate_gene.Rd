@@ -44,37 +44,41 @@ than by you, and the assembled formula is reported with a message.}
 \code{~1} by default. Used only when \code{shape_prior = "student_t"}, where it
 becomes a \verb{shape ~ <terms> + offset(...)} submodel. The offset is
 \verb{log(1/<dispersion>)} when \code{dispersion} is supplied, and \code{0} when it is
-\code{NULL}, so the terms you give describe departures from edgeR's estimate
-or, with a zero offset, the log-shape itself. Do not write the offset
-yourself.}
+\code{NULL}, so the terms you give describe departures from that external
+estimate or, with a zero offset, the log-shape itself. Do not write the
+offset yourself.}
 
 \item{offset}{Required name of the precomputed offset column in \code{data}
 (or in \code{colData} if \code{data} is a \code{SummarizedExperiment}). The offset is
 never calculated inside this function.}
 
-\item{dispersion}{Optional name of a precomputed edgeR dispersion column
+\item{dispersion}{Optional name of a precomputed dispersion column
 in \code{rowData} (or in \code{data}). Default \code{NULL} puts a zero offset on the
 shape submodel: the intercept is then \code{log(shape)}, with prior median
 shape \code{1}. Use this when the sample size is large enough that an
 informative location from previous tools is unnecessary. When supplied,
 the column becomes \verb{offset(log(1/<dispersion>))} as described under
-\code{shape_prior}. \code{\link[=estimate_dispersion]{estimate_dispersion()}} writes this column; this function
-does not compute it.}
+\code{shape_prior}: that is the prior \emph{location} of the shape, which the
+gene's counts are then free to update. \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}
+writes this column; this function does not compute it.}
 
 \item{dispersion_degrees_freedom}{Optional name of the effective degrees
 of freedom column that accompanies \code{dispersion}, as written by
-\code{\link[=estimate_dispersion]{estimate_dispersion()}}. Default \code{NULL} gives the Student-t shape
-intercept a log-scale SD of 1, so the prior scale does not depend on
-previous tools. Independent of \code{dispersion}: you can pass one, both, or
-neither.}
+\code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}. Default \code{NULL} gives the Student-t
+shape intercept a log-scale SD of 1, so the prior scale does not depend
+on previous tools. Independent of \code{dispersion}: you can pass one, both,
+or neither.}
 
-\item{shape_prior}{How edgeR's dispersion is turned into a prior on the
-shape parameter. Both forms imply the same log-scale spread,
-\code{trigamma(d_eff / 2)}, but they are not reparameterisations of one
-another: they differ in tail weight, and they centre different summaries
-of the shape on edgeR's estimate. Both put all prior mass on a positive
+\item{shape_prior}{How the external dispersion is turned into a prior on
+the shape parameter. The gene-wise posterior is not constrained to equal
+that estimate: both forms only locate and scale the prior, and the
+likelihood can move the shape away from it. Both imply the same
+log-scale spread, \code{trigamma(d_eff / 2)}, but they are not
+reparameterisations of one another: they differ in tail weight (how
+readily a gene may diverge), and they centre different summaries of the
+shape on the external estimate. Both put all prior mass on a positive
 shape, one by exponentiating an unbounded parameter and the other by
-bounding it. See \code{\link[=estimate_dispersion]{estimate_dispersion()}} for the derivation.
+bounding it.
 \itemize{
 \item \code{"student_t"} (default) adds a
 \code{shape ~ 1 + offset(log(1/dispersion))} submodel (or \code{offset(0)} when
@@ -177,10 +181,14 @@ A \code{brmsfit} object.
 \description{
 Prepares one gene's samples (data frame or one-row
 \code{SummarizedExperiment}) and fits a brms model. You give the mean and
-dispersion models as plain one-sided formulas; the library size offset and
-the edgeR dispersion offset are appended here, and the assembled formulas
-are reported with a message. Priors, inits, and MCMC defaults follow the
-immuneBodyMap ZINB specification and can all be overridden.
+dispersion models as plain one-sided formulas; the library size offset and the externally estimated dispersion offset are
+appended here, and the assembled formulas are reported with a message. A
+precomputed dispersion (typically from \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}})
+is used as a \strong{prior} on the negative
+binomial shape, not as a fixed plug-in: the gene-wise likelihood can still
+pull the posterior away from that estimate. Priors, inits, and MCMC
+defaults follow the immuneBodyMap ZINB specification and can all be
+overridden.
 }
 \details{
 Formula terms are resolved against \code{data} first and the global environment
