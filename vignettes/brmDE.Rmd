@@ -253,6 +253,7 @@ pipeline <- se |>
     computing_resources = crew_controller_slurm(
       workers = 100,
       options_cluster = crew_options_slurm(
+        cpus_per_task = 2,
         memory_gigabytes_per_cpu = 5
       )
     )
