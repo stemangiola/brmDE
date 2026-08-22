@@ -32,7 +32,13 @@ on each \code{\link[=estimate]{estimate()}} fit. This is an S3 method for
 \code{\link[brms:hypothesis]{brms::hypothesis()}}.
 }
 \details{
+Each gene's table holds the posterior statistics for every contrast and the
+convergence of that contrast's own draws, so this is where a run of 20,000
+genes becomes something you can read: it is small enough to return in full,
+while the fits stay in the store. See \code{\link[=hypothesis_gene]{hypothesis_gene()}} for the columns.
+
 Collecting the pipeline adds an \code{fdr} column across genes when the tests
-took the directional route, which is the default. See
-\code{\link[=false_discovery_rate]{false_discovery_rate()}}.
+took the directional route, which is the default. That is the one quantity
+a gene-wise target cannot compute, since it is a property of the gene set.
+See \code{\link[=false_discovery_rate]{false_discovery_rate()}}.
 }

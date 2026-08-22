@@ -110,6 +110,22 @@
 #' their priors, so a point equation with `class = "r"` always reports `NA`.
 #' The directional test has no such limitation.
 #'
+#' @section Convergence of the contrast:
+#' Every row carries its own `rhat`, `ess_bulk`, and `mcse`, computed by
+#' [posterior::summarise_draws()] from the draws of that contrast rather than
+#' from the parameters it was built from. They describe the quantity the row
+#' reports, which is the distinction that matters here: a contrast commonly
+#' mixes better than its parts, since a random-effect level that drifts
+#' between chains cancels in a difference of levels.
+#'
+#' `mcse` is the Monte Carlo error of `estimate`, for the same functional
+#' `robust` selects, so being in the units of the estimate it can be read
+#' against the width of the interval beside it. `ess_bulk` is the more
+#' informative of the two at the few hundred draws a gene-wise fit is usually
+#' given, and it bounds `pH0` as well: a probability counted from draws cannot
+#' resolve below `1 / ndraws`, and correlated draws are worth fewer than their
+#' number.
+#'
 #' @references
 #' Stephens, M. (2017). False discovery rates: a new deal. *Biostatistics*
 #' 18(2), 275-294.
@@ -136,7 +152,8 @@
 #'   natural-log scale of the coefficients, `log2_fold_change` in log2 units,
 #'   `test` naming the route (`"threshold"` or `"point"`), `p_positive` and
 #'   `p_negative` for the two sides of a threshold test and `NA` otherwise,
-#'   `pH0`, and `evid_ratio`. See *One vocabulary for every test*.
+#'   `pH0`, `evid_ratio`, and the convergence of the contrast itself in
+#'   `rhat`, `ess_bulk`, and `mcse`. See *One vocabulary for every test*.
 #'
 #' @examples
 #' \dontrun{
@@ -290,27 +307,30 @@ hypothesis_gene_scope <- function(fit,
   }
   pH0 <- ifelse(point, posterior, 1 - pmax(p_positive, p_negative))
 
-  tibble::tibble(
-    component = component,
-    group = if ("Group" %in% names(hyp$hypothesis)) {
-      hyp$hypothesis$Group
-    } else {
-      grouping_label
-    },
-    hypothesis = labels,
-    estimate = location,
-    ci_lower = over_draws(function(d) {
-      stats::quantile(d, alpha / 2, names = FALSE)
-    }),
-    ci_upper = over_draws(function(d) {
-      stats::quantile(d, 1 - alpha / 2, names = FALSE)
-    }),
-    log2_fold_change = location / log(2),
-    test = ifelse(point, "point", "threshold"),
-    p_positive = ifelse(point, NA_real_, p_positive),
-    p_negative = ifelse(point, NA_real_, p_negative),
-    pH0 = pH0,
-    evid_ratio = (1 - pH0) / pH0
+  dplyr::bind_cols(
+    tibble::tibble(
+      component = component,
+      group = if ("Group" %in% names(hyp$hypothesis)) {
+        hyp$hypothesis$Group
+      } else {
+        grouping_label
+      },
+      hypothesis = labels,
+      estimate = location,
+      ci_lower = over_draws(function(d) {
+        stats::quantile(d, alpha / 2, names = FALSE)
+      }),
+      ci_upper = over_draws(function(d) {
+        stats::quantile(d, 1 - alpha / 2, names = FALSE)
+      }),
+      log2_fold_change = location / log(2),
+      test = ifelse(point, "point", "threshold"),
+      p_positive = ifelse(point, NA_real_, p_positive),
+      p_negative = ifelse(point, NA_real_, p_negative),
+      pH0 = pH0,
+      evid_ratio = (1 - pH0) / pH0
+    ),
+    contrast_diagnostics(draws, brms::nchains(fit), robust = robust)
   )
 }
 
@@ -365,6 +385,37 @@ call_hypothesis <- function(fit, hypothesis, robust, alpha, class, scope,
   }
   args[names(dots)] <- dots
   do.call(brms::hypothesis, args)
+}
+
+# Rhat, ESS and MCSE describe a quantity rather than a model, and the quantity
+# a row reports is the contrast, so they belong beside the estimate whose
+# reliability they bound rather than in a table of parameters nobody asked
+# about. The parameters a contrast is built from routinely mix worse than the
+# contrast does, since a level that drifts between chains often cancels in the
+# difference.
+#
+# `mcse` is the Monte Carlo error of `estimate`, so it follows `robust` to the
+# same functional the estimate reports, and being in the units of the estimate
+# it can be read against the interval width.
+#
+# brms computes no diagnostics of its own for a hypothesis, but it does hand
+# back the draws: each contrast evaluated over the fit's draws, one column per
+# row of the returned table, flattened chain after chain. The chain count is
+# the only thing that flattening loses, and with it the contrasts are a random
+# variable posterior diagnoses like any parameter.
+contrast_diagnostics <- function(draws, n_chains, robust) {
+  contrast <- posterior::rvar(as.matrix(draws), nchains = n_chains)
+
+  mcse <- if (isTRUE(robust)) "mcse_median" else "mcse_mean"
+  summary <- posterior::summarise_draws(
+    posterior::draws_rvars(contrast = contrast),
+    "rhat", "ess_bulk", mcse
+  )
+  tibble::tibble(
+    rhat = summary$rhat,
+    ess_bulk = summary$ess_bulk,
+    mcse = summary[[mcse]]
+  )
 }
 
 #' False discovery rate from per-gene null probabilities

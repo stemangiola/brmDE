@@ -45,7 +45,8 @@ you wrote, or its name), \code{estimate}, \code{ci_lower}, \code{ci_upper} on th
 natural-log scale of the coefficients, \code{log2_fold_change} in log2 units,
 \code{test} naming the route (\code{"threshold"} or \code{"point"}), \code{p_positive} and
 \code{p_negative} for the two sides of a threshold test and \code{NA} otherwise,
-\code{pH0}, and \code{evid_ratio}. See \emph{One vocabulary for every test}.
+\code{pH0}, \code{evid_ratio}, and the convergence of the contrast itself in
+\code{rhat}, \code{ess_bulk}, and \code{mcse}. See \emph{One vocabulary for every test}.
 }
 \description{
 Thin wrapper around \code{\link[brms:hypothesis]{brms::hypothesis()}} that returns a tidy table. Pass
@@ -164,6 +165,24 @@ expression rather than something diffuse.
 Group-level coefficients are the one case no refit fixes: brms cannot sample
 their priors, so a point equation with \code{class = "r"} always reports \code{NA}.
 The directional test has no such limitation.
+}
+
+\section{Convergence of the contrast}{
+
+Every row carries its own \code{rhat}, \code{ess_bulk}, and \code{mcse}, computed by
+\code{\link[posterior:summarise_draws]{posterior::summarise_draws()}} from the draws of that contrast rather than
+from the parameters it was built from. They describe the quantity the row
+reports, which is the distinction that matters here: a contrast commonly
+mixes better than its parts, since a random-effect level that drifts
+between chains cancels in a difference of levels.
+
+\code{mcse} is the Monte Carlo error of \code{estimate}, for the same functional
+\code{robust} selects, so being in the units of the estimate it can be read
+against the width of the interval beside it. \code{ess_bulk} is the more
+informative of the two at the few hundred draws a gene-wise fit is usually
+given, and it bounds \code{pH0} as well: a probability counted from draws cannot
+resolve below \code{1 / ndraws}, and correlated draws are worth fewer than their
+number.
 }
 
 \examples{

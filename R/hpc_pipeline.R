@@ -170,11 +170,9 @@ collect_brmde_hpc <- function(input_hpc) {
   )
   out <- tibble::tibble(.feature = as.character(gene_id))
 
-  if ("brms_fit" %in% names(input_hpc)) {
-    out$brms_fit <- collect_branches(
-      targets::tar_read_raw("brms_fit", store = store)
-    )
-  }
+  # Twenty thousand brmsfit objects do not fit in one table, so estimate()
+  # contributes the gene column alone. The fits stay in the store; read one
+  # with targets::tar_read(brms_fit, branches = i, store = store).
   if ("hypothesis_tbl" %in% names(input_hpc)) {
     # A false discovery rate is a property of the gene set, so it is the one
     # quantity that cannot be computed inside a gene-wise target. The tables
@@ -202,6 +200,14 @@ collect_brmde_hpc <- function(input_hpc) {
 #' The pipeline is gene-wise only. Anything estimated across the whole matrix,
 #' namely the library size offset and the dispersion, belongs upstream of
 #' [brmDE()] and arrives as ordinary `colData` / `rowData` columns.
+#'
+#' Running the pipeline gives one row per gene. [estimate()] contributes the
+#' gene column; [hypothesis()] and [adjust()] add their tables, the first of
+#' them carrying the convergence of each contrast. The fits are not in that
+#' result, because a transcriptome's worth of `brmsfit` objects will not fit
+#' in one table: they stay in the store. Read one with
+#' `targets::tar_read(brms_fit, branches = i, store = store)`, using the same
+#' `store` you passed to [brmDE()]. See *Where the fits are* in [estimate()].
 #'
 #' @param .data A `SummarizedExperiment` that already carries a library size
 #'   offset in `colData` and dispersion in `rowData`. Neither is
@@ -402,6 +408,17 @@ brmDE <- function(.data,
 #'
 #' @return The updated `tidytargets` pipeline.
 #'
+#' @section Where the fits are:
+#' A `brmsfit` carries its draws and its data, so at 20,000 genes the fits are
+#' far too large to be gathered into one table, and gathering them would undo
+#' the point of having a store. [estimate()] therefore contributes the gene
+#' column alone; what makes the result worth reading is [hypothesis()], whose
+#' per-contrast statistics and convergence are small enough to hold for every
+#' gene at once (see [hypothesis_gene()]). The fits stay in the store. Read
+#' one with `targets::tar_read(brms_fit, branches = i, store = store)`, using
+#' the same `store` you passed to [brmDE()]; with `bundle = 1` the branch
+#' index is the gene's row in the result.
+#'
 #' @section Bundling:
 #' One target per gene gives the scheduler tens of thousands of jobs whose
 #' queueing cost rivals the fit itself. `bundle` puts that many genes in each
@@ -547,9 +564,15 @@ estimate.tidytargets <- function(input_hpc,
 #' on each [estimate()] fit. This is an S3 method for
 #' [brms::hypothesis()].
 #'
+#' Each gene's table holds the posterior statistics for every contrast and the
+#' convergence of that contrast's own draws, so this is where a run of 20,000
+#' genes becomes something you can read: it is small enough to return in full,
+#' while the fits stay in the store. See [hypothesis_gene()] for the columns.
+#'
 #' Collecting the pipeline adds an `fdr` column across genes when the tests
-#' took the directional route, which is the default. See
-#' [false_discovery_rate()].
+#' took the directional route, which is the default. That is the one quantity
+#' a gene-wise target cannot compute, since it is a property of the gene set.
+#' See [false_discovery_rate()].
 #'
 #' @param x A `tidytargets` pipeline from [brmDE()].
 #' @param hypothesis Effects to test, passed to [hypothesis_gene()].

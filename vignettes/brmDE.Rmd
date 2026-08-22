@@ -183,6 +183,7 @@ The pipeline fits genes and nothing else. Offset and dispersion are whole-matrix
 
 ```{r pipeline, message = FALSE, warning = FALSE, eval = run_vignette}
 library(crew)
+store <- tempfile(pattern = "brmde_")
 pipeline <- se |>
   filter(.feature %in% c(
     "ENSG00000120129",
@@ -191,7 +192,10 @@ pipeline <- se |>
     "ENSG00000000419",
     "ENSG00000000457"
   )) |>
-  brmDE(computing_resources = crew_controller_local(workers = 5)) |>
+  brmDE(
+    store = store,
+    computing_resources = crew_controller_local(workers = 5)
+  ) |>
   estimate(
     ~ dex + (1 | cell),
     offset = "offset",
@@ -210,6 +214,24 @@ pipeline <- se |>
 
 # Runs the targets graph
 pipeline
+```
+
+## What comes back, and where the fits are
+
+One row per gene. `estimate()` contributes the gene column; `hypothesis()` adds the table that makes the run readable, and `adjust()` its own. Each hypothesis row carries `log2_fold_change` and `pH0` for that contrast, the `fdr` those `pH0` values give across genes, and the convergence of that contrast's own draws: `rhat`, `ess_bulk`, and `mcse`, the Monte Carlo error of the reported `estimate`, which you can read against the width of the interval beside it. Those are diagnostics of the quantity being reported rather than of the parameters behind it, which is the distinction that matters in practice: a `cell` level that drifts between chains cancels in a difference of levels, so the contrast is often trustworthy when its parts are not. `ess_bulk` also bounds how far `pH0` can be trusted, since a probability counted from draws cannot resolve below `1 / ndraws` and correlated draws are worth fewer than their number.
+
+The fits themselves are not in the result. A `brmsfit` carries its draws and its data, so twenty thousand of them cannot be held in one object, and at that scale the statistics are what you want anyway: they tell you which handful of genes to open. Those stay in the targets store; `targets::tar_read(brms_fit, branches = i, store = store)` reads branch `i`. With `bundle = 1` that is the gene's row in the result.
+
+```{r diagnostics, eval = run_vignette}
+result <- pipeline |> tt_evaluate()
+
+result$hypothesis |>
+  stats::setNames(result$.feature) |>
+  dplyr::bind_rows(.id = ".feature")
+
+# Open the gene whose contrast mixed worst.
+worst <- vapply(result$hypothesis, function(h) max(h$rhat), numeric(1))
+targets::tar_read(brms_fit, branches = which.max(worst), store = store)
 ```
 
 ## SLURM
@@ -278,8 +300,8 @@ Pick `bundle` against a single job rather than against the gene count, because t
 |------|-----------------|------|
 | tidybulk / tidySE, before `brmDE()` | `colData` `"multiplier"`, `"offset"` | TMM scale factor and `log(1 / multiplier)` |
 | `tidybulk::estimate_dispersion()`, before `brmDE()` | `rowData` `"dispersion"`, `"dispersion_degrees_freedom"` | edgeR \(\phi_g\) and \(d_{\mathrm{eff}}\) |
-| `estimate()` → `estimate_gene()` | `brms_fit` per gene | posterior fit; edgeR dispersion is the shape prior, not a fixed value |
-| `hypothesis()` | hypothesis table | `log2_fold_change` and `pH0` per gene, plus `fdr` across genes |
+| `estimate()` → `estimate_gene()` | `brms_fit` per gene, in the store | posterior fit; edgeR dispersion is the shape prior, not a fixed value |
+| `hypothesis()` | hypothesis table | `log2_fold_change` and `pH0` per gene, `rhat`/`ess_bulk`/`mcse` per contrast, plus `fdr` across genes |
 | `adjust()` | adjusted residuals / fitted | dex kept; random intercepts dropped |
 
 # Dispersion priors at a glance
