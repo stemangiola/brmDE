@@ -7,9 +7,8 @@
 hypothesis_gene(
   fit,
   hypothesis,
+  test_above_log2FC = 1,
   group = NULL,
-  grouping = group,
-  par = "Intercept",
   class = NULL,
   robust = TRUE,
   alpha = 0.05,
@@ -19,17 +18,18 @@ hypothesis_gene(
 \arguments{
 \item{fit}{A \code{brmsfit} from \code{\link[=estimate_gene]{estimate_gene()}}.}
 
-\item{hypothesis}{Character vector of brms hypothesis equations, or the
-string \code{"random_vs_rest"}.}
+\item{hypothesis}{Character vector of effects to test. An entry written on
+its own (\code{"dextrt"}, or a contrast such as \code{"dextrt - dexb"}) gets the
+directional threshold test. An entry written as \code{"dextrt = 0"} gets a
+Bayes factor instead. The two may be mixed in one call; any other
+right-hand side is an error.}
+
+\item{test_above_log2FC}{Magnitude an effect has to exceed, in log2 fold
+change units, so the default \code{1} asks for a doubling of expression and \code{2}
+for a quadrupling. \code{0} tests only the sign. Ignored for \code{"= 0"} entries.}
 
 \item{group}{Grouping factor for \code{scope = "coef"} tests (e.g.
 \code{"tissue_groups"}). Ignored when \code{NULL}.}
-
-\item{grouping}{For \code{hypothesis = "random_vs_rest"}, the random-effect
-grouping name (defaults to \code{group}).}
-
-\item{par}{Random-effect coefficient to contrast when using
-\code{"random_vs_rest"}. Default \code{"Intercept"}.}
 
 \item{class}{Passed to \code{\link[brms:hypothesis]{brms::hypothesis()}} (e.g. \code{"r"} for random
 effects).}
@@ -39,20 +39,133 @@ effects).}
 \item{...}{Additional arguments passed to \code{\link[brms:hypothesis]{brms::hypothesis()}}.}
 }
 \value{
-A tibble with \code{component}, \code{group}, \code{hypothesis}, \code{estimate},
-interval, and posterior probability columns.
+A tibble with one row per effect tested and the same columns
+whichever route was taken: \code{component}, \code{group}, \code{hypothesis} (the string
+you wrote, or its name), \code{estimate}, \code{ci_lower}, \code{ci_upper} on the
+natural-log scale of the coefficients, \code{log2_fold_change} in log2 units,
+\code{test} naming the route (\code{"threshold"} or \code{"point"}), \code{p_positive} and
+\code{p_negative} for the two sides of a threshold test and \code{NA} otherwise,
+\code{pH0}, and \code{evid_ratio}. See \emph{One vocabulary for every test}.
 }
 \description{
 Thin wrapper around \code{\link[brms:hypothesis]{brms::hypothesis()}} that returns a tidy table. Pass
-arbitrary hypothesis strings for an arbitrary model, or set
-\code{hypothesis = "random_vs_rest"} to contrast each random-intercept level
-against the mean of the others (the tissue test in the immuneBodyMap
-pipeline).
+one or more effects to test; a vector gives one row per entry.
 }
 \details{
 When \code{group} is set, both population-level (\code{scope = "standard"}) and
-group-specific (\code{scope = "coef"}) tests are returned.
+group-specific (\code{scope = "coef"}) tests are returned; the second is a
+\code{\link[=hypothesis_gene_scope]{hypothesis_gene_scope()}} call stacked under the first.
 }
+\section{One vocabulary for every test}{
+
+Whichever route a row took, it reports the same two things, so tables from
+different tests can be read and ranked the same way.
+
+\code{estimate}, the interval, and \code{log2_fold_change} describe the \emph{contrast}, and
+nothing else. They do not move when you change the question asked about it,
+so \code{"dextrt"} and \code{"dextrt = 0"} report the same fold change for \code{dextrt}.
+
+\code{pH0} is the posterior probability that the null being tested is true, and
+\code{evid_ratio} is the posterior odds against it, \code{(1 - pH0) / pH0}. Lower \code{pH0}
+and higher \code{evid_ratio} always mean more evidence for a discovery. What
+counts as the null differs by route, and \code{test} records which route a row
+took, because the routes do not rest on the same assumptions: a \code{"threshold"}
+row needs neither a prior nor prior odds, while a \code{"point"} row needs a
+proper prior and assumes the null and the alternative were equally likely
+beforehand. For a point equation, \code{evid_ratio} is the reciprocal of the Bayes
+factor \code{\link[brms:hypothesis]{brms::hypothesis()}} reports, which measures evidence \emph{for} the null.
+}
+
+\section{Directional threshold test (the default)}{
+
+Write the effect on its own, \code{"dextrt"}, and the test asks whether that
+effect exceeds \code{test_above_log2FC} in magnitude. Each side is counted
+separately from the posterior draws, and \code{pH0} is the probability that the
+better supported side is wrong:
+
+\deqn{p_{H0} = P(\mathrm{ROPE}) + P(\mathrm{losing\ side})
+  = 1 - \max(p_{+}, p_{-}).}
+
+Both ways of being wrong are in there. The effect may be too small to care
+about, or it may run the other way. Testing \verb{P(|effect| > threshold)}
+instead would collapse the two and call a posterior sitting on zero with
+heavy tails a discovery, because such a posterior has mass beyond the
+threshold on both sides at once while its sign is not even determined. The
+form above cannot do that: it is at least 1/2 for any posterior symmetric
+about zero, whatever its tails, and reaches 1 for a posterior lying entirely
+inside the threshold. At \code{test_above_log2FC = 0} it reduces to the local
+false sign rate of Stephens (2017).
+
+Which way the effect goes is left to \code{estimate} and \code{log2_fold_change}, with
+\code{p_positive} and \code{p_negative} giving the two sides separately. There is no
+direction label, because a posterior lying entirely inside the threshold
+leaves both sides at zero and supports no direction at all.
+
+Because \code{pH0} is a probability rather than a test statistic, it turns into
+a false discovery rate by averaging: see \code{\link[=false_discovery_rate]{false_discovery_rate()}}, which
+\code{\link[=brmDE]{brmDE()}} pipelines apply across genes for you.
+
+Nothing here needs prior draws, a proper prior, or a density estimate, so
+this route has none of the failure modes below and is stable at a few
+hundred draws.
+}
+
+\section{Asking for a Bayes factor instead}{
+
+Write the effect against zero, \code{"dextrt = 0"}, and \code{pH0} is filled from a
+Bayes factor computed by \code{\link[brms:hypothesis]{brms::hypothesis()}} rather than counted from the
+draws. The effect size columns are unaffected, as above.
+
+Zero is the only right-hand side either form accepts. Anything else
+(\code{"dextrt = 0.7"}, \code{"dextrt > 0.7"}) is an error rather than a translation,
+because brms returns draws of \code{left - right} and a non-zero right-hand side
+would shift them, reporting a fold change offset by it. Use
+\code{test_above_log2FC} to say how large an effect has to be.
+
+That Bayes factor is computed by the Savage-Dickey density ratio, the posterior density at 0 divided by the prior
+density at 0. That Bayes factor is the Bayesian counterpart of the
+frequentist likelihood-ratio test, which is what edgeR's \code{glmLRT()} reports
+for the same coefficient: both weigh the model with \code{dextrt} free against
+the same model with \code{dextrt} held at 0, so both need the null to be a
+restriction of the alternative. What differs is the treatment of the
+parameters. The likelihood-ratio test maximises the likelihood under each
+hypothesis and refers the ratio to a chi-square distribution to get a
+p-value; the Bayes factor averages the likelihood over the prior instead, so
+it needs no null distribution, but it inherits a dependence on that prior.
+\code{evid_ratio} is the analogue of the test statistic, on a scale where 1 is no
+evidence either way. It is not a p-value: there is no error rate being
+controlled behind it, so do not threshold it as if there were.
+
+Three things follow from how that ratio is computed, and each of them turns
+\code{pH0} and \code{evid_ratio} into \code{NA} or into noise when it is not met.
+\itemize{
+\item \strong{It needs prior draws.} The fit has to come from \code{\link[=estimate_gene]{estimate_gene()}} with
+\code{sample_prior = "yes"}, which is \emph{not} the default: prior draws enlarge
+every stored fit and the directional test above has no use for them, so a
+fit made without them reports \code{NA} here and has to be refitted.
+\item \strong{It needs a proper prior on every parameter tested.} brms cannot draw
+from a flat prior, so a parameter left with brms' default flat prior
+reports \code{NA} however many draws the fit has. The default prior set built
+by \code{\link[=estimate_gene]{estimate_gene()}} is proper throughout; a \code{prior} you supply yourself
+replaces it entirely, so keep it proper.
+\item \strong{It rests on a density estimate, so it needs draws.} The estimate and
+the interval settle long before a density at a single point does. A fit of
+a few hundred draws gives a usable \code{ci_lower}/\code{ci_upper} next to a \code{pH0}
+that moves from run to run; around a thousand post-warmup draws is where
+it starts to hold still.
+}
+
+The ratio also depends on the prior scale rather than on the data alone.
+Widening \code{coefficient_prior_scale} in \code{\link[=estimate_gene]{estimate_gene()}} thins prior mass at
+0 and so moves the evidence towards the null however clear the data are
+(Lindley's paradox), which is why that default is one doubling of
+expression rather than something diffuse.
+
+Group-level coefficients are the one case no refit fixes: brms cannot sample
+their priors, so a point equation with \code{class = "r"} always reports \code{NA}.
+The directional test has no such limitation.
+}
+
 \examples{
 \dontrun{
 data("airway", package = "airway")
@@ -61,13 +174,30 @@ se$offset <- log(colSums(SummarizedExperiment::assay(airway, "counts")))
 se$dex <- relevel(factor(se$dex), ref = "untrt")
 fit <- estimate_gene(se, ~ dex + (1 | cell), offset = "offset")
 
-hypothesis_gene(fit, "dextrt = 0")
+# Default: is the effect bigger than one log2 fold change, and which way?
+hypothesis_gene(fit, "dextrt")
+
+# Sign only, which is the local false sign rate.
+hypothesis_gene(fit, "dextrt", test_above_log2FC = 0)
+
+# Each cell-line intercept, as four group-level tests.
 hypothesis_gene(
   fit,
-  hypothesis = "random_vs_rest",
-  grouping = "cell",
+  c(
+    "`cell[N052611,Intercept]`",
+    "`cell[N061011,Intercept]`",
+    "`cell[N080611,Intercept]`",
+    "`cell[N61311,Intercept]`"
+  ),
   class = "r"
 )
+
+# Point null: a Savage-Dickey Bayes factor. Needs sample_prior = "yes".
+hypothesis_gene(fit, "dextrt = 0")
 }
 
+}
+\references{
+Stephens, M. (2017). False discovery rates: a new deal. \emph{Biostatistics}
+18(2), 275-294.
 }

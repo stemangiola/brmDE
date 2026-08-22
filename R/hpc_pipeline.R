@@ -176,8 +176,11 @@ collect_brmde_hpc <- function(input_hpc) {
     )
   }
   if ("hypothesis_tbl" %in% names(input_hpc)) {
-    out$hypothesis <- collect_branches(
-      targets::tar_read_raw("hypothesis_tbl", store = store)
+    # A false discovery rate is a property of the gene set, so it is the one
+    # quantity that cannot be computed inside a gene-wise target. The tables
+    # are tiny, so it is added here, where every gene is in hand at once.
+    out$hypothesis <- add_hypothesis_fdr(
+      collect_branches(targets::tar_read_raw("hypothesis_tbl", store = store))
     )
   }
   if ("adjust_tbl" %in% names(input_hpc)) {
@@ -544,8 +547,12 @@ estimate.tidytargets <- function(input_hpc,
 #' on each [estimate()] fit. This is an S3 method for
 #' [brms::hypothesis()].
 #'
+#' Collecting the pipeline adds an `fdr` column across genes when the tests
+#' took the directional route, which is the default. See
+#' [false_discovery_rate()].
+#'
 #' @param x A `tidytargets` pipeline from [brmDE()].
-#' @param hypothesis Hypothesis strings passed to [hypothesis_gene()].
+#' @param hypothesis Effects to test, passed to [hypothesis_gene()].
 #' @param target_input Name of the upstream fit target.
 #' @param target_output Name of the targets output.
 #' @param ... Passed to [hypothesis_gene()].

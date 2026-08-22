@@ -221,12 +221,12 @@ strip_formula_env <- function(x) {
   x
 }
 
-is_zinb_family <- function(family) {
+is_negbinomial_family <- function(family) {
   fam <- family
   if (is.function(fam)) {
     fam <- fam()
   }
-  identical(fam$family, "zero_inflated_negbinomial")
+  grepl("negbinomial", fam$family, fixed = TRUE)
 }
 
 intercept_location <- function(data, abundance, offset) {
@@ -417,7 +417,28 @@ shape_student_t_prior <- function(data,
   gene_prior(p, gene_prior_stanvar("brmde_shape_scale", scale))
 }
 
-zinb_location_priors <- function(data, abundance, offset) {
+# Default scale of the Student-t prior on the abundance coefficients. They sit
+# behind a log link, so each is a natural-log fold change, and 0.7 is one log2
+# fold change: a doubling of expression. Multiples follow in log2 units, 1.4
+# being two log2 fold changes.
+#
+# This scale is not only a shrinkage choice. A point hypothesis ("dextrt = 0")
+# is evaluated by the Savage-Dickey density ratio, the posterior density at 0
+# divided by the prior density at 0, so widening this prior thins prior mass at
+# 0 and shifts the evidence towards the null however clear the data are
+# (Lindley's paradox). A scale on the order of the effects being looked for is
+# what makes that ratio mean anything.
+#
+# estimate_gene() spells the same default out in its own signature, where a
+# user reading ?estimate_gene can see it.
+coefficient_prior_scale_default <- 0.7
+
+location_priors <- function(data,
+                            abundance,
+                            offset,
+                            coefficient_prior_scale =
+                              coefficient_prior_scale_default,
+                            coefficient_prior_df = 3) {
   i <- intercept_location(data, abundance, offset)
   gene_prior(
     prior = c(
@@ -425,7 +446,14 @@ zinb_location_priors <- function(data, abundance, offset) {
         "student_t(3, brmde_intercept_location, 1.5)",
         class = "Intercept"
       ),
-      brms::prior(student_t(3, 0, 5), class = b)
+      brms::prior_string(
+        sprintf(
+          "student_t(%s, 0, %s)",
+          format_prior_number(coefficient_prior_df),
+          format_prior_number(coefficient_prior_scale)
+        ),
+        class = "b"
+      )
     ),
     stanvars = gene_prior_stanvar("brmde_intercept_location", i)
   )
@@ -478,8 +506,10 @@ combine_gene_priors <- function(...) {
   )
 }
 
-# The default prior set for a zero-inflated negative binomial gene: one term
-# for the shape, one for the location parameters.
+# The default prior set for a negative binomial gene: one term for the shape,
+# one for the location parameters. Every parameter it touches gets a proper
+# prior, which is what lets point hypotheses be tested at all: brms can only
+# draw from a prior that integrates to one.
 default_gene_priors <- function(data,
                                 formula,
                                 abundance,
@@ -487,7 +517,10 @@ default_gene_priors <- function(data,
                                 dispersion,
                                 dispersion_degrees_freedom,
                                 shape_prior_df,
-                                shape_prior) {
+                                shape_prior,
+                                coefficient_prior_scale =
+                                  coefficient_prior_scale_default,
+                                coefficient_prior_df = 3) {
   shape <- if (has_shape_submodel(formula)) {
     shape_student_t_prior(
       data,
@@ -501,7 +534,16 @@ default_gene_priors <- function(data,
   } else {
     gene_prior(brms::prior(student_t(3, 0, 2), class = shape))
   }
-  combine_gene_priors(shape, zinb_location_priors(data, abundance, offset))
+  combine_gene_priors(
+    shape,
+    location_priors(
+      data,
+      abundance,
+      offset,
+      coefficient_prior_scale = coefficient_prior_scale,
+      coefficient_prior_df = coefficient_prior_df
+    )
+  )
 }
 
 detect_cores <- function() {
@@ -695,54 +737,6 @@ prepare_gene_data <- function(data,
   )
 }
 
-random_intercept_parameters <- function(fit, grouping, par = "Intercept") {
-  pattern <- paste0(
-    "^r_", grouping, "\\[.*,", par, "\\]$"
-  )
-  params <- rownames(summary(fit$fit)[[1]])
-  params[grepl(pattern, params)]
-}
-
-random_intercept_vs_rest_from_names <- function(params,
-                                                grouping,
-                                                par = "Intercept") {
-  if (length(params) < 2L) {
-    stop(
-      "Need at least two '", grouping, "' levels to contrast each level ",
-      "against the rest.",
-      call. = FALSE
-    )
-  }
-
-  quoted <- paste0("`", sub("^r_", "", params), "`")
-  level_names <- sub(
-    paste0("^`", grouping, "\\[(.*),", par, "\\]`$"),
-    "\\1",
-    quoted
-  )
-
-  equations <- vapply(seq_along(quoted), function(i) {
-    this_param <- quoted[[i]]
-    other_params <- quoted[-i]
-    avg_expr <- paste0(
-      "(", paste(other_params, collapse = " + "), ")/",
-      length(other_params)
-    )
-    paste0(this_param, " - ", avg_expr, " = 0")
-  }, character(1))
-  stats::setNames(equations, level_names)
-}
-
-random_intercept_vs_rest_equations <- function(fit,
-                                               grouping,
-                                               par = "Intercept") {
-  random_intercept_vs_rest_from_names(
-    random_intercept_parameters(fit, grouping, par = par),
-    grouping = grouping,
-    par = par
-  )
-}
-
 nullify_newdata <- function(data, nullify = NULL, offset = "offset", offset_value = 0) {
   newdata <- data
   if (!is.null(offset) && offset %in% names(newdata)) {
@@ -763,20 +757,11 @@ nullify_newdata <- function(data, nullify = NULL, offset = "offset", offset_valu
   newdata
 }
 
-tidy_hypothesis <- function(hyp, component, grouping_label) {
-  tbl <- tibble::as_tibble(hyp$hypothesis)
-  if (!nrow(tbl)) {
-    return(tbl)
-  }
-  dplyr::transmute(
-    tbl,
-    component = component,
-    group = if ("Group" %in% names(tbl)) .data$Group else grouping_label,
-    hypothesis = .data$Hypothesis,
-    estimate = .data$Estimate,
-    ci_lower = .data$CI.Lower,
-    ci_upper = .data$CI.Upper,
-    post_prob = if ("Post.Prob" %in% names(tbl)) .data$Post.Prob else NA_real_,
-    evid_ratio = if ("Evid.Ratio" %in% names(tbl)) .data$Evid.Ratio else NA_real_
-  )
+
+split_rows <- function(x, sizes) {
+  ends <- cumsum(sizes)
+  starts <- ends - sizes + 1L
+  lapply(seq_along(sizes), function(i) {
+    if (sizes[[i]] == 0L) x[0, ] else x[starts[[i]]:ends[[i]], ]
+  })
 }

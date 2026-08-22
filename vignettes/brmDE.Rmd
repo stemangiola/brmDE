@@ -131,10 +131,48 @@ fit_t <- se |>
     silent = 2        # set for vignette build
   )
 
-hypothesis_gene(fit_t, "dextrt = 0")
-
 # Keep the dex main effect; drop the cell random intercept.
 adjust_gene(fit_t, re_formula = ~0)
+```
+
+## Hypothesis testing
+
+Name the effect on its own and `hypothesis_gene()` asks the question a DE analysis actually wants: is this effect big enough to care about, and which way does it go?
+
+```{r one-gene-hypotheses, message = FALSE, warning = FALSE, eval = run_vignette}
+# Is the dex effect bigger than one log2 fold change, and in which direction?
+hypothesis_gene(fit_t, "dextrt")
+```
+
+`test_above_log2FC` is the size an effect has to beat, in log2 fold change units, so the default `1` asks for a doubling of expression and `2` for a quadrupling. `pH0` is the probability that the better supported side is wrong:
+
+\[
+p_{H0} = P(\text{effect too small}) + P(\text{effect runs the other way}) = 1 - \max(p_{+}, p_{-}).
+\]
+
+Both ways of being wrong are in that number, which is the point of splitting the sides. Testing `P(|effect| > threshold)` instead would add the two tails together, and a posterior sitting on zero with heavy tails has mass beyond the threshold on *both* sides at once — a large two-sided probability for an effect whose sign is not even determined. Counting the sides separately cannot make that mistake: `pH0` is at least 1/2 for any posterior symmetric about zero, whatever its tails, and climbs to 1 for a posterior lying entirely inside the threshold. Setting `test_above_log2FC = 0` tests only the sign and gives the local false sign rate.
+
+Which way the effect goes is left to `log2_fold_change`, with `p_positive` and `p_negative` giving the two sides separately. There is no direction label: a gene whose posterior sits entirely inside the threshold has both sides at zero and supports no direction at all, so labelling one would be inventing a claim the fit does not make.
+
+Because `pH0` is a probability rather than a test statistic, a false discovery rate follows by averaging: the expected number of false discoveries in a set of genes is the sum of their null probabilities, so the mean `pH0` over the genes you selected *is* the expected proportion of false discoveries among them. `false_discovery_rate()` sorts genes by `pH0` and reports that running mean, and pipelines add it as an `fdr` column. No null distribution and no p-values are involved, and since a cumulative mean of an ascending sequence is already monotone, no Benjamini-Hochberg step-up is needed either.
+
+One limit worth keeping in mind: `pH0` is counted from draws, so it cannot resolve below `1 / ndraws`. A `pH0` of 0 means "smaller than this fit can measure", and an `fdr` far below `1 / ndraws` is not supported by the draws behind it. The fits in this vignette are deliberately short in order to build quickly.
+
+## Group differences
+
+The same test applies to random intercepts. Airway has four cell lines; asking whether each cell's intercept exceeds one log2 fold change from the population mean is four hypotheses. `class = "r"` tells brms to look among the group-level coefficients.
+
+```{r one-gene-cells, message = FALSE, warning = FALSE, eval = run_vignette}
+hypothesis_gene(
+  fit_t,
+  c(
+    "`cell[N052611,Intercept]`",
+    "`cell[N061011,Intercept]`",
+    "`cell[N080611,Intercept]`",
+    "`cell[N61311,Intercept]`"
+  ),
+  class = "r"
+)
 ```
 
 # Full scalable pipeline
@@ -167,7 +205,7 @@ pipeline <- se |>
     refresh = 0,      # set for vignette build
     silent = 2        # set for vignette build
   ) |>
-  hypothesis("dextrt = 0") |>
+  hypothesis("dextrt") |>
   adjust(re_formula = ~0)
 
 # Runs the targets graph
@@ -205,7 +243,7 @@ pipeline <- se |>
     dispersion_degrees_freedom = "dispersion_degrees_freedom",
     family = brms::negbinomial()
   ) |>
-  hypothesis("dextrt = 0") |>
+  hypothesis("dextrt") |>
   adjust(re_formula = ~0)
 
 pipeline
@@ -229,7 +267,7 @@ pipeline <- se |>
     dispersion_degrees_freedom = "dispersion_degrees_freedom",
     bundle = 100    # 20,000 genes become 200 jobs of 100 fits each
   ) |>
-  hypothesis("dextrt = 0")
+  hypothesis("dextrt")
 ```
 
 Pick `bundle` against a single job rather than against the gene count, because that is exactly what it fixes: a job takes about `bundle` times as long as one fit and lands on disk as a single `.rds` holding `bundle` `brmsfit` objects, whether you are running 200 genes or 20,000. Bundling also coarsens `targets`' bookkeeping. A gene that fails takes its bundle with it, and changing the gene set reshuffles which genes share a bundle, so everything refits. Leave `bundle` at `1` when you are iterating on a gene set and relying on incremental reruns.
@@ -241,7 +279,7 @@ Pick `bundle` against a single job rather than against the gene count, because t
 | tidybulk / tidySE, before `brmDE()` | `colData` `"multiplier"`, `"offset"` | TMM scale factor and `log(1 / multiplier)` |
 | `tidybulk::estimate_dispersion()`, before `brmDE()` | `rowData` `"dispersion"`, `"dispersion_degrees_freedom"` | edgeR \(\phi_g\) and \(d_{\mathrm{eff}}\) |
 | `estimate()` → `estimate_gene()` | `brms_fit` per gene | posterior fit; edgeR dispersion is the shape prior, not a fixed value |
-| `hypothesis()` | hypothesis table | posterior tests |
+| `hypothesis()` | hypothesis table | `log2_fold_change` and `pH0` per gene, plus `fdr` across genes |
 | `adjust()` | adjusted residuals / fitted | dex kept; random intercepts dropped |
 
 # Dispersion priors at a glance
@@ -252,3 +290,16 @@ Pick `bundle` against a single job rather than against the gene count, because t
 | `"gamma"` | scalar `shape` (no submodel) | `gamma(d_eff/2, d_eff * dispersion/2)` (needs both columns) |
 
 `prior.df` from `estimateDisp()` is shared across genes (unless `robust = TRUE` in edgeR). What varies per gene is the tagwise `dispersion` that sets the prior location. In either form the gene-wise counts update that prior: the posterior shape is not forced to equal `1/dispersion`.
+
+# Abundance priors at a glance
+
+The default prior set applies whenever `prior` is left `NULL` and `family` is a negative binomial, zero-inflated or not.
+
+| Parameter | Prior | Set by |
+|-----------|-------|--------|
+| `Intercept` | `student_t(3, mean(log1p(counts / exp(offset))), 1.5)` | the gene's own data |
+| `b` (coefficients) | `student_t(coefficient_prior_df, 0, coefficient_prior_scale)`, `student_t(3, 0, 0.7)` by default, one log2 fold change | `coefficient_prior_scale`, `coefficient_prior_df` |
+| `Intercept` of `shape` | `student_t(shape_prior_df, 0, scale)` | `dispersion_degrees_freedom`, `shape_prior_df` |
+| `shape` (scalar) | `gamma(d_eff/2, d_eff * dispersion/2)` | `shape_prior = "gamma"` |
+
+Passing your own `prior` replaces the whole set.
