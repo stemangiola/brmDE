@@ -5,7 +5,7 @@
 
 test_that("a bare contrast takes the directional route and '= 0' the Bayes factor", {
   expect_equal(
-    brmDE:::hypothesis_is_point(c(
+    brmDE:::hypothesis_is_equal_zero(c(
       "dextrt",
       "`cell[N1,Intercept]` - `cell[N2,Intercept]`",
       "dextrt = 0",
@@ -16,19 +16,19 @@ test_that("a bare contrast takes the directional route and '= 0' the Bayes facto
   )
 
   # Names are the caller's labels, not part of the equation.
-  expect_equal(brmDE:::hypothesis_is_point(c(treated = "dextrt")), FALSE)
+  expect_equal(brmDE:::hypothesis_is_equal_zero(c(treated = "dextrt")), FALSE)
 })
 
 test_that("a right-hand side other than zero is refused", {
   # brms returns draws of `left - right`, so a non-zero right-hand side would
   # shift the fold change rather than change the question.
   for (bad in c("dextrt = 0.7", "dextrt > 0.7", "dextrt < -0.7", "dextrt > 0")) {
-    expect_error(brmDE:::hypothesis_is_point(bad), "Unsupported hypothesis")
+    expect_error(brmDE:::hypothesis_is_equal_zero(bad), "Unsupported hypothesis")
   }
 
   # Reported together, and the supported entries alongside them are not.
   expect_error(
-    brmDE:::hypothesis_is_point(c("dextrt", "dexb > 0.7", "dexc = 1")),
+    brmDE:::hypothesis_is_equal_zero(c("dextrt", "dexb > 0.7", "dexc = 1")),
     '"dexb > 0.7", "dexc = 1"',
     fixed = TRUE
   )
@@ -54,15 +54,17 @@ test_that("every route reports the same effect size and the same vocabulary", {
   )
 
   routes <- list(
-    threshold = hypothesis_gene(fit, "dextrt"),
-    point = hypothesis_gene(fit, "dextrt = 0")
+    posterior_draws = hypothesis_gene(fit, "dextrt"),
+    bayes_factor = hypothesis_gene(fit, "dextrt = 0")
   )
 
   # One schema, so tables from different tests stack and rank together.
   schema <- lapply(routes, names)
   expect_true(all(vapply(schema, identical, logical(1), schema[[1]])))
-  expect_equal(vapply(routes, function(x) x$test, character(1)),
-               c(threshold = "threshold", point = "point"))
+  expect_equal(
+    vapply(routes, function(x) x$pH0_from, character(1)),
+    c(posterior_draws = "posterior_draws", bayes_factor = "bayes_factor")
+  )
 
   # The effect size describes the contrast, so asking a different question
   # about it must not move it.
@@ -81,14 +83,13 @@ test_that("every route reports the same effect size and the same vocabulary", {
 
   # A single call may mix routes, one row each, from one brms call.
   mixed <- hypothesis_gene(fit, c("dextrt", "dextrt = 0"))
-  expect_equal(mixed$test, c("threshold", "point"))
+  expect_equal(mixed$pH0_from, c("posterior_draws", "bayes_factor"))
   expect_equal(mixed$hypothesis, c("dextrt", "dextrt = 0"))
   expect_equal(mixed$log2_fold_change, rep(stats::median(draws) / log(2), 2))
-  expect_equal(mixed$pH0, c(routes$threshold$pH0, routes$point$pH0))
-
-  # The two sides belong to the threshold test alone.
-  expect_true(all(is.finite(unlist(routes$threshold[c("p_positive", "p_negative")]))))
-  expect_true(all(is.na(unlist(routes$point[c("p_positive", "p_negative")]))))
+  expect_equal(
+    mixed$pH0,
+    c(routes$posterior_draws$pH0, routes$bayes_factor$pH0)
+  )
 })
 
 test_that("pH0 is counted from the draws", {
@@ -116,13 +117,14 @@ test_that("pH0 is counted from the draws", {
   eps <- log(2)
   expect_equal(nrow(out), 1L)
   expect_equal(out$hypothesis, "dextrt")
-  expect_equal(out$p_positive, mean(draws > eps))
-  expect_equal(out$p_negative, mean(draws < -eps))
   expect_equal(out$pH0, 1 - max(mean(draws > eps), mean(draws < -eps)))
 
   # Two log2 fold changes is 2 * log(2), not 2.
   two <- hypothesis_gene(fit, "dextrt", test_above_log2FC = 2)
-  expect_equal(two$p_positive, mean(draws > 2 * log(2)))
+  expect_equal(
+    two$pH0,
+    1 - max(mean(draws > 2 * log(2)), mean(draws < -2 * log(2)))
+  )
   expect_equal(out$estimate, stats::median(draws))
   expect_equal(out$log2_fold_change, stats::median(draws) / log(2))
 
@@ -130,8 +132,6 @@ test_that("pH0 is counted from the draws", {
   # dropping it to 0 leaves the local false sign rate.
   far <- hypothesis_gene(fit, "dextrt", test_above_log2FC = 50)
   expect_equal(far$pH0, 1)
-  expect_equal(far$p_positive, 0)
-  expect_equal(far$p_negative, 0)
 
   # A pH0 of 1 says no direction is supported, but the effect size is still
   # reported, so the sign stays readable off log2_fold_change alone.
@@ -222,13 +222,13 @@ test_that("the pipeline adds an fdr column across genes", {
   expect_equal(out_two[[1]]$fdr, rep(mean(c(0.01, 0.4)), 2))
   expect_equal(out_two[[2]]$fdr, c(0.01, 0.01))
 
-  # Every route now reports pH0, so the FDR reaches all of them, including a
-  # point test whose Bayes factor came from brms.
-  point <- lapply(c(0.3, 0.004), function(p) {
+  # Every route now reports pH0, so the FDR reaches all of them, including one
+  # whose pH0 came from a Bayes factor rather than from the draws.
+  from_bf <- lapply(c(0.3, 0.004), function(p) {
     tibble::tibble(component = "fixed", hypothesis = "dextrt = 0", pH0 = p)
   })
   expect_equal(
-    vapply(brmDE:::add_hypothesis_fdr(point), function(x) x$fdr, numeric(1)),
+    vapply(brmDE:::add_hypothesis_fdr(from_bf), function(x) x$fdr, numeric(1)),
     c(mean(c(0.004, 0.3)), 0.004)
   )
 
@@ -240,7 +240,7 @@ test_that("the pipeline adds an fdr column across genes", {
   expect_identical(brmDE:::add_hypothesis_fdr(without), without)
 })
 
-test_that("a point test without prior draws leaves fdr NA without spoiling others", {
+test_that("an '= 0' test without prior draws leaves fdr NA without spoiling others", {
   # pH0 is NA when brms could not compute a Bayes factor. Those genes cannot be
   # ranked, but they must not corrupt the rate for the genes that can be.
   expect_equal(false_discovery_rate(c(0.1, NA, 0.3)), c(0.1, NA, 0.2))

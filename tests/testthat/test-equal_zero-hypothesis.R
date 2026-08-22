@@ -1,4 +1,4 @@
-# A point hypothesis is a Savage-Dickey density ratio, so it needs prior draws
+# An "= 0" hypothesis is a Savage-Dickey density ratio, so it needs prior draws
 # and a prior that integrates to one. These tests pin down both halves: that
 # the default prior set is proper for every negative binomial family, and that
 # hypothesis_gene() says so rather than returning a silent NA when it is not.
@@ -52,7 +52,7 @@ test_that("default priors cover negbinomial as well as its zero-inflated form", 
   expect_true(all(nzchar(coefficient_prior_string(priors))))
 })
 
-test_that("a point hypothesis reports pH0 when priors were sampled", {
+test_that("an '= 0' hypothesis reports pH0 when priors were sampled", {
   skip_cmdstan()
 
   se <- airway_one_gene("ENSG00000120129")
@@ -74,19 +74,19 @@ test_that("a point hypothesis reports pH0 when priors were sampled", {
 
   expect_true("prior_b" %in% brms::variables(fit))
 
-  point <- hypothesis_gene(fit, "dextrt = 0")
-  expect_equal(point$test, "point")
-  expect_true(is.finite(point$pH0))
-  expect_true(is.finite(point$evid_ratio))
+  out <- hypothesis_gene(fit, "dextrt = 0")
+  expect_equal(out$pH0_from, "bayes_factor")
+  expect_true(is.finite(out$pH0))
+  expect_true(is.finite(out$evid_ratio))
 
   # brms reports the Bayes factor in favour of the null; evid_ratio is the
   # odds against it, so the two are reciprocal.
   brms_bf <- brms::hypothesis(fit, "dextrt = 0")$hypothesis$Evid.Ratio
-  expect_equal(point$evid_ratio, 1 / brms_bf, tolerance = 1e-6)
-  expect_equal(point$pH0, brms::hypothesis(fit, "dextrt = 0")$hypothesis$Post.Prob)
+  expect_equal(out$evid_ratio, 1 / brms_bf, tolerance = 1e-6)
+  expect_equal(out$pH0, brms::hypothesis(fit, "dextrt = 0")$hypothesis$Post.Prob)
 })
 
-test_that("the default fit carries no prior draws, so a point hypothesis is NA", {
+test_that("the default fit carries no prior draws, so an '= 0' hypothesis is NA", {
   skip_cmdstan()
 
   se <- airway_one_gene("ENSG00000120129")
@@ -106,13 +106,13 @@ test_that("the default fit carries no prior draws, so a point hypothesis is NA",
   )
 
   expect_false(any(startsWith(brms::variables(fit), "prior_")))
-  point <- hypothesis_gene(fit, "dextrt = 0")
-  expect_true(is.na(point$pH0))
-  expect_true(is.na(point$evid_ratio))
+  out <- hypothesis_gene(fit, "dextrt = 0")
+  expect_true(is.na(out$pH0))
+  expect_true(is.na(out$evid_ratio))
 
   # The effect size comes from the posterior, so it survives even when the
   # probability cannot be computed.
-  expect_true(is.finite(point$log2_fold_change))
+  expect_true(is.finite(out$log2_fold_change))
 
   # The directional test needs only the posterior, which is why not storing
   # prior draws is the default.

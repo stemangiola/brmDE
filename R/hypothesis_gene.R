@@ -18,12 +18,14 @@
 #' `pH0` is the posterior probability that the null being tested is true, and
 #' `evid_ratio` is the posterior odds against it, `(1 - pH0) / pH0`. Lower `pH0`
 #' and higher `evid_ratio` always mean more evidence for a discovery. What
-#' counts as the null differs by route, and `test` records which route a row
-#' took, because the routes do not rest on the same assumptions: a `"threshold"`
-#' row needs neither a prior nor prior odds, while a `"point"` row needs a
-#' proper prior and assumes the null and the alternative were equally likely
-#' beforehand. For a point equation, `evid_ratio` is the reciprocal of the Bayes
-#' factor [brms::hypothesis()] reports, which measures evidence *for* the null.
+#' counts as the null differs by route, and so does where `pH0` came from,
+#' which is what `pH0_from` records. The two do not rest on the same
+#' assumptions: a `"posterior_draws"` row counted `pH0` from the draws and
+#' needs neither a prior nor prior odds, while a `"bayes_factor"` row derived
+#' it from a density ratio that needs a proper prior and assumes the null and
+#' the alternative were equally likely beforehand. On that route `evid_ratio`
+#' is the reciprocal of the Bayes factor [brms::hypothesis()] reports, which
+#' measures evidence *for* the null.
 #'
 #' @section Directional threshold test (the default):
 #' Write the effect on its own, `"dextrt"`, and the test asks whether that
@@ -44,10 +46,9 @@
 #' inside the threshold. At `test_above_log2FC = 0` it reduces to the local
 #' false sign rate of Stephens (2017).
 #'
-#' Which way the effect goes is left to `estimate` and `log2_fold_change`, with
-#' `p_positive` and `p_negative` giving the two sides separately. There is no
-#' direction label, because a posterior lying entirely inside the threshold
-#' leaves both sides at zero and supports no direction at all.
+#' Which way the effect goes is left to `estimate` and `log2_fold_change`.
+#' There is no direction label, because a posterior lying entirely inside the
+#' threshold supports no direction at all.
 #'
 #' Because `pH0` is a probability rather than a test statistic, it turns into
 #' a false discovery rate by averaging: see [false_discovery_rate()], which
@@ -107,7 +108,7 @@
 #' expression rather than something diffuse.
 #'
 #' Group-level coefficients are the one case no refit fixes: brms cannot sample
-#' their priors, so a point equation with `class = "r"` always reports `NA`.
+#' their priors, so an `"= 0"` entry with `class = "r"` always reports `NA`.
 #' The directional test has no such limitation.
 #'
 #' @section Convergence of the contrast:
@@ -150,10 +151,10 @@
 #'   whichever route was taken: `component`, `group`, `hypothesis` (the string
 #'   you wrote, or its name), `estimate`, `ci_lower`, `ci_upper` on the
 #'   natural-log scale of the coefficients, `log2_fold_change` in log2 units,
-#'   `test` naming the route (`"threshold"` or `"point"`), `p_positive` and
-#'   `p_negative` for the two sides of a threshold test and `NA` otherwise,
-#'   `pH0`, `evid_ratio`, and the convergence of the contrast itself in
-#'   `rhat`, `ess_bulk`, and `mcse`. See *One vocabulary for every test*.
+#'   `pH0_from` naming where `pH0` came from (`"posterior_draws"` or
+#'   `"bayes_factor"`), `pH0`, `evid_ratio`, and the convergence of the
+#'   contrast itself in `rhat`, `ess_bulk`, and `mcse`. See *One vocabulary
+#'   for every test*.
 #'
 #' @examples
 #' \dontrun{
@@ -181,7 +182,7 @@
 #'   class = "r"
 #' )
 #'
-#' # Point null: a Savage-Dickey Bayes factor. Needs sample_prior = "yes".
+#' # Against zero: a Savage-Dickey Bayes factor. Needs sample_prior = "yes".
 #' hypothesis_gene(fit, "dextrt = 0")
 #' }
 #'
@@ -261,16 +262,16 @@ hypothesis_gene_scope <- function(fit,
                                   robust = TRUE,
                                   alpha = 0.05,
                                   ...) {
-  point <- hypothesis_is_point(hypothesis)
+  equal_zero <- hypothesis_is_equal_zero(hypothesis)
 
   # One brms call answers both routes. Whichever of the two supported forms an
   # entry takes, its right-hand side is 0, so the draws brms hands back for
   # `left - right` are the contrast itself: the effect size can be read off the
-  # same call that returns the point null's Bayes factor, and a threshold test
-  # needs nothing further than those draws.
+  # same call that returns the Bayes factor, and a threshold test needs nothing
+  # further than those draws.
   hyp <- call_hypothesis(
     fit,
-    ifelse(point, hypothesis, paste0("(", hypothesis, ") > 0")),
+    ifelse(equal_zero, hypothesis, paste0("(", hypothesis, ") > 0")),
     robust = robust,
     alpha = alpha,
     class = class,
@@ -284,79 +285,85 @@ hypothesis_gene_scope <- function(fit,
   # grouping factor, blocked by expression, so anything held per expression
   # repeats in blocks rather than cycling.
   per_expression <- ncol(draws) / length(hypothesis)
-  point <- rep(point, each = per_expression)
+  equal_zero <- rep(equal_zero, each = per_expression)
   labels <- rep(hypothesis_labels(hypothesis), each = per_expression)
+
+  # At scope = "coef" brms names the level each row belongs to; otherwise every
+  # row shares the label the caller gave this scope.
+  group <- if ("Group" %in% names(hyp$hypothesis)) {
+    hyp$hypothesis$Group
+  } else {
+    grouping_label
+  }
 
   # USE.NAMES would carry brms' internal "H1", "H2" labels into the columns.
   over_draws <- function(f) vapply(draws, f, numeric(1), USE.NAMES = FALSE)
-  location <- over_draws(if (isTRUE(robust)) stats::median else mean)
+  quantile_over_draws <- function(p) {
+    over_draws(function(d) stats::quantile(d, p, names = FALSE))
+  }
   threshold <- test_above_log2FC * log(2)
+
+  location <- over_draws(if (isTRUE(robust)) stats::median else mean)
+  ci_lower <- quantile_over_draws(alpha / 2)
+  ci_upper <- quantile_over_draws(1 - alpha / 2)
   p_positive <- over_draws(function(d) mean(d > threshold))
   p_negative <- over_draws(function(d) mean(d < -threshold))
 
   # pH0 is the probability of the null on both routes: brms' Post.Prob already
-  # is that for a point equation, and the threshold test keeps whichever of the
+  # is that for an `= 0` entry, and the threshold test keeps whichever of the
   # two directional claims the draws support better. evid_ratio is then the
   # posterior odds against the null, so higher always means more evidence for a
-  # discovery; for a point equation it is the reciprocal of the Bayes factor
+  # discovery; on the Bayes factor route it is the reciprocal of the factor
   # brms reports, which measures evidence *for* the null.
   posterior <- if ("Post.Prob" %in% names(hyp$hypothesis)) {
     hyp$hypothesis$Post.Prob
   } else {
     NA_real_
   }
-  pH0 <- ifelse(point, posterior, 1 - pmax(p_positive, p_negative))
+  pH0 <- ifelse(equal_zero, posterior, 1 - pmax(p_positive, p_negative))
 
-  dplyr::bind_cols(
-    tibble::tibble(
-      component = component,
-      group = if ("Group" %in% names(hyp$hypothesis)) {
-        hyp$hypothesis$Group
-      } else {
-        grouping_label
-      },
-      hypothesis = labels,
-      estimate = location,
-      ci_lower = over_draws(function(d) {
-        stats::quantile(d, alpha / 2, names = FALSE)
-      }),
-      ci_upper = over_draws(function(d) {
-        stats::quantile(d, 1 - alpha / 2, names = FALSE)
-      }),
-      log2_fold_change = location / log(2),
-      test = ifelse(point, "point", "threshold"),
-      p_positive = ifelse(point, NA_real_, p_positive),
-      p_negative = ifelse(point, NA_real_, p_negative),
-      pH0 = pH0,
-      evid_ratio = (1 - pH0) / pH0
-    ),
-    contrast_diagnostics(draws, brms::nchains(fit), robust = robust)
-  )
+  tibble::tibble(
+    component = component,
+    group = group,
+    hypothesis = labels,
+    estimate = location,
+    ci_lower = ci_lower,
+    ci_upper = ci_upper,
+    log2_fold_change = location / log(2),
+    pH0_from = ifelse(equal_zero, "bayes_factor", "posterior_draws"),
+    pH0 = pH0,
+    evid_ratio = (1 - pH0) / pH0
+  ) |>
+    dplyr::bind_cols(
+      contrast_diagnostics(draws, brms::nchains(fit), robust = robust)
+    )
 }
 
-# Two forms are supported, and both put 0 on the right-hand side of brms'
-# `left - right`: a bare contrast, which takes the threshold test, and
-# `contrast = 0`, which takes the Bayes factor. That shared zero is what makes
-# the returned draws the contrast itself, so the effect size is a property of
-# the contrast alone and does not move with the question asked about it. A
-# non-zero right-hand side would shift those draws and report a fold change
-# offset by it, so it is refused rather than quietly translated.
-hypothesis_is_point <- function(hypothesis) {
+# Two forms are supported: a bare contrast, which takes the threshold test,
+# and `contrast = 0`, which takes the Bayes factor. Only the second writes the
+# zero, but the first is normalised to `(contrast) > 0` before the brms call,
+# so both arrive with 0 on the right-hand side of brms' `left - right`. That
+# shared zero is what makes the returned draws the contrast itself, so the
+# effect size is a property of the contrast alone and does not move with the
+# question asked about it. A non-zero right-hand side would shift those draws
+# and report a fold change offset by it, so it is refused rather than quietly
+# translated.
+hypothesis_is_equal_zero <- function(hypothesis) {
   at <- regexpr("[=<>]", hypothesis)
   right <- suppressWarnings(as.numeric(trimws(substring(hypothesis, at + 1L))))
-  point <- at > 0L & substr(hypothesis, at, at) == "=" &
+  equal_zero <- at > 0L & substr(hypothesis, at, at) == "=" &
     !is.na(right) & right == 0
-  if (any(at > 0L & !point)) {
+  if (any(at > 0L & !equal_zero)) {
     stop(
       "Unsupported hypothesis: ",
-      paste0("\"", hypothesis[at > 0L & !point], "\"", collapse = ", "),
+      paste0("\"", hypothesis[at > 0L & !equal_zero], "\"", collapse = ", "),
       ".\nWrite the contrast on its own (\"dextrt\") to test whether it ",
       "exceeds test_above_log2FC, or \"dextrt = 0\" for a Bayes factor ",
-      "against the point null.",
+      "against zero.",
       call. = FALSE
     )
   }
-  unname(point)
+  unname(equal_zero)
 }
 
 # The label brms would print is built from the parsed equation, which says

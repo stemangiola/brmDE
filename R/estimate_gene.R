@@ -100,8 +100,8 @@
 #'   `shape_prior_df`, this is the Stan scale itself rather than a target
 #'   standard deviation, so it reaches the prior untouched.
 #'
-#'   This is not only a shrinkage choice. [hypothesis_gene()] evaluates a point
-#'   hypothesis such as `"dextrt = 0"` by the Savage-Dickey density ratio, the
+#'   This is not only a shrinkage choice. [hypothesis_gene()] evaluates an
+#'   entry such as `"dextrt = 0"` by the Savage-Dickey density ratio, the
 #'   posterior density at 0 over the prior density at 0, so a wider prior thins
 #'   prior mass at 0 and moves the evidence towards the null however clear the
 #'   data are. Keep this on the order of the effects you are looking for.
@@ -117,11 +117,11 @@
 #'   the intercept centred at `mean(log1p(counts / exp(offset)))` and the
 #'   coefficients scaled by `coefficient_prior_scale`. Supplying your own
 #'   `prior` replaces that set entirely, so give every parameter you intend to
-#'   test a proper prior; brms cannot draw from a flat one, and point
-#'   hypotheses on a parameter with a flat prior report NA.
+#'   test a proper prior; brms cannot draw from a flat one, and an `"= 0"`
+#'   entry on a parameter with a flat prior reports NA.
 #' @param sample_prior Passed to [brms::brm()]. `"yes"` draws from the prior
 #'   alongside the posterior, which is what lets [hypothesis_gene()] report
-#'   `pH0` and `evid_ratio` for a point hypothesis such as
+#'   `pH0` and `evid_ratio` for an entry such as
 #'   `"dextrt = 0"`. The draws cost no sampling work, being taken in generated
 #'   quantities, but they do enlarge every stored fit, which at transcriptome
 #'   scale is disk you would rather keep. The default `"no"` omits them, since

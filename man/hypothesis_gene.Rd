@@ -43,10 +43,10 @@ A tibble with one row per effect tested and the same columns
 whichever route was taken: \code{component}, \code{group}, \code{hypothesis} (the string
 you wrote, or its name), \code{estimate}, \code{ci_lower}, \code{ci_upper} on the
 natural-log scale of the coefficients, \code{log2_fold_change} in log2 units,
-\code{test} naming the route (\code{"threshold"} or \code{"point"}), \code{p_positive} and
-\code{p_negative} for the two sides of a threshold test and \code{NA} otherwise,
-\code{pH0}, \code{evid_ratio}, and the convergence of the contrast itself in
-\code{rhat}, \code{ess_bulk}, and \code{mcse}. See \emph{One vocabulary for every test}.
+\code{pH0_from} naming where \code{pH0} came from (\code{"posterior_draws"} or
+\code{"bayes_factor"}), \code{pH0}, \code{evid_ratio}, and the convergence of the
+contrast itself in \code{rhat}, \code{ess_bulk}, and \code{mcse}. See \emph{One vocabulary
+for every test}.
 }
 \description{
 Thin wrapper around \code{\link[brms:hypothesis]{brms::hypothesis()}} that returns a tidy table. Pass
@@ -69,12 +69,14 @@ so \code{"dextrt"} and \code{"dextrt = 0"} report the same fold change for \code
 \code{pH0} is the posterior probability that the null being tested is true, and
 \code{evid_ratio} is the posterior odds against it, \code{(1 - pH0) / pH0}. Lower \code{pH0}
 and higher \code{evid_ratio} always mean more evidence for a discovery. What
-counts as the null differs by route, and \code{test} records which route a row
-took, because the routes do not rest on the same assumptions: a \code{"threshold"}
-row needs neither a prior nor prior odds, while a \code{"point"} row needs a
-proper prior and assumes the null and the alternative were equally likely
-beforehand. For a point equation, \code{evid_ratio} is the reciprocal of the Bayes
-factor \code{\link[brms:hypothesis]{brms::hypothesis()}} reports, which measures evidence \emph{for} the null.
+counts as the null differs by route, and so does where \code{pH0} came from,
+which is what \code{pH0_from} records. The two do not rest on the same
+assumptions: a \code{"posterior_draws"} row counted \code{pH0} from the draws and
+needs neither a prior nor prior odds, while a \code{"bayes_factor"} row derived
+it from a density ratio that needs a proper prior and assumes the null and
+the alternative were equally likely beforehand. On that route \code{evid_ratio}
+is the reciprocal of the Bayes factor \code{\link[brms:hypothesis]{brms::hypothesis()}} reports, which
+measures evidence \emph{for} the null.
 }
 
 \section{Directional threshold test (the default)}{
@@ -97,10 +99,9 @@ about zero, whatever its tails, and reaches 1 for a posterior lying entirely
 inside the threshold. At \code{test_above_log2FC = 0} it reduces to the local
 false sign rate of Stephens (2017).
 
-Which way the effect goes is left to \code{estimate} and \code{log2_fold_change}, with
-\code{p_positive} and \code{p_negative} giving the two sides separately. There is no
-direction label, because a posterior lying entirely inside the threshold
-leaves both sides at zero and supports no direction at all.
+Which way the effect goes is left to \code{estimate} and \code{log2_fold_change}.
+There is no direction label, because a posterior lying entirely inside the
+threshold supports no direction at all.
 
 Because \code{pH0} is a probability rather than a test statistic, it turns into
 a false discovery rate by averaging: see \code{\link[=false_discovery_rate]{false_discovery_rate()}}, which
@@ -163,7 +164,7 @@ Widening \code{coefficient_prior_scale} in \code{\link[=estimate_gene]{estimate_
 expression rather than something diffuse.
 
 Group-level coefficients are the one case no refit fixes: brms cannot sample
-their priors, so a point equation with \code{class = "r"} always reports \code{NA}.
+their priors, so an \code{"= 0"} entry with \code{class = "r"} always reports \code{NA}.
 The directional test has no such limitation.
 }
 
@@ -211,7 +212,7 @@ hypothesis_gene(
   class = "r"
 )
 
-# Point null: a Savage-Dickey Bayes factor. Needs sample_prior = "yes".
+# Against zero: a Savage-Dickey Bayes factor. Needs sample_prior = "yes".
 hypothesis_gene(fit, "dextrt = 0")
 }
 

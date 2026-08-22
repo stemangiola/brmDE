@@ -152,11 +152,13 @@ p_{H0} = P(\text{effect too small}) + P(\text{effect runs the other way}) = 1 - 
 
 Both ways of being wrong are in that number, which is the point of splitting the sides. Testing `P(|effect| > threshold)` instead would add the two tails together, and a posterior sitting on zero with heavy tails has mass beyond the threshold on *both* sides at once — a large two-sided probability for an effect whose sign is not even determined. Counting the sides separately cannot make that mistake: `pH0` is at least 1/2 for any posterior symmetric about zero, whatever its tails, and climbs to 1 for a posterior lying entirely inside the threshold. Setting `test_above_log2FC = 0` tests only the sign and gives the local false sign rate.
 
-Which way the effect goes is left to `log2_fold_change`, with `p_positive` and `p_negative` giving the two sides separately. There is no direction label: a gene whose posterior sits entirely inside the threshold has both sides at zero and supports no direction at all, so labelling one would be inventing a claim the fit does not make.
+Which way the effect goes is left to `log2_fold_change`. There is no direction label: a gene whose posterior sits entirely inside the threshold supports no direction at all, so labelling one would be inventing a claim the fit does not make.
 
 Because `pH0` is a probability rather than a test statistic, a false discovery rate follows by averaging: the expected number of false discoveries in a set of genes is the sum of their null probabilities, so the mean `pH0` over the genes you selected *is* the expected proportion of false discoveries among them. `false_discovery_rate()` sorts genes by `pH0` and reports that running mean, and pipelines add it as an `fdr` column. No null distribution and no p-values are involved, and since a cumulative mean of an ascending sequence is already monotone, no Benjamini-Hochberg step-up is needed either.
 
 One limit worth keeping in mind: `pH0` is counted from draws, so it cannot resolve below `1 / ndraws`. A `pH0` of 0 means "smaller than this fit can measure", and an `fdr` far below `1 / ndraws` is not supported by the draws behind it. The fits in this vignette are deliberately short in order to build quickly.
+
+Writing the effect against zero instead, `hypothesis_gene(fit_t, "dextrt = 0")`, fills `pH0` from a Savage-Dickey Bayes factor rather than by counting draws. The effect size columns do not move, but the number now needs prior draws (`sample_prior = "yes"` in `estimate_gene()`) and a proper prior on the parameter, and it is `NA` without them. The `pH0_from` column records which of the two a row used, `"posterior_draws"` or `"bayes_factor"`, because a `pH0` derived from a Bayes factor carries assumptions the counted one does not. See `?hypothesis_gene` for the full comparison.
 
 ## Group differences
 

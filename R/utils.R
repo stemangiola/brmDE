@@ -422,7 +422,7 @@ shape_student_t_prior <- function(data,
 # fold change: a doubling of expression. Multiples follow in log2 units, 1.4
 # being two log2 fold changes.
 #
-# This scale is not only a shrinkage choice. A point hypothesis ("dextrt = 0")
+# This scale is not only a shrinkage choice. An "= 0" hypothesis ("dextrt = 0")
 # is evaluated by the Savage-Dickey density ratio, the posterior density at 0
 # divided by the prior density at 0, so widening this prior thins prior mass at
 # 0 and shifts the evidence towards the null however clear the data are
@@ -508,7 +508,7 @@ combine_gene_priors <- function(...) {
 
 # The default prior set for a negative binomial gene: one term for the shape,
 # one for the location parameters. Every parameter it touches gets a proper
-# prior, which is what lets point hypotheses be tested at all: brms can only
+# prior, which is what lets "= 0" hypotheses be tested at all: brms can only
 # draw from a prior that integrates to one.
 default_gene_priors <- function(data,
                                 formula,

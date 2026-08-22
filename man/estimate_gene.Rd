@@ -120,8 +120,8 @@ analysis looks for; \code{1.4} is two log2 fold changes, and so on. Unlike
 \code{shape_prior_df}, this is the Stan scale itself rather than a target
 standard deviation, so it reaches the prior untouched.
 
-This is not only a shrinkage choice. \code{\link[=hypothesis_gene]{hypothesis_gene()}} evaluates a point
-hypothesis such as \code{"dextrt = 0"} by the Savage-Dickey density ratio, the
+This is not only a shrinkage choice. \code{\link[=hypothesis_gene]{hypothesis_gene()}} evaluates an
+entry such as \code{"dextrt = 0"} by the Savage-Dickey density ratio, the
 posterior density at 0 over the prior density at 0, so a wider prior thins
 prior mass at 0 and moves the evidence towards the null however clear the
 data are. Keep this on the order of the effects you are looking for.}
@@ -141,12 +141,12 @@ binomial (with or without zero inflation), student-t priors are used with
 the intercept centred at \code{mean(log1p(counts / exp(offset)))} and the
 coefficients scaled by \code{coefficient_prior_scale}. Supplying your own
 \code{prior} replaces that set entirely, so give every parameter you intend to
-test a proper prior; brms cannot draw from a flat one, and point
-hypotheses on a parameter with a flat prior report NA.}
+test a proper prior; brms cannot draw from a flat one, and an \code{"= 0"}
+entry on a parameter with a flat prior reports NA.}
 
 \item{sample_prior}{Passed to \code{\link[brms:brm]{brms::brm()}}. \code{"yes"} draws from the prior
 alongside the posterior, which is what lets \code{\link[=hypothesis_gene]{hypothesis_gene()}} report
-\code{pH0} and \code{evid_ratio} for a point hypothesis such as
+\code{pH0} and \code{evid_ratio} for an entry such as
 \code{"dextrt = 0"}. The draws cost no sampling work, being taken in generated
 quantities, but they do enlarge every stored fit, which at transcriptome
 scale is disk you would rather keep. The default \code{"no"} omits them, since
