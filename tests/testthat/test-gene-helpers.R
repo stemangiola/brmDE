@@ -142,7 +142,7 @@ test_that("as_gene_tibble accepts a one-gene SummarizedExperiment", {
 
 test_that("default ZINB priors omit shape submodel terms without shape ~", {
   dat <- airway_one_gene_tbl()
-  location <- brmDE:::zinb_location_priors(dat, "counts", "offset")
+  location <- brmDE:::location_priors(dat, "counts", "offset")
   priors <- c(
     location$prior,
     brms::prior(student_t(3, 0, 2), class = shape)

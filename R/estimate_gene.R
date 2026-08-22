@@ -83,13 +83,40 @@
 #'   Student-t standard deviation does not exist at or below 2 degrees of
 #'   freedom. The target `sd` is `sqrt(trigamma(d_eff / 2))` when
 #'   `dispersion_degrees_freedom` is supplied, and 1 when it is omitted.
+#' @param coefficient_prior_scale Scale of the Student-t prior on the
+#'   population-level coefficients of the abundance model (`class = "b"`).
+#'   Those coefficients sit behind a log link, so each one is a natural-log
+#'   fold change. The default `0.7` is one log2 fold change, a doubling of
+#'   expression, which is the order of the effects a differential expression
+#'   analysis looks for; `1.4` is two log2 fold changes, and so on. Unlike
+#'   `shape_prior_df`, this is the Stan scale itself rather than a target
+#'   standard deviation, so it reaches the prior untouched.
+#'
+#'   This is not only a shrinkage choice. [hypothesis_gene()] evaluates a point
+#'   hypothesis such as `"dextrt = 0"` by the Savage-Dickey density ratio, the
+#'   posterior density at 0 over the prior density at 0, so a wider prior thins
+#'   prior mass at 0 and moves the evidence towards the null however clear the
+#'   data are. Keep this on the order of the effects you are looking for.
+#' @param coefficient_prior_df Degrees of freedom of that Student-t prior. The
+#'   default 3 keeps the tails heavy enough that a large fold change is still
+#'   cheap.
 #' @param family A brms family. Default is
 #'   [brms::zero_inflated_negbinomial()].
 #' @param abundance Name of the count column, or assay name if `data` is a
 #'   `SummarizedExperiment`.
-#' @param prior Optional brms prior. If `NULL` and `family` is ZINB, student-t
-#'   priors are used with the intercept centred at
-#'   `mean(log1p(counts / exp(offset)))`.
+#' @param prior Optional brms prior. If `NULL` and `family` is a negative
+#'   binomial (with or without zero inflation), student-t priors are used with
+#'   the intercept centred at `mean(log1p(counts / exp(offset)))` and the
+#'   coefficients scaled by `coefficient_prior_scale`. Supplying your own
+#'   `prior` replaces that set entirely, so give every parameter you intend to
+#'   test a proper prior; brms cannot draw from a flat one, and point
+#'   hypotheses on a parameter with a flat prior report NA.
+#' @param sample_prior Passed to [brms::brm()]. `"yes"` (the default) draws
+#'   from the prior alongside the posterior, which is what lets
+#'   [hypothesis_gene()] report `post_prob` and `evid_ratio` for a point
+#'   hypothesis. The draws are taken in generated quantities, so they add no
+#'   sampling work. `"no"` omits them and leaves those two columns NA for
+#'   point hypotheses; one-sided hypotheses are unaffected either way.
 #' @param chains,iter,warmup MCMC settings. Defaults match the manuscript
 #'   pipeline (2 chains, 600 iterations, 400 warmup).
 #' @param backend Passed to [brms::brm()]. Default `"cmdstanr"`.
@@ -134,9 +161,12 @@ estimate_gene <- function(data,
                           dispersion_degrees_freedom = NULL,
                           shape_prior = c("student_t", "gamma"),
                           shape_prior_df = 3,
+                          coefficient_prior_scale = 0.7, # ~1 log2 fold change
+                          coefficient_prior_df = 3,
                           family = NULL,
                           abundance = "counts",
                           prior = NULL,
+                          sample_prior = "yes",
                           chains = 2,
                           iter = 600,
                           warmup = 400,
@@ -153,6 +183,7 @@ estimate_gene <- function(data,
   offset <- check_offset_name(offset)
   shape_prior <- match.arg(shape_prior)
   shape_prior_df <- check_student_df(shape_prior_df)
+  sample_prior <- match.arg(sample_prior, c("yes", "no", "only"))
   if (!is.null(dispersion)) {
     dispersion <- check_dispersion_name(dispersion)
   }
@@ -196,7 +227,7 @@ estimate_gene <- function(data,
     shape_prior = shape_prior
   )
 
-  if (is.null(prior) && is_zinb_family(family)) {
+  if (is.null(prior) && is_negbinomial_family(family)) {
     defaults <- default_gene_priors(
       data = data,
       formula = formula,
@@ -205,7 +236,9 @@ estimate_gene <- function(data,
       dispersion = dispersion,
       dispersion_degrees_freedom = dispersion_degrees_freedom,
       shape_prior_df = shape_prior_df,
-      shape_prior = shape_prior
+      shape_prior = shape_prior,
+      coefficient_prior_scale = coefficient_prior_scale,
+      coefficient_prior_df = coefficient_prior_df
     )
     prior <- defaults$prior
     stanvars <- combine_stanvars(stanvars, defaults$stanvars)
@@ -234,6 +267,7 @@ estimate_gene <- function(data,
     family = family,
     prior = prior,
     stanvars = stanvars,
+    sample_prior = sample_prior,
     chains = chains,
     cores = n_cores,
     threads = threads,

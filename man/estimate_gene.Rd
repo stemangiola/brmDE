@@ -13,9 +13,12 @@ estimate_gene(
   dispersion_degrees_freedom = NULL,
   shape_prior = c("student_t", "gamma"),
   shape_prior_df = 3,
+  coefficient_prior_scale = 0.7,
+  coefficient_prior_df = 3,
   family = NULL,
   abundance = "counts",
   prior = NULL,
+  sample_prior = "yes",
   chains = 2,
   iter = 600,
   warmup = 400,
@@ -104,15 +107,45 @@ Student-t standard deviation does not exist at or below 2 degrees of
 freedom. The target \code{sd} is \code{sqrt(trigamma(d_eff / 2))} when
 \code{dispersion_degrees_freedom} is supplied, and 1 when it is omitted.}
 
+\item{coefficient_prior_scale}{Scale of the Student-t prior on the
+population-level coefficients of the abundance model (\code{class = "b"}).
+Those coefficients sit behind a log link, so each one is a natural-log
+fold change. The default \code{0.7} is one log2 fold change, a doubling of
+expression, which is the order of the effects a differential expression
+analysis looks for; \code{1.4} is two log2 fold changes, and so on. Unlike
+\code{shape_prior_df}, this is the Stan scale itself rather than a target
+standard deviation, so it reaches the prior untouched.
+
+This is not only a shrinkage choice. \code{\link[=hypothesis_gene]{hypothesis_gene()}} evaluates a point
+hypothesis such as \code{"dextrt = 0"} by the Savage-Dickey density ratio, the
+posterior density at 0 over the prior density at 0, so a wider prior thins
+prior mass at 0 and moves the evidence towards the null however clear the
+data are. Keep this on the order of the effects you are looking for.}
+
+\item{coefficient_prior_df}{Degrees of freedom of that Student-t prior. The
+default 3 keeps the tails heavy enough that a large fold change is still
+cheap.}
+
 \item{family}{A brms family. Default is
 \code{\link[brms:zero_inflated_negbinomial]{brms::zero_inflated_negbinomial()}}.}
 
 \item{abundance}{Name of the count column, or assay name if \code{data} is a
 \code{SummarizedExperiment}.}
 
-\item{prior}{Optional brms prior. If \code{NULL} and \code{family} is ZINB, student-t
-priors are used with the intercept centred at
-\code{mean(log1p(counts / exp(offset)))}.}
+\item{prior}{Optional brms prior. If \code{NULL} and \code{family} is a negative
+binomial (with or without zero inflation), student-t priors are used with
+the intercept centred at \code{mean(log1p(counts / exp(offset)))} and the
+coefficients scaled by \code{coefficient_prior_scale}. Supplying your own
+\code{prior} replaces that set entirely, so give every parameter you intend to
+test a proper prior; brms cannot draw from a flat one, and point
+hypotheses on a parameter with a flat prior report NA.}
+
+\item{sample_prior}{Passed to \code{\link[brms:brm]{brms::brm()}}. \code{"yes"} (the default) draws
+from the prior alongside the posterior, which is what lets
+\code{\link[=hypothesis_gene]{hypothesis_gene()}} report \code{post_prob} and \code{evid_ratio} for a point
+hypothesis. The draws are taken in generated quantities, so they add no
+sampling work. \code{"no"} omits them and leaves those two columns NA for
+point hypotheses; one-sided hypotheses are unaffected either way.}
 
 \item{chains, iter, warmup}{MCMC settings. Defaults match the manuscript
 pipeline (2 chains, 600 iterations, 400 warmup).}

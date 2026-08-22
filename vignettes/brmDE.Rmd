@@ -129,10 +129,34 @@ fit_t <- se |>
     silent = 2        # set for vignette build
   )
 
-hypothesis_gene(fit_t, "dextrt = 0")
-
 # Keep the dex main effect; drop the cell random intercept.
 adjust_gene(fit_t, re_formula = ~0)
+```
+
+## Point and one-sided hypotheses
+
+The form of the equation you give `hypothesis_gene()` decides how its `post_prob` and `evid_ratio` columns are obtained, and the two routes ask different things of the fit.
+
+A one-sided equation, `"dextrt > 0"`, is a tally: `post_prob` is the fraction of posterior draws with a positive coefficient, and `evid_ratio` is that fraction over its complement. Nothing but the posterior is involved.
+
+A point equation, `"dextrt = 0"`, is a Bayes factor computed by the Savage-Dickey density ratio: the posterior density at 0 divided by the prior density at 0. That needs draws from the prior as well as the posterior, so `estimate_gene()` passes `sample_prior = "yes"` to brms by default. Those draws are taken in Stan's generated quantities block, so they cost no sampling time, and they are what keeps the two columns from being `NA`. Every parameter under test also needs a prior that integrates to one, because brms cannot draw from a flat prior; this is why the default prior set is applied to plain `brms::negbinomial()` fits and not only to zero-inflated ones.
+
+If you are arriving from edgeR, this is the Bayesian counterpart of the likelihood-ratio test that `glmLRT()` gives you for the same coefficient. Both weigh a model with `dex` free against the same model with it held at 0, which is why both want the null to be a restriction of the alternative. The difference is what happens to the parameters: the likelihood-ratio test maximises the likelihood under each hypothesis and refers the ratio to a chi-square distribution to get a p-value, whereas the Bayes factor averages the likelihood over the prior and so needs no null distribution at all. `evid_ratio` is the analogue of the test statistic, with 1 meaning no evidence either way, and `post_prob` is its normalised form. Neither is a p-value, and nothing behind them controls a type-I error rate, so they are not to be thresholded at 0.05.
+
+Two properties of that ratio matter before you read a `post_prob` off a point test.
+
+**It depends on the prior scale, not only on the data.** Widening the prior on a coefficient thins prior mass at 0 and so moves the evidence towards the null however clear the data are. This is Lindley's paradox, and it is why `coefficient_prior_scale` defaults to `0.7`. A coefficient here sits behind a log link, so it is a natural-log fold change, and `0.7` is one log2 fold change: a doubling of expression, which is the order of the effects a DE analysis looks for. Multiples follow in log2 units, `1.4` being two log2 fold changes. Widen it deliberately when your effects are larger, and expect point tests to grow more conservative as you do.
+
+**It is a density estimate, so it needs draws.** The estimate and the interval stabilise long before a density at a single point does, so a short fit gives a usable `ci_lower`/`ci_upper` alongside a `post_prob` that moves from run to run. Around a thousand post-warmup draws is where it starts to hold still. The fits in this vignette are deliberately far shorter than that, in order to build quickly, so read their `post_prob` as illustration rather than as a result.
+
+Group-level coefficients are the one case no refit fixes. brms cannot sample their priors, so a point test on `class = "r"`, which is what `hypothesis = "random_vs_rest"` builds, reports `estimate` and the interval and leaves `post_prob` as `NA`.
+
+```{r one-gene-hypotheses, message = FALSE, warning = FALSE, eval = run_vignette}
+# Savage-Dickey Bayes factor against the point null.
+hypothesis_gene(fit_t, "dextrt = 0")
+
+# Posterior probability of a positive effect, from the posterior alone.
+hypothesis_gene(fit_t, "dextrt > 0")
 ```
 
 # Full scalable pipeline
@@ -250,3 +274,16 @@ Pick `bundle` against a single job rather than against the gene count, because t
 | `"gamma"` | scalar `shape` (no submodel) | `gamma(d_eff/2, d_eff * dispersion/2)` (needs both columns) |
 
 `prior.df` from `estimateDisp()` is shared across genes (unless `robust = TRUE` in edgeR). What varies per gene is the tagwise `dispersion` that sets the prior location.
+
+# Abundance priors at a glance
+
+The default prior set applies whenever `prior` is left `NULL` and `family` is a negative binomial, zero-inflated or not. All of it is proper, which is what makes a point hypothesis testable.
+
+| Parameter | Prior | Set by |
+|-----------|-------|--------|
+| `Intercept` | `student_t(3, mean(log1p(counts / exp(offset))), 1.5)` | the gene's own data |
+| `b` (coefficients) | `student_t(coefficient_prior_df, 0, coefficient_prior_scale)`, `student_t(3, 0, 0.7)` by default, one log2 fold change | `coefficient_prior_scale`, `coefficient_prior_df` |
+| `Intercept` of `shape` | `student_t(shape_prior_df, 0, scale)` | `dispersion_degrees_freedom`, `shape_prior_df` |
+| `shape` (scalar) | `gamma(d_eff/2, d_eff * dispersion/2)` | `shape_prior = "gamma"` |
+
+Passing your own `prior` replaces the whole set, so give every parameter you intend to test a proper prior of its own.
