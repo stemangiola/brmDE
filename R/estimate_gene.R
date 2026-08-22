@@ -2,10 +2,14 @@
 #'
 #' Prepares one gene's samples (data frame or one-row
 #' `SummarizedExperiment`) and fits a brms model. You give the mean and
-#' dispersion models as plain one-sided formulas; the library size offset and
-#' the edgeR dispersion offset are appended here, and the assembled formulas
-#' are reported with a message. Priors, inits, and MCMC defaults follow the
-#' immuneBodyMap ZINB specification and can all be overridden.
+#' dispersion models as plain one-sided formulas; the library size offset and the externally estimated dispersion offset are
+#' appended here, and the assembled formulas are reported with a message. A
+#' precomputed dispersion (typically from [tidybulk::estimate_dispersion()])
+#' is used as a **prior** on the negative
+#' binomial shape, not as a fixed plug-in: the gene-wise likelihood can still
+#' pull the posterior away from that estimate. Priors, inits, and MCMC
+#' defaults follow the immuneBodyMap ZINB specification and can all be
+#' overridden.
 #'
 #' Formula terms are resolved against `data` first and the global environment
 #' after. The environment a formula was written in is deliberately dropped:
@@ -27,33 +31,37 @@
 #'   `~1` by default. Used only when `shape_prior = "student_t"`, where it
 #'   becomes a `shape ~ <terms> + offset(...)` submodel. The offset is
 #'   `log(1/<dispersion>)` when `dispersion` is supplied, and `0` when it is
-#'   `NULL`, so the terms you give describe departures from edgeR's estimate
-#'   or, with a zero offset, the log-shape itself. Do not write the offset
-#'   yourself.
+#'   `NULL`, so the terms you give describe departures from that external
+#'   estimate or, with a zero offset, the log-shape itself. Do not write the
+#'   offset yourself.
 #' @param offset Required name of the precomputed offset column in `data`
 #'   (or in `colData` if `data` is a `SummarizedExperiment`). The offset is
 #'   never calculated inside this function.
-#' @param dispersion Optional name of a precomputed edgeR dispersion column
+#' @param dispersion Optional name of a precomputed dispersion column
 #'   in `rowData` (or in `data`). Default `NULL` puts a zero offset on the
 #'   shape submodel: the intercept is then `log(shape)`, with prior median
 #'   shape `1`. Use this when the sample size is large enough that an
 #'   informative location from previous tools is unnecessary. When supplied,
 #'   the column becomes `offset(log(1/<dispersion>))` as described under
-#'   `shape_prior`. [estimate_dispersion()] writes this column; this function
-#'   does not compute it.
+#'   `shape_prior`: that is the prior *location* of the shape, which the
+#'   gene's counts are then free to update. [tidybulk::estimate_dispersion()]
+#'   writes this column; this function does not compute it.
 #' @param dispersion_degrees_freedom Optional name of the effective degrees
 #'   of freedom column that accompanies `dispersion`, as written by
-#'   [estimate_dispersion()]. Default `NULL` gives the Student-t shape
-#'   intercept a log-scale SD of 1, so the prior scale does not depend on
-#'   previous tools. Independent of `dispersion`: you can pass one, both, or
-#'   neither.
-#' @param shape_prior How edgeR's dispersion is turned into a prior on the
-#'   shape parameter. Both forms imply the same log-scale spread,
-#'   `trigamma(d_eff / 2)`, but they are not reparameterisations of one
-#'   another: they differ in tail weight, and they centre different summaries
-#'   of the shape on edgeR's estimate. Both put all prior mass on a positive
+#'   [tidybulk::estimate_dispersion()]. Default `NULL` gives the Student-t
+#'   shape intercept a log-scale SD of 1, so the prior scale does not depend
+#'   on previous tools. Independent of `dispersion`: you can pass one, both,
+#'   or neither.
+#' @param shape_prior How the external dispersion is turned into a prior on
+#'   the shape parameter. The gene-wise posterior is not constrained to equal
+#'   that estimate: both forms only locate and scale the prior, and the
+#'   likelihood can move the shape away from it. Both imply the same
+#'   log-scale spread, `trigamma(d_eff / 2)`, but they are not
+#'   reparameterisations of one another: they differ in tail weight (how
+#'   readily a gene may diverge), and they centre different summaries of the
+#'   shape on the external estimate. Both put all prior mass on a positive
 #'   shape, one by exponentiating an unbounded parameter and the other by
-#'   bounding it. See [estimate_dispersion()] for the derivation.
+#'   bounding it.
 #'
 #'   * `"student_t"` (default) adds a
 #'     `shape ~ 1 + offset(log(1/dispersion))` submodel (or `offset(0)` when

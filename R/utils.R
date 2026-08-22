@@ -296,7 +296,7 @@ shape_prior_sd_default <- 1
 
 # Prior scale for the shape intercept. When `dispersion_degrees_freedom` is
 # supplied it is derived from the effective degrees of freedom that
-# estimate_dispersion() recorded; when it is omitted the scale comes from
+# tidybulk::estimate_dispersion() recorded; when it is omitted the scale comes from
 # `shape_prior_sd_default`, so the prior does not depend on previous tools.
 shape_intercept_scale <- function(data,
                                   dispersion_degrees_freedom,
@@ -323,8 +323,8 @@ require_degrees_freedom_column <- function(data, dispersion_degrees_freedom) {
   }
   stop(
     "Degrees of freedom column '", dispersion_degrees_freedom,
-    "' was not found in `data`. estimate_dispersion() writes it; pass ",
-    "`dispersion_degrees_freedom` if you named it something else, or omit ",
+    "' was not found in `data`. tidybulk::estimate_dispersion() writes it; ",
+    "pass `dispersion_degrees_freedom` if you named it something else, or omit ",
     "the argument to use the default Student-t scale.",
     call. = FALSE
   )
@@ -618,8 +618,8 @@ check_dispersion_values <- function(data, dispersion) {
   if (any(bad)) {
     stop(
       "Dispersion column '", dispersion, "' has ", sum(bad),
-      " non-finite or non-positive value(s). estimate_dispersion() returns ",
-      "NA when edgeR cannot fit the design; fix that rather than passing ",
+      " non-finite or non-positive value(s). tidybulk::estimate_dispersion() ",
+      "returns NA when the design cannot be fit; fix that rather than passing ",
       "the result on.",
       call. = FALSE
     )

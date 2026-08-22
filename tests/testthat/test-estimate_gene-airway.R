@@ -55,10 +55,10 @@ test_that("estimate_gene, hypothesis_gene, and adjust_gene run on one airway gen
 test_that("ZINB with a dispersion-derived shape prior fits one airway gene", {
   skip_on_cran()
   skip_if_no_cmdstan()
-  skip_if_not_installed("edgeR")
+  skip_if_not_installed("tidybulk")
 
   se <- airway_se(n_genes = 150)
-  se <- estimate_dispersion(se, ~ dex, abundance = "counts")
+  se <- tidybulk::estimate_dispersion(se, formula_abundance = ~ dex)
   se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
   se_gene <- se["ENSG00000120129", , drop = FALSE]
 
@@ -92,10 +92,10 @@ test_that("ZINB with a dispersion-derived shape prior fits one airway gene", {
 test_that("ZINB with a conjugate gamma shape prior fits one airway gene", {
   skip_on_cran()
   skip_if_no_cmdstan()
-  skip_if_not_installed("edgeR")
+  skip_if_not_installed("tidybulk")
 
   se <- airway_se(n_genes = 150)
-  se <- estimate_dispersion(se, ~ dex, abundance = "counts")
+  se <- tidybulk::estimate_dispersion(se, formula_abundance = ~ dex)
   se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
   se_gene <- se["ENSG00000120129", , drop = FALSE]
 

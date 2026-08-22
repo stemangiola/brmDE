@@ -197,14 +197,14 @@ collect_brmde_hpc <- function(input_hpc) {
 #' calling [tt_evaluate()]) runs the pipeline, as in tidytargets.
 #'
 #' The pipeline is gene-wise only. Anything estimated across the whole matrix,
-#' namely the library size offset and the edgeR dispersion, belongs upstream of
+#' namely the library size offset and the dispersion, belongs upstream of
 #' [brmDE()] and arrives as ordinary `colData` / `rowData` columns.
 #'
 #' @param .data A `SummarizedExperiment` that already carries a library size
-#'   offset in `colData` and edgeR dispersion in `rowData`. Neither is
+#'   offset in `colData` and dispersion in `rowData`. Neither is
 #'   computed here: both are whole-matrix quantities, so derive them before
 #'   the pipeline (`tidybulk::scale_abundance()` taking `log(1 / multiplier)`,
-#'   and [estimate_dispersion()]) and name the columns when you call
+#'   and [tidybulk::estimate_dispersion()]) and name the columns when you call
 #'   [estimate()].
 #' @param abundance Count assay name.
 #' @param features Optional character vector of gene ids to fit, e.g.
@@ -233,7 +233,7 @@ collect_brmde_hpc <- function(input_hpc) {
 #' # Whole-matrix quantities are prepared before the gene-wise pipeline.
 #' se <- airway
 #' se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
-#' se <- estimate_dispersion(se, formula_abundance = ~ dex + (1 | cell))
+#' se <- tidybulk::estimate_dispersion(se, formula_abundance = ~ dex + cell)
 #'
 #' se |>
 #'   brmDE(features = c("ENSG00000120129")) |>
@@ -369,20 +369,23 @@ brmDE <- function(.data,
 #' @param offset Required name of the precomputed offset column in `colData`
 #'   (the same argument as [estimate_gene()]).
 #' @param dispersion Optional name of the `rowData` dispersion column, as
-#'   written by [estimate_dispersion()]. Default `NULL` puts a zero offset on
-#'   the shape submodel (see [estimate_gene()]).
+#'   written by [tidybulk::estimate_dispersion()]. Default `NULL` puts a zero
+#'   offset on the shape submodel (see [estimate_gene()]).
 #' @param dispersion_degrees_freedom Optional name of the effective degrees of
-#'   freedom column written alongside it by [estimate_dispersion()]. Default
-#'   `NULL` uses a default Student-t SD of 1 on the log-shape intercept.
+#'   freedom column written alongside it by [tidybulk::estimate_dispersion()].
+#'   Default `NULL` uses a default Student-t SD of 1 on the log-shape intercept.
 #'
 #' @details
 #' Neither the offset nor the dispersion is computed here. Run
-#' [estimate_dispersion()] on the whole object before [brmDE()], exactly as
-#' you compute the offset, so that both are ordinary columns of the input, then
-#' pass those column names here. Gene-wise fitting is the only thing this
-#' pipeline does. Omitting `dispersion` and/or `dispersion_degrees_freedom`
-#' is valid (zero shape offset, default prior SD) but computing and passing
-#' both is the preferred starting point.
+#' [tidybulk::estimate_dispersion()] on the whole object before [brmDE()],
+#' exactly as you compute the offset, so that both are ordinary columns of the
+#' input, then pass those column names here. Gene-wise fitting is the only
+#' thing this pipeline does. The dispersion columns are a prior on the
+#' negative binomial shape (see [estimate_gene()]): they inform each gene
+#' without fixing the posterior to the external estimate. Omitting
+#' `dispersion` and/or `dispersion_degrees_freedom` is valid (zero shape
+#' offset, default prior SD) but computing and passing both is the preferred
+#' starting point.
 #'
 #' Prior constants derived from each gene are passed to Stan as data, so every
 #' gene generates identical Stan code and cmdstanr compiles it at most once per
