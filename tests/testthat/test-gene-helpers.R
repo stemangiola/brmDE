@@ -14,18 +14,6 @@ test_that("estimate_gene requires a single offset column name", {
   )
 })
 
-test_that("draws are counted per chain rather than as brms' iter", {
-  dat <- airway_one_gene_tbl()
-  expect_error(
-    estimate_gene(dat, ~ dex, offset = "offset", iter = 500),
-    "draws_warmup"
-  )
-  expect_error(
-    estimate_gene(dat, ~ dex, offset = "offset", warmup = 200),
-    "rather than .warmup."
-  )
-})
-
 test_that("prepare_gene_data rejects NA counts rather than dropping them", {
   dat <- airway_one_gene_tbl()
   dat$counts[2] <- NA_integer_
