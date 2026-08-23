@@ -3,7 +3,9 @@
 header (target_list) and the shared steps (load SE, gene ids). Later
 calls to estimate(), hypothesis(), and adjust() append
 tt_iterate() branches onto the same graph. Printing the object (or
-calling tt_evaluate()) runs the pipeline, as in tidytargets."><!-- mathjax --><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js" integrity="sha256-nvJJv9wWKEm88qvoQl9ekL2J+k/RWIsaSScxxlsrv8k=" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/config/TeX-AMS-MML_HTMLorMML.js" integrity="sha256-84DKXVJXs0/F8OTMzX4UR909+jtl4G7SPypPavF+GfA=" crossorigin="anonymous"></script><!--[if lt IE 9]>
+calling tt_evaluate()) runs the pipeline, as in tidytargets. Assigning
+it does not; an interactive session then says the pipeline is ready to be
+evaluated, rather than appearing to do nothing."><!-- mathjax --><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js" integrity="sha256-nvJJv9wWKEm88qvoQl9ekL2J+k/RWIsaSScxxlsrv8k=" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/config/TeX-AMS-MML_HTMLorMML.js" integrity="sha256-84DKXVJXs0/F8OTMzX4UR909+jtl4G7SPypPavF+GfA=" crossorigin="anonymous"></script><!--[if lt IE 9]>
 <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
 <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
 <![endif]--></head><body data-spy="scroll" data-target="#toc">
@@ -51,7 +53,9 @@ calling tt_evaluate()) runs the pipeline, as in tidytargets."><!-- mathjax --><s
 header (<code>target_list</code>) and the shared steps (load SE, gene ids). Later
 calls to <code><a href="estimate.html">estimate()</a></code>, <code><a href="https://paulbuerkner.com/brms/reference/hypothesis.brmsfit.html" class="external-link">hypothesis()</a></code>, and <code><a href="adjust.html">adjust()</a></code> append
 <code><a href="https://stemangiola.github.io/tidytargets/reference/tt_iterate.html" class="external-link">tt_iterate()</a></code> branches onto the same graph. Printing the object (or
-calling <code><a href="https://stemangiola.github.io/tidytargets/reference/tt_evaluate.html" class="external-link">tt_evaluate()</a></code>) runs the pipeline, as in tidytargets.</p>
+calling <code><a href="https://stemangiola.github.io/tidytargets/reference/tt_evaluate.html" class="external-link">tt_evaluate()</a></code>) runs the pipeline, as in tidytargets. Assigning
+it does not; an interactive session then says the pipeline is ready to be
+evaluated, rather than appearing to do nothing.</p>
     </div>
 
     <div id="ref-usage">
@@ -141,7 +145,8 @@ to <code>tar_option_set()</code> / <code>tar_cue()</code> as in tidytargets.</p>
 </dl></div>
     <div id="value">
     <h2>Value</h2>
-    <p>A <code>tidytargets</code> pipeline object (<code>brmDE_hpc</code>).</p>
+    <p>A <code>tidytargets</code> pipeline object (<code>brmDE_hpc</code>). The graph is not
+run until you print it or call <code><a href="https://stemangiola.github.io/tidytargets/reference/tt_evaluate.html" class="external-link">tt_evaluate()</a></code>.</p>
     </div>
     <div id="details">
     <h2>Details</h2>
