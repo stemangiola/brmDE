@@ -57,7 +57,8 @@ offset on the shape submodel (see \code{\link[=estimate_gene]{estimate_gene()}})
 freedom column written alongside it by \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}.
 Default \code{NULL} uses a default Student-t SD of 1 on the log-shape intercept.}
 
-\item{...}{Passed to \code{\link[=estimate_gene]{estimate_gene()}} (e.g. \code{family}, \code{chains}, \code{iter}).}
+\item{...}{Passed to \code{\link[=estimate_gene]{estimate_gene()}} (e.g. \code{family}, \code{chains},
+\code{draws_sampling}).}
 
 \item{bundle}{Number of genes to fit per target. Default \code{10}. \code{1} gives
 one target per gene. A larger value fits that many genes sequentially
@@ -100,6 +101,17 @@ gene at once (see \code{\link[=hypothesis_gene]{hypothesis_gene()}}). The fits s
 one with \code{targets::tar_read(brms_fit, branches = i, store = store)}, using
 the same \code{store} you passed to \code{\link[=brmDE]{brmDE()}}; with \code{bundle = 1} the branch
 index is the gene's row in the result.
+}
+
+\section{What the pipeline remembers}{
+
+What the fits were asked for goes onto the pipeline with
+\code{\link[tidytargets:tt_metadata]{tidytargets::tt_metadata()}}: the formulas, the column names, and every
+\code{\link[=estimate_gene]{estimate_gene()}} argument the sampling depends on, defaults included, so
+the object carries its own specification while the fits stay in the store.
+Read it with \code{tt_metadata(pipeline)}. It is how \code{\link[=plot_volcano]{plot_volcano()}} knows the
+\code{chains * draws_sampling} draws a \code{pH0} was counted from, and so why it
+takes the pipeline rather than the table.
 }
 
 \section{Bundling}{

@@ -127,8 +127,14 @@
 #'   scale is disk you would rather keep. The default `"no"` omits them, since
 #'   the default test in [hypothesis_gene()] is directional and needs no prior
 #'   draws. Set this to `"yes"` when you intend to ask for a Bayes factor.
-#' @param chains,iter,warmup MCMC settings. Defaults match the manuscript
-#'   pipeline (2 chains, 600 iterations, 400 warmup).
+#' @param chains,draws_warmup,draws_sampling MCMC settings, counted in draws
+#'   per chain rather than in brms' `iter` (which counts warmup and sampling
+#'   together): brms is given `warmup = draws_warmup` and
+#'   `iter = draws_warmup + draws_sampling`. The fit therefore keeps
+#'   `chains * draws_sampling` draws, and that product is what bounds the
+#'   resolution of a `pH0` counted from them, `1 / ndraws`. Defaults are the
+#'   manuscript pipeline's: 2 chains of 300 warmup and 500 sampling draws, so
+#'   1000 draws kept.
 #' @param backend Passed to [brms::brm()]. Default `"cmdstanr"`.
 #' @param cores Number of CPU cores. Defaults to `min(available cores, chains)`.
 #' @param init Inits for [brms::brm()]. `"gene"` (default) builds intercept
@@ -178,8 +184,8 @@ estimate_gene <- function(data,
                           prior = NULL,
                           sample_prior = c("no", "yes", "only"),
                           chains = 2,
-                          iter = 800,
-                          warmup = 300,
+                          draws_warmup = 300,
+                          draws_sampling = 500,
                           backend = c("cmdstanr", "rstan"),
                           cores = chains,
                           init = "gene",
@@ -282,8 +288,8 @@ estimate_gene <- function(data,
     chains = chains,
     cores = n_cores,
     threads = threads,
-    warmup = warmup,
-    iter = iter,
+    warmup = draws_warmup,
+    iter = draws_warmup + draws_sampling,
     backend = backend,
     init = init,
     ...

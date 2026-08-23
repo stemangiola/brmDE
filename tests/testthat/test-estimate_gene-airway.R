@@ -14,8 +14,8 @@ test_that("estimate_gene, hypothesis_gene, and adjust_gene run on one airway gen
     abundance = "counts",
     offset = "offset",
     chains = 1,
-    iter = 300,
-    warmup = 150,
+    draws_warmup = 150,
+    draws_sampling = 150,
     cores = 1,
     backend = "cmdstanr",
     refresh = 0,
@@ -50,6 +50,16 @@ test_that("estimate_gene, hypothesis_gene, and adjust_gene run on one airway gen
     c("adjusted___Estimate", "residuals___Estimate", "fitted___Estimate") %in%
       names(adj)
   ))
+
+  p <- suppressMessages(plot_gene(fit, factor = "dex", number_of_draws = 20))
+  expect_s3_class(p, "ggplot")
+  p_adj <- plot_gene(
+    fit,
+    factor = "dex",
+    remove_unwanted_effects = TRUE,
+    number_of_draws = 20
+  )
+  expect_s3_class(p_adj, "ggplot")
 })
 
 test_that("ZINB with a dispersion-derived shape prior fits one airway gene", {
@@ -69,8 +79,8 @@ test_that("ZINB with a dispersion-derived shape prior fits one airway gene", {
     dispersion = "dispersion",
     dispersion_degrees_freedom = "dispersion_degrees_freedom",
     chains = 1,
-    iter = 250,
-    warmup = 100,
+    draws_warmup = 100,
+    draws_sampling = 150,
     cores = 1,
     backend = "cmdstanr",
     refresh = 0,
@@ -107,8 +117,8 @@ test_that("ZINB with a conjugate gamma shape prior fits one airway gene", {
     dispersion_degrees_freedom = "dispersion_degrees_freedom",
     shape_prior = "gamma",
     chains = 1,
-    iter = 250,
-    warmup = 100,
+    draws_warmup = 100,
+    draws_sampling = 150,
     cores = 1,
     backend = "cmdstanr",
     refresh = 0,
@@ -140,8 +150,8 @@ test_that("estimate_gene default ZINB priors work on one airway gene", {
     formula_abundance = ~ dex,
     offset = "offset",
     chains = 1,
-    iter = 250,
-    warmup = 100,
+    draws_warmup = 100,
+    draws_sampling = 150,
     cores = 1,
     backend = "cmdstanr",
     refresh = 0,
@@ -165,8 +175,8 @@ test_that("hypothesis_gene reports the convergence of each contrast", {
     family = brms::negbinomial(),
     offset = "offset",
     chains = 2,
-    iter = 300,
-    warmup = 150,
+    draws_warmup = 150,
+    draws_sampling = 150,
     cores = 1,
     backend = "cmdstanr",
     refresh = 0,

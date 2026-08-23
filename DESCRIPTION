@@ -18,21 +18,24 @@ biocViews: AssayDomain, Infrastructure, RNASeq, DifferentialExpression,
 Roxygen: list(markdown = TRUE)
 Depends:
     R (>= 4.6.0),
-    tidytargets
+    tidytargets (>= 0.2.0)
 Imports:
     brms,
     dplyr,
+    ggplot2 (>= 3.5.0),
     glue,
     instantiate (>= 0.2.3),
     parallel,
     posterior,
     rlang,
+    scales (>= 1.3.0),
     stats,
     stringr,
+    SummarizedExperiment,
     tibble,
     tidyr,
     targets,
-    SummarizedExperiment
+    utils
 Suggests:
     cmdstanr,
     parallelly,

@@ -13,6 +13,8 @@ The archived [HPCell](https://github.com/MangiolaLaboratory/HPCell) tree and the
 | `hypothesis_gene()` | Posterior hypothesis tests on that fit |
 | `false_discovery_rate()` | Turn per-gene null probabilities into an FDR across genes |
 | `adjust_gene()` | Residual-plus-fitted adjustment, dropping nuisance covariates |
+| `plot_gene()` | Boxplot of one gene across a factor, with a posterior predictive overlay |
+| `plot_volcano()` | Volcano of a pipeline, with `pH0` below `1 / ndraws` jittered in a shaded band |
 | `brmDE()` | Start a [tidytargets](https://github.com/stemangiola/tidytargets) pipeline (`tt_initialise()` analogue) |
 | `estimate()` / `hypothesis()` / `adjust()` | `tt_iterate()` steps on that same graph |
 
@@ -32,6 +34,10 @@ fit <- estimate_gene(
 )
 
 hypothesis_gene(fit, "dextrt")
+
+plot_gene(fit, factor = "dex", feature = "ENSG00000120129")
+plot_gene(fit, factor = "dex", feature = "ENSG00000120129",
+          remove_unwanted_effects = TRUE)
 
 adjust_gene(
   fit,
@@ -76,6 +82,8 @@ se |>
 Printing that object runs the pipeline (`print` calls `tt_evaluate()`, as in tidytargets).
 
 The result is one row per gene and contrast. `estimate()` contributes the gene column, and `hypothesis()` the statistics worth returning for all of them, unnested into the table: each contrast's posterior summary together with the convergence of that contrast's own draws (`rhat`, `ess_bulk`, `mcse`). The fits are not in the table — twenty thousand `brmsfit` objects will not fit in one — but they are in the targets store: `targets::tar_read(brms_fit, branches = i, store = store)` reads branch `i` (the gene's row, when `bundle = 1`).
+
+`plot_volcano(pipeline)` draws the run as a volcano, evaluating the pipeline first if printing it has not already. It takes the pipeline rather than the table because `pH0` is counted from draws and so cannot resolve below `1 / ndraws`, and only the pipeline knows that number: `estimate()` records the sampling settings on it with `tt_metadata()`, while the fits themselves stay in the store. The genes that come back as exactly 0 are jittered across a shaded band one decade below the dashed resolution line, which reads as "smaller than these draws can measure" rather than as a probability.
 
 By default `estimate()` fits 10 genes per target. At transcriptome scale that can swamp an HPC scheduler with tiny jobs, so `estimate(bundle = 100)` fits 100 genes per target instead; the output is unchanged, one row per gene. Set `bundle = 1` for one target per gene.
 
