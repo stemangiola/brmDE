@@ -105,7 +105,7 @@ se |>
   adjust(nullify = "dex")
 ```
 
-Printing that object runs the pipeline (`print` calls `tt_evaluate()`, as in tidytargets).
+Printing that object runs the pipeline (`print` calls `tt_evaluate()`, as in tidytargets). Assigning it does not; an interactive session then says the pipeline is ready to be evaluated, rather than appearing to do nothing.
 
 The result is one row per gene and contrast. `estimate()` contributes the gene column, and `hypothesis()` the statistics worth returning for all of them, unnested into the table: each contrast's posterior summary together with the convergence of that contrast's own draws (`rhat`, `ess_bulk`, `mcse`). The fits are not in the table — twenty thousand `brmsfit` objects will not fit in one — but they are in the targets store: `targets::tar_read(brms_fit, branches = i, store = store)` reads branch `i` (the gene's row, when `bundle = 1`).
 

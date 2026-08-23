@@ -1,9 +1,17 @@
-# tidytargets grammar wrappers. The gene-wise engines stay in estimate_gene(),
-# hypothesis_gene(), and adjust_gene(); these methods only append them to a
-# tidytargets graph via tt_single() / tt_iterate().
-
+#' Mark a tidytargets graph as a `brmDE` pipeline.
+#'
+#' Sets the `brmDE_hpc` class and, in an interactive session, schedules the
+#' ready notice for this object's store.
+#'
+#' @param x A tidytargets pipeline list.
+#'
+#' @return `x` with classes `brmDE_hpc` and `tidytargets`.
+#'
+#' @keywords internal
+#' @noRd
 as_brmde_hpc <- function(x) {
   class(x) <- unique(c("brmDE_hpc", "tidytargets", class(x)))
+  schedule_pipeline_ready_notice(x$initialisation$store)
   x
 }
 
@@ -198,7 +206,9 @@ collect_brmde_hpc <- function(input_hpc) {
 #' header (`target_list`) and the shared steps (load SE, gene ids). Later
 #' calls to [estimate()], [hypothesis()], and [adjust()] append
 #' `tt_iterate()` branches onto the same graph. Printing the object (or
-#' calling [tt_evaluate()]) runs the pipeline, as in tidytargets.
+#' calling [tt_evaluate()]) runs the pipeline, as in tidytargets. Assigning
+#' it does not; an interactive session then says the pipeline is ready to be
+#' evaluated, rather than appearing to do nothing.
 #'
 #' The pipeline is gene-wise only. Anything estimated across the whole matrix,
 #' namely the library size offset and the dispersion, belongs upstream of
@@ -237,7 +247,8 @@ collect_brmde_hpc <- function(input_hpc) {
 #'   to `tar_option_set()` / `tar_cue()` as in tidytargets.
 #' @param verbosity Reporter passed to [targets::tar_make()].
 #'
-#' @return A `tidytargets` pipeline object (`brmDE_hpc`).
+#' @return A `tidytargets` pipeline object (`brmDE_hpc`). The graph is not
+#'   run until you print it or call [tt_evaluate()].
 #'
 #' @examples
 #' \dontrun{
@@ -750,6 +761,7 @@ localize_target_append <- function(script) {
 #' @exportS3Method tidytargets::tt_evaluate
 tt_evaluate.brmDE_hpc <- function(tt_input) {
   store <- tt_input$initialisation$store
+  mark_pipeline_evaluated(store)
   script <- paste0(store, ".R")
   localize_target_append(script)
   cat("target_list\n", file = script, append = TRUE)

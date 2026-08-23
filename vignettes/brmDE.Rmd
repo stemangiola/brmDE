@@ -204,7 +204,7 @@ plot_boxplot(
 
 # Full scalable pipeline
 
-For many genes, start a pipeline with `brmDE()`, then append `estimate()`, `hypothesis()`, and `adjust()`. Printing the object runs it (`print` calls `tt_evaluate()`).
+For many genes, start a pipeline with `brmDE()`, then append `estimate()`, `hypothesis()`, and `adjust()`. Printing the object runs it (`print` calls `tt_evaluate()`). Assigning it does not; an interactive session then says the pipeline is ready to be evaluated, rather than appearing to do nothing.
 
 The pipeline fits genes and nothing else. Offset and dispersion are whole-matrix quantities, so they are computed above, before any gene is chosen; once those columns exist you can `filter()` any feature set and pass that object in. Five genes are enough to show the gene-wise branches that `estimate()` maps over; pass a local `crew` controller to `brmDE()` so those branches run in parallel on your machine (the default is sequential).
 
