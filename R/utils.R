@@ -412,7 +412,10 @@ shape_student_t_prior <- function(data,
     dpar = "shape"
   )
   if (shape_submodel_has_terms(formula)) {
-    p <- c(p, brms::prior(student_t(3, 0, 2), class = b, dpar = shape))
+    p <- c(
+      p,
+      brms::prior_string("student_t(3, 0, 2)", class = "b", dpar = "shape")
+    )
   }
   gene_prior(p, gene_prior_stanvar("brmde_shape_scale", scale))
 }
@@ -532,7 +535,7 @@ default_gene_priors <- function(data,
   } else if (identical(shape_prior, "gamma")) {
     shape_gamma_prior(data, dispersion, dispersion_degrees_freedom)
   } else {
-    gene_prior(brms::prior(student_t(3, 0, 2), class = shape))
+    gene_prior(brms::prior_string("student_t(3, 0, 2)", class = "shape"))
   }
   combine_gene_priors(
     shape,

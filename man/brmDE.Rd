@@ -55,6 +55,10 @@ targets (default). On SLURM, use
 to \code{tar_option_set()} / \code{tar_cue()} as in tidytargets.}
 
 \item{verbosity}{Reporter passed to \code{\link[targets:tar_make]{targets::tar_make()}}.}
+
+\item{x}{A \code{brmDE_hpc} pipeline.}
+
+\item{...}{Passed to \code{\link[=print]{print()}}.}
 }
 \value{
 A \code{tidytargets} pipeline object (\code{brmDE_hpc}).
