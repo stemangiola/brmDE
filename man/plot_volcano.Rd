@@ -49,7 +49,8 @@ has nowhere to put.
 
 Those genes are drawn in a shaded band one decade below the resolution and
 jittered across it. The yellow square in the legend is that bound,
-\code{pH0 < 1 / ndraws}: smaller than these draws can measure. The spread
+\code{pH0 < 1e-3} (the resolution, in scientific notation): smaller than these
+draws can measure. The spread
 within the band carries no information beyond separating the points, so
 the axis is left unlabelled there. The dashed line is the resolution
 itself.

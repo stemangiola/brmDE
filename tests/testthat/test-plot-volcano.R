@@ -38,7 +38,7 @@ test_that("the band spans the decade below the resolution", {
   expect_equal(band$fill, "lightyellow")
   expect_null(built$plot$labels$caption)
   fill_scale <- built$plot$scales$get_scales("fill")
-  expect_equal(fill_scale$name, "pH0 < 1/1000")
+  expect_equal(fill_scale$name, "pH0 < 1e-03")
   expect_equal(fill_scale$get_labels(), "TRUE")
 
   # Shorter fits resolve less, so the band and its line move up with them.

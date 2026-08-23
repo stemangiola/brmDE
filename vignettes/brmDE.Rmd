@@ -271,7 +271,69 @@ Note that it takes the pipeline, not the result. That is the reason: the table c
 pipeline |> plot_volcano()
 ```
 
-Five genes make a thin volcano; the band earns its place over a whole transcriptome. `plot_volcano()` returns a ggplot object, so a run holding several contrasts can be split with `+ facet_wrap(~ hypothesis)`, as the `tidybulk` volcano facets by method.
+Five genes make a thin volcano. `plot_volcano()` returns a ggplot object, so a run holding several contrasts can be split with `+ facet_wrap(~ hypothesis)`, as the `tidybulk` volcano facets by method.
+
+## The whole transcriptome
+
+The band earns its place at scale, so here is the same pipeline over every abundant gene in airway rather than a hand-picked five. The setup is the one at the top of this vignette with a single change — `keep_abundant()` in place of `identify_abundant()`, dropping the low-count genes instead of only flagging them, which leaves 15,926 of airway's 63,677. The run itself uses the two scaling controls the sections below describe, a `crew.cluster` controller and `bundle`.
+
+```{r whole-transcriptome, eval = FALSE}
+library(brmDE)
+library(tidybulk)
+library(tidySummarizedExperiment)
+library(crew.cluster)
+data("airway", package = "airway")
+
+# Whole-matrix quantities first: the pipeline fits genes and nothing else.
+se <- airway |>
+  mutate(
+    dex = relevel(factor(dex), ref = "untrt"),
+    cell = droplevels(cell)
+  ) |>
+  keep_abundant(formula_design = ~ dex) |>
+  scale_abundance(method = "TMM") |>
+  mutate(offset = log(1 / multiplier)) |>
+  estimate_dispersion(formula_abundance = ~ dex + cell)
+
+pipeline <- se |>
+  brmDE(
+    store = "/path/to/brmde_store",
+    computing_resources = crew_controller_slurm(
+      workers = 100,
+      options_cluster = crew_options_slurm(
+        cpus_per_task = 2,
+        memory_gigabytes_per_cpu = 5
+      )
+    )
+  ) |>
+  estimate(
+    ~ dex + (1 | cell),
+    offset = "offset",
+    dispersion = "dispersion",
+    dispersion_degrees_freedom = "dispersion_degrees_freedom",
+    family = brms::zero_inflated_negbinomial(),
+    chains = 2,
+    draws_sampling = 800,  # 2 * 800 = 1600 draws behind every pH0
+    bundle = 100           # 160 jobs rather than 15,926
+  ) |>
+  hypothesis("dextrt")
+
+pipeline |> plot_volcano()
+```
+
+Sixteen thousand fits is a cluster job rather than a package build, so the figure below is a saved run of that code rather than one the vignette makes.
+
+```{r whole-transcriptome-figure, echo = FALSE, out.width = "100%"}
+knitr::include_graphics("volcano.png")
+```
+
+Three things in it are worth naming, because none of them appear in a p-value volcano.
+
+The band along the top is full. Those are the genes whose `pH0` came back as exactly 0 from 1600 draws — not a probability of zero, but one smaller than the draws can measure, which is what the dashed line at `1/1600` marks. At this scale they are most of the genes a run is about, so a log axis that simply dropped them would drop the answer.
+
+Just below the band the points fall into rows. A counted `pH0` is a whole number of draws over 1600, so near the resolution it can only take a few values and the genes stack onto them. Wanting to separate two genes that both sit on `2/1600` is wanting more draws, and `draws_sampling` is where to ask for them.
+
+The floor is flat at exactly `pH0 = 1`, and stays flat out to about one log2 fold change either side of zero. That is `test_above_log2FC = 1` drawn in the data: a gene whose whole posterior lies inside the threshold has no draws beyond it on either side, so `1 - max(p_+, p_-)` is exactly 1. How far the floor reaches is therefore the threshold less the width of the posteriors, which is why it stops a little short of `±1`. Those genes are not "not significant" in the sense of a test that failed to reject. The fit is positively saying the effect is small, and that is a claim a p-value has no way to make.
 
 ## SLURM
 
