@@ -1,0 +1,26 @@
+<urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
+<url><loc>/404.html</loc></url>
+<url><loc>/articles/brmDE.html</loc></url>
+<url><loc>/articles/index.html</loc></url>
+<url><loc>/authors.html</loc></url>
+<url><loc>/index.html</loc></url>
+<url><loc>/reference/adjust.html</loc></url>
+<url><loc>/reference/adjust_gene.html</loc></url>
+<url><loc>/reference/adjust_gene_from_fit.html</loc></url>
+<url><loc>/reference/brmDE-package.html</loc></url>
+<url><loc>/reference/brmDE.html</loc></url>
+<url><loc>/reference/bundle_gene_ids.html</loc></url>
+<url><loc>/reference/estimate.html</loc></url>
+<url><loc>/reference/estimate_gene.html</loc></url>
+<url><loc>/reference/estimate_gene_from_se.html</loc></url>
+<url><loc>/reference/gene_ids_for_hpc.html</loc></url>
+<url><loc>/reference/hypothesis.tidytargets.html</loc></url>
+<url><loc>/reference/hypothesis_gene.html</loc></url>
+<url><loc>/reference/hypothesis_gene_from_fit.html</loc></url>
+<url><loc>/reference/hypothesis_gene_scope.html</loc></url>
+<url><loc>/reference/index.html</loc></url>
+<url><loc>/reference/plot_boxplot.html</loc></url>
+<url><loc>/reference/plot_volcano.html</loc></url>
+<url><loc>/reference/reexports.html</loc></url>
+</urlset>
+
