@@ -13,10 +13,11 @@
 #' has nowhere to put.
 #'
 #' Those genes are drawn in a shaded band one decade below the resolution and
-#' jittered across it. The band says "smaller than these draws can measure",
-#' and the spread within it carries no information beyond separating the
-#' points, so the axis is left unlabelled there. The dashed line is the
-#' resolution itself, `1 / ndraws`.
+#' jittered across it. The yellow square in the legend is that bound,
+#' `pH0 < 1 / ndraws`: smaller than these draws can measure. The spread
+#' within the band carries no information beyond separating the points, so
+#' the axis is left unlabelled there. The dashed line is the resolution
+#' itself.
 #'
 #' The result is a `ggplot`, so a pipeline holding several contrasts can be
 #' split with `+ facet_wrap(~ hypothesis)` in the same way the `tidybulk`
@@ -136,6 +137,11 @@ volcano_ggplot <- function(hypotheses,
   )
 
   significance <- sprintf("%s < %s", probability, significance_threshold)
+  unresolved_label <- sprintf(
+    "%s < 1/%g",
+    probability,
+    round(1 / resolution)
+  )
 
   ggplot2::ggplot(
     volcano_data,
@@ -146,13 +152,17 @@ volcano_ggplot <- function(hypotheses,
       size = .data$significant___
     )
   ) +
-    ggplot2::annotate(
-      "rect",
-      xmin = -Inf,
-      xmax = Inf,
-      ymin = resolution / 10,
-      ymax = resolution,
-      fill = "lightyellow"
+    ggplot2::geom_rect(
+      data = data.frame(unresolved = TRUE),
+      ggplot2::aes(
+        xmin = -Inf,
+        xmax = Inf,
+        ymin = resolution / 10,
+        ymax = resolution,
+        fill = .data$unresolved
+      ),
+      colour = NA,
+      inherit.aes = FALSE
     ) +
     ggplot2::geom_hline(
       yintercept = resolution,
@@ -183,15 +193,16 @@ volcano_ggplot <- function(hypotheses,
       values = c(`TRUE` = 1.5, `FALSE` = 0.5),
       name = significance
     ) +
-    ggplot2::labs(
-      x = effect,
-      y = probability,
-      caption = sprintf(
-        "Shaded band: %s below 1/%g, the resolution of the draws; jittered.",
-        probability,
-        round(1 / resolution)
+    ggplot2::scale_fill_manual(
+      values = c(`TRUE` = "lightyellow"),
+      name = unresolved_label
+    ) +
+    ggplot2::guides(
+      fill = ggplot2::guide_legend(
+        override.aes = list(colour = "grey40", linewidth = 0.3)
       )
     ) +
+    ggplot2::labs(x = effect, y = probability) +
     ggplot2::theme_bw()
 }
 

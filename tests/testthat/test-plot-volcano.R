@@ -32,9 +32,14 @@ test_that("unresolved genes are jittered inside the band, the rest are not", {
 })
 
 test_that("the band spans the decade below the resolution", {
-  band <- volcano(number_of_draws = 1000)$data[[1]]
+  built <- volcano(number_of_draws = 1000)
+  band <- built$data[[1]]
   expect_equal(sort(10^(-c(band$ymin, band$ymax))), c(1e-4, 1e-3))
   expect_equal(band$fill, "lightyellow")
+  expect_null(built$plot$labels$caption)
+  fill_scale <- built$plot$scales$get_scales("fill")
+  expect_equal(fill_scale$name, "pH0 < 1/1000")
+  expect_equal(fill_scale$get_labels(), "TRUE")
 
   # Shorter fits resolve less, so the band and its line move up with them.
   band <- volcano(number_of_draws = 500)$data[[1]]

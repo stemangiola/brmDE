@@ -48,10 +48,11 @@ transcriptome scale many genes come back as exactly 0 — which a log scale
 has nowhere to put.
 
 Those genes are drawn in a shaded band one decade below the resolution and
-jittered across it. The band says "smaller than these draws can measure",
-and the spread within it carries no information beyond separating the
-points, so the axis is left unlabelled there. The dashed line is the
-resolution itself, \code{1 / ndraws}.
+jittered across it. The yellow square in the legend is that bound,
+\code{pH0 < 1 / ndraws}: smaller than these draws can measure. The spread
+within the band carries no information beyond separating the points, so
+the axis is left unlabelled there. The dashed line is the resolution
+itself.
 
 The result is a \code{ggplot}, so a pipeline holding several contrasts can be
 split with \code{+ facet_wrap(~ hypothesis)} in the same way the \code{tidybulk}
