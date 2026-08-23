@@ -22,17 +22,19 @@ Depends:
 Imports:
     brms,
     dplyr,
+    ggplot2 (>= 3.5.0),
     glue,
     instantiate (>= 0.2.3),
     parallel,
     posterior,
     rlang,
+    scales,
     stats,
     stringr,
+    SummarizedExperiment,
     tibble,
     tidyr,
-    targets,
-    SummarizedExperiment
+    targets
 Suggests:
     cmdstanr,
     parallelly,

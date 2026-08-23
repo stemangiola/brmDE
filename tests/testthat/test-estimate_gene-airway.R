@@ -50,6 +50,16 @@ test_that("estimate_gene, hypothesis_gene, and adjust_gene run on one airway gen
     c("adjusted___Estimate", "residuals___Estimate", "fitted___Estimate") %in%
       names(adj)
   ))
+
+  p <- suppressMessages(plot_gene(fit, factor = "dex", number_of_draws = 20))
+  expect_s3_class(p, "ggplot")
+  p_adj <- plot_gene(
+    fit,
+    factor = "dex",
+    remove_unwanted_effects = TRUE,
+    number_of_draws = 20
+  )
+  expect_s3_class(p_adj, "ggplot")
 })
 
 test_that("ZINB with a dispersion-derived shape prior fits one airway gene", {
