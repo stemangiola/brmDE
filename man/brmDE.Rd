@@ -61,14 +61,17 @@ to \code{tar_option_set()} / \code{tar_cue()} as in tidytargets.}
 \item{...}{Passed to \code{\link[=print]{print()}}.}
 }
 \value{
-A \code{tidytargets} pipeline object (\code{brmDE_hpc}).
+A \code{tidytargets} pipeline object (\code{brmDE_hpc}). The graph is not
+run until you print it or call \code{\link[=tt_evaluate]{tt_evaluate()}}.
 }
 \description{
 Analogue of tidytargets' \code{\link[tidytargets:tt_initialise]{tidytargets::tt_initialise()}}: writes the targets
 header (\code{target_list}) and the shared steps (load SE, gene ids). Later
 calls to \code{\link[=estimate]{estimate()}}, \code{\link[=hypothesis]{hypothesis()}}, and \code{\link[=adjust]{adjust()}} append
 \code{tt_iterate()} branches onto the same graph. Printing the object (or
-calling \code{\link[=tt_evaluate]{tt_evaluate()}}) runs the pipeline, as in tidytargets.
+calling \code{\link[=tt_evaluate]{tt_evaluate()}}) runs the pipeline, as in tidytargets. Assigning
+it does not; an interactive session then says the pipeline is ready to be
+evaluated, rather than appearing to do nothing.
 }
 \details{
 The pipeline is gene-wise only. Anything estimated across the whole matrix,
