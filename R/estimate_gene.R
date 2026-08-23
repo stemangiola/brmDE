@@ -194,9 +194,6 @@ estimate_gene <- function(data,
                           stanvars = NULL,
                           ...) {
   backend <- match.arg(backend)
-  if (identical(backend, "cmdstanr")) {
-    check_and_install_cmdstanr()
-  }
   offset <- check_offset_name(offset)
   shape_prior <- match.arg(shape_prior)
   shape_prior_df <- check_student_df(shape_prior_df)
@@ -277,6 +274,10 @@ estimate_gene <- function(data,
   n_cores <- if (is.null(cores)) min(detect_cores(), chains) else cores
   tpc <- floor(n_cores / chains)
   threads <- if (tpc <= 1L) NULL else brms::threading(tpc)
+
+  if (identical(backend, "cmdstanr")) {
+    check_and_install_cmdstanr()
+  }
 
   res <- brms::brm(
     formula = formula,
