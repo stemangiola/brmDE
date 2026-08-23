@@ -104,8 +104,8 @@ There is no direction label, because a posterior lying entirely inside the
 threshold supports no direction at all.
 
 Because \code{pH0} is a probability rather than a test statistic, it turns into
-a false discovery rate by averaging: see \code{\link[=false_discovery_rate]{false_discovery_rate()}}, which
-\code{\link[=brmDE]{brmDE()}} pipelines apply across genes for you.
+a false discovery rate by averaging, which \code{\link[=brmDE]{brmDE()}} pipelines add as an
+\code{fdr} column across genes.
 
 Nothing here needs prior draws, a proper prior, or a density estimate, so
 this route has none of the failure modes below and is stable at a few

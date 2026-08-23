@@ -13,7 +13,6 @@ The archived [HPCell](https://github.com/MangiolaLaboratory/HPCell) tree and the
 |----------|------|
 | `estimate_gene()` | Fit one gene (ZINB mixed model by default) |
 | `hypothesis_gene()` | Posterior hypothesis tests on that fit |
-| `false_discovery_rate()` | Turn per-gene null probabilities into an FDR across genes |
 | `adjust_gene()` | Residual-plus-fitted adjustment, dropping nuisance covariates |
 | `plot_boxplot()` | Boxplot of one gene across a factor, with a posterior predictive overlay |
 | `plot_volcano()` | Volcano of a pipeline, with `pH0` below `1 / ndraws` jittered in a shaded band |
@@ -48,7 +47,7 @@ adjust_gene(
 )
 ```
 
-Naming an effect on its own tests whether it clears `test_above_log2FC` (default `1`, a doubling of expression), reporting the effect in `log2_fold_change` and the probability that the better supported side is wrong in `pH0`. Both ways of being wrong are in that one number: too small to matter, or pointing the other way. Because it is a probability rather than a test statistic, `false_discovery_rate()` turns it into an FDR by averaging, and pipelines add that as an `fdr` column.
+Naming an effect on its own tests whether it clears `test_above_log2FC` (default `1`, a doubling of expression), reporting the effect in `log2_fold_change` and the probability that the better supported side is wrong in `pH0`. Both ways of being wrong are in that one number: too small to matter, or pointing the other way. Because it is a probability rather than a test statistic, pipelines turn it into an FDR by averaging and add that as an `fdr` column.
 
 Neither `estimate_gene()` nor `brmDE()` normalises. Compute the offset yourself on all genes (TMM, or anything else), store it as a `colData` column, and pass that name to `offset`. Dispersion is the same kind of whole-matrix quantity: run `tidybulk::estimate_dispersion()` before `brmDE()` and pass the two column names to `estimate()`. Those columns become a **prior** on the negative binomial shape, not a plug-in: the gene-wise likelihood can still pull the posterior away from the external estimate.
 

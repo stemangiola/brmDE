@@ -51,8 +51,8 @@
 #' threshold supports no direction at all.
 #'
 #' Because `pH0` is a probability rather than a test statistic, it turns into
-#' a false discovery rate by averaging: see [false_discovery_rate()], which
-#' [brmDE()] pipelines apply across genes for you.
+#' a false discovery rate by averaging, which [brmDE()] pipelines add as an
+#' `fdr` column across genes.
 #'
 #' Nothing here needs prior draws, a proper prior, or a density estimate, so
 #' this route has none of the failure modes below and is stable at a few
@@ -458,7 +458,8 @@ contrast_diagnostics <- function(draws, n_chains, robust) {
 #' pH0 <- c(0.4, 0.001, 0.02, 0.9, 0.005)
 #' false_discovery_rate(pH0)
 #'
-#' @export
+#' @noRd
+#' @keywords internal
 false_discovery_rate <- function(pH0) {
   pH0 <- as.numeric(pH0)
   dplyr::cummean(pH0[order(pH0)])[order(order(pH0))]
