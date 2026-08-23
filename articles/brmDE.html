@@ -475,11 +475,92 @@ the first thing you call; targets skips what it already has, and here
 everything is already built.</p>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pipeline</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/plot_volcano.html">plot_volcano</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<p>Five genes make a thin volcano; the band earns its place over a whole
-transcriptome. <code><a href="../reference/plot_volcano.html">plot_volcano()</a></code> returns a ggplot object, so a
-run holding several contrasts can be split with
+<p>Five genes make a thin volcano. <code><a href="../reference/plot_volcano.html">plot_volcano()</a></code> returns a
+ggplot object, so a run holding several contrasts can be split with
 <code>+ facet_wrap(~ hypothesis)</code>, as the <code>tidybulk</code>
 volcano facets by method.</p>
+</div>
+<div class="section level3">
+<h3 id="the-whole-transcriptome">The whole transcriptome<a class="anchor" aria-label="anchor" href="#the-whole-transcriptome"></a>
+</h3>
+<p>The band earns its place at scale, so here is the same pipeline over
+every abundant gene in airway rather than a hand-picked five. The setup
+is the one at the top of this vignette with a single change —
+<code><a href="https://rdrr.io/pkg/tidybulk/man/keep_abundant.html" class="external-link">keep_abundant()</a></code> in place of
+<code><a href="https://rdrr.io/pkg/tidybulk/man/identify_abundant-methods.html" class="external-link">identify_abundant()</a></code>, dropping the low-count genes instead
+of only flagging them, which leaves 15,926 of airway’s 63,677. The run
+itself uses the two scaling controls the sections below describe, a
+<code>crew.cluster</code> controller and <code>bundle</code>.</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/MangiolaLaboratory" class="external-link">brmDE</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/stemangiola/tidybulk" class="external-link">tidybulk</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/stemangiola/tidySummarizedExperiment" class="external-link">tidySummarizedExperiment</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://wlandau.github.io/crew.cluster/" class="external-link">crew.cluster</a></span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"airway"</span>, package <span class="op">=</span> <span class="st">"airway"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Whole-matrix quantities first: the pipeline fits genes and nothing else.</span></span>
+<span><span class="va">se</span> <span class="op">&lt;-</span> <span class="va">airway</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu">mutate</span><span class="op">(</span></span>
+<span>    dex <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/relevel.html" class="external-link">relevel</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">dex</span><span class="op">)</span>, ref <span class="op">=</span> <span class="st">"untrt"</span><span class="op">)</span>,</span>
+<span>    cell <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/droplevels.html" class="external-link">droplevels</a></span><span class="op">(</span><span class="va">cell</span><span class="op">)</span></span>
+<span>  <span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/tidybulk/man/keep_abundant.html" class="external-link">keep_abundant</a></span><span class="op">(</span>formula_design <span class="op">=</span> <span class="op">~</span> <span class="va">dex</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/tidybulk/man/scale_abundance-methods.html" class="external-link">scale_abundance</a></span><span class="op">(</span>method <span class="op">=</span> <span class="st">"TMM"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu">mutate</span><span class="op">(</span>offset <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="fl">1</span> <span class="op">/</span> <span class="va">multiplier</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">estimate_dispersion</a></span><span class="op">(</span>formula_abundance <span class="op">=</span> <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="va">cell</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">pipeline</span> <span class="op">&lt;-</span> <span class="va">se</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/brmDE.html">brmDE</a></span><span class="op">(</span></span>
+<span>    store <span class="op">=</span> <span class="st">"/path/to/brmde_store"</span>,</span>
+<span>    computing_resources <span class="op">=</span> <span class="fu"><a href="https://wlandau.github.io/crew.cluster/reference/crew_controller_slurm.html" class="external-link">crew_controller_slurm</a></span><span class="op">(</span></span>
+<span>      workers <span class="op">=</span> <span class="fl">100</span>,</span>
+<span>      options_cluster <span class="op">=</span> <span class="fu"><a href="https://wlandau.github.io/crew.cluster/reference/crew_options_slurm.html" class="external-link">crew_options_slurm</a></span><span class="op">(</span></span>
+<span>        cpus_per_task <span class="op">=</span> <span class="fl">2</span>,</span>
+<span>        memory_gigabytes_per_cpu <span class="op">=</span> <span class="fl">5</span></span>
+<span>      <span class="op">)</span></span>
+<span>    <span class="op">)</span></span>
+<span>  <span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/estimate.html">estimate</a></span><span class="op">(</span></span>
+<span>    <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">cell</span><span class="op">)</span>,</span>
+<span>    offset <span class="op">=</span> <span class="st">"offset"</span>,</span>
+<span>    dispersion <span class="op">=</span> <span class="st">"dispersion"</span>,</span>
+<span>    dispersion_degrees_freedom <span class="op">=</span> <span class="st">"dispersion_degrees_freedom"</span>,</span>
+<span>    family <span class="op">=</span> <span class="fu">brms</span><span class="fu">::</span><span class="fu"><a href="https://paulbuerkner.com/brms/reference/brmsfamily.html" class="external-link">zero_inflated_negbinomial</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>    chains <span class="op">=</span> <span class="fl">2</span>,</span>
+<span>    draws_sampling <span class="op">=</span> <span class="fl">800</span>,  <span class="co"># 2 * 800 = 1600 draws behind every pH0</span></span>
+<span>    bundle <span class="op">=</span> <span class="fl">100</span>           <span class="co"># 160 jobs rather than 15,926</span></span>
+<span>  <span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://paulbuerkner.com/brms/reference/hypothesis.brmsfit.html" class="external-link">hypothesis</a></span><span class="op">(</span><span class="st">"dextrt"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">pipeline</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/plot_volcano.html">plot_volcano</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p>Sixteen thousand fits is a cluster job rather than a package build,
+so the figure below is a saved run of that code rather than one the
+vignette makes.</p>
+<p><img src="volcano.png" class="r-plt" alt="" width="100%"></p>
+<p>Three things in it are worth naming, because none of them appear in a
+p-value volcano.</p>
+<p>The band along the top is full. Those are the genes whose
+<code>pH0</code> came back as exactly 0 from 1600 draws — not a
+probability of zero, but one smaller than the draws can measure, which
+is what the dashed line at <code>1/1600</code> marks. At this scale they
+are most of the genes a run is about, so a log axis that simply dropped
+them would drop the answer.</p>
+<p>Just below the band the points fall into rows. A counted
+<code>pH0</code> is a whole number of draws over 1600, so near the
+resolution it can only take a few values and the genes stack onto them.
+Wanting to separate two genes that both sit on <code>2/1600</code> is
+wanting more draws, and <code>draws_sampling</code> is where to ask for
+them.</p>
+<p>The floor is flat at exactly <code>pH0 = 1</code>, and stays flat out
+to about one log2 fold change either side of zero. That is
+<code>test_above_log2FC = 1</code> drawn in the data: a gene whose whole
+posterior lies inside the threshold has no draws beyond it on either
+side, so <code>1 - max(p_+, p_-)</code> is exactly 1. How far the floor
+reaches is therefore the threshold less the width of the posteriors,
+which is why it stops a little short of <code>±1</code>. Those genes are
+not “not significant” in the sense of a test that failed to reject. The
+fit is positively saying the effect is small, and that is a claim a
+p-value has no way to make.</p>
 </div>
 <div class="section level3">
 <h3 id="slurm">SLURM<a class="anchor" aria-label="anchor" href="#slurm"></a>
@@ -488,7 +569,7 @@ volcano facets by method.</p>
 <code><a href="../reference/brmDE.html">brmDE()</a></code> as <code>computing_resources</code>. Gene-wise
 targets then launch as SLURM jobs (run this block from a login node, not
 in the vignette build).</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://wlandau.github.io/crew.cluster/" class="external-link">crew.cluster</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">pipeline</span> <span class="op">&lt;-</span> <span class="va">se</span> <span class="op">|&gt;</span></span>
@@ -536,7 +617,7 @@ one row per gene in the same order. On the other hand, if the sample
 size is large and each gene estimation is slow, you should not bundle as
 you risk less that the failure of one gene would compromise the whole
 bundle.</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pipeline</span> <span class="op">&lt;-</span> <span class="va">se</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/brmDE.html">brmDE</a></span><span class="op">(</span></span>
 <span>    store <span class="op">=</span> <span class="st">"/path/to/brmde_store"</span>,</span>
