@@ -51,7 +51,7 @@ Suggests:
     testthat (>= 3.0.0),
     withr
 VignetteBuilder: knitr
-SystemRequirements: CmdStan (https://mc-stan.org/users/interfaces/cmdstan), C++14
+SystemRequirements: CmdStan (https://mc-stan.org/users/interfaces/cmdstan)
 Remotes:
     stemangiola/tidytargets,
     stemangiola/tidybulk

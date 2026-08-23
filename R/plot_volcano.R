@@ -38,7 +38,7 @@
 #'
 #' @return A `ggplot` object.
 #'
-#' @seealso [hypothesis_gene()], [false_discovery_rate()], [plot_boxplot()]
+#' @seealso [hypothesis_gene()], [plot_boxplot()]
 #'
 #' @examples
 #' \dontrun{

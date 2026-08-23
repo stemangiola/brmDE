@@ -639,7 +639,7 @@ estimate.tidytargets <- function(input_hpc,
 #' Collecting the pipeline adds an `fdr` column across genes when the tests
 #' took the directional route, which is the default. That is the one quantity
 #' a gene-wise target cannot compute, since it is a property of the gene set.
-#' See [false_discovery_rate()].
+#' The rate is the cumulative mean of `pH0` in ascending order.
 #'
 #' @param x A `tidytargets` pipeline from [brmDE()].
 #' @param hypothesis Effects to test, passed to [hypothesis_gene()].
