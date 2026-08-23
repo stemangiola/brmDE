@@ -1,11 +1,9 @@
 # brmDE
 
-[![R build status](https://github.com/MangiolaLaboratory/brmDE/workflows/rworkflows/badge.svg)](https://github.com/MangiolaLaboratory/brmDE/actions)
+[![R build status](https://github.com/stemangiola/brmDE/actions/workflows/rworkflows.yml/badge.svg)](https://github.com/stemangiola/brmDE/actions)
 
 Mixed-effect modelling for differential gene expression analyses, based on Bayesian regression through [brms](https://paul-buerkner.github.io/brms/).
 Each gene is fit with an arbitrary formula and a precomputed offset; hypothesis tests and covariate adjustment follow, including as a [tidytargets](https://github.com/stemangiola/tidytargets) `targets` pipeline.
-
-The archived [HPCell](https://github.com/MangiolaLaboratory/HPCell) tree and the immuneBodyMap `dynamic_tar_script.R` are **not** part of this package.
 
 ## Install
 
@@ -22,20 +20,27 @@ cmdstanr::check_cmdstan_toolchain(fix = TRUE)
 cmdstanr::install_cmdstan()
 ```
 
-`estimate_gene()` defaults to `backend = "cmdstanr"`. Vignette fitting chunks run only when `instantiate::stan_cmdstan_exists()` is true.
-
 ## Functions
+
+### Single-gene functions
 
 | Function | Role |
 |----------|------|
-| **Single-gene functions** | |
 | `estimate_gene()` | Fit one gene (ZINB mixed model by default) |
 | `hypothesis_gene()` | Posterior hypothesis tests on that fit |
 | `adjust_gene()` | Residual-plus-fitted adjustment, dropping nuisance covariates |
-| **High-performance computing functions** | |
+
+### High-performance computing functions
+
+| Function | Role |
+|----------|------|
 | `brmDE()` | Start a [tidytargets](https://github.com/stemangiola/tidytargets) pipeline (`tt_initialise()` analogue) |
 | `estimate()` / `hypothesis()` / `adjust()` | `tt_iterate()` steps on that same graph |
-| **Plotting functions** | |
+
+### Plotting functions
+
+| Function | Role |
+|----------|------|
 | `plot_boxplot()` | Boxplot of one gene across a factor, with a posterior predictive overlay |
 | `plot_volcano()` | Volcano of a pipeline, with `pH0` below `1 / ndraws` jittered in a shaded band |
 
