@@ -18,7 +18,7 @@ biocViews: AssayDomain, Infrastructure, RNASeq, DifferentialExpression,
 Roxygen: list(markdown = TRUE)
 Depends:
     R (>= 4.6.0),
-    tidytargets
+    tidytargets (>= 0.2.0)
 Imports:
     brms,
     dplyr,
