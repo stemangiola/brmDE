@@ -51,9 +51,9 @@ test_that("estimate_gene, hypothesis_gene, and adjust_gene run on one airway gen
       names(adj)
   ))
 
-  p <- suppressMessages(plot_gene(fit, factor = "dex", number_of_draws = 20))
+  p <- suppressMessages(plot_boxplot(fit, factor = "dex", number_of_draws = 20))
   expect_s3_class(p, "ggplot")
-  p_adj <- plot_gene(
+  p_adj <- plot_boxplot(
     fit,
     factor = "dex",
     remove_unwanted_effects = TRUE,

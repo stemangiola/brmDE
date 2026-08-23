@@ -50,14 +50,14 @@
 #'     abundance = "counts"
 #'   )
 #'
-#'   plot_gene(fit, factor = "dex", feature = "ENSG00000120129")
-#'   plot_gene(fit, factor = "dex", feature = "ENSG00000120129",
+#'   plot_boxplot(fit, factor = "dex", feature = "ENSG00000120129")
+#'   plot_boxplot(fit, factor = "dex", feature = "ENSG00000120129",
 #'             remove_unwanted_effects = TRUE)
 #' }
 #' }
 #'
 #' @export
-plot_gene <- function(fit,
+plot_boxplot <- function(fit,
                       factor,
                       remove_unwanted_effects = FALSE,
                       number_of_draws = 100,
@@ -190,7 +190,7 @@ gene_nuisance_fixed_effects <- function(fit, factor, abundance, offset) {
   setdiff(all.vars(fe), c(abundance, offset, factor))
 }
 
-#' Counts for [plot_gene()], with the library size removed
+#' Counts for [plot_boxplot()], with the library size removed
 #'
 #' [adjust_gene()] values, always predicted with the offset zeroed, so the
 #' library size comes out of the counts through the model rather than by
@@ -230,7 +230,7 @@ gene_plot_observed <- function(fit,
   data_observed
 }
 
-#' Posterior predictive counts for [plot_gene()]
+#' Posterior predictive counts for [plot_boxplot()]
 #'
 #' Draws from [brms::posterior_predict()], divided by `exp(offset)` so they
 #' sit on the same scale as the observed (or adjusted) counts. `factor = NULL`

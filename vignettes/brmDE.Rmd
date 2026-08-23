@@ -179,20 +179,20 @@ hypothesis_gene(
 
 ## Plotting the fit
 
-The same fit is worth looking at. `plot_gene()` draws the TMM-normalised counts of one gene across a factor; the construction is the same as `sccomp`'s boxplot. Black boxplots and points are the counts, blue boxplots are draws from the posterior predictive distribution. If the model is descriptively adequate, the blue boxplots should roughly overlay the black ones.
+The same fit is worth looking at. `plot_boxplot()` draws the TMM-normalised counts of one gene across a factor; the construction is the same as `sccomp`'s boxplot. Black boxplots and points are the counts, blue boxplots are draws from the posterior predictive distribution. If the model is descriptively adequate, the blue boxplots should roughly overlay the black ones.
 
 The library size is always taken out, and through the model rather than by dividing the counts: `adjust_gene()` predicts with the offset zeroed, which for the TMM offset above leaves the normalised abundance.
 
 `ENSG00000120129` is DUSP1, a dexamethasone-responsive gene. The hypothesis above asked whether its dex effect clears one log2 fold change; the plot is that effect in the counts.
 
 ```{r one-gene-plot, message = FALSE, warning = FALSE, eval = run_vignette, fig.width = 6, fig.height = 4}
-plot_gene(fit_t, factor = "dex", feature = "ENSG00000120129")
+plot_boxplot(fit_t, factor = "dex", feature = "ENSG00000120129")
 ```
 
 Those counts still carry the cell-line intercepts, so for a mixed model the dex contrast can be hard to see in one dimension. `remove_unwanted_effects = TRUE` takes the random intercepts out too, keeping `dex` alone, and redraws the posterior predictive from that same reduced model.
 
 ```{r one-gene-plot-adjusted, message = FALSE, warning = FALSE, eval = run_vignette, fig.width = 6, fig.height = 4}
-plot_gene(
+plot_boxplot(
   fit_t,
   factor = "dex",
   feature = "ENSG00000120129",
@@ -200,7 +200,7 @@ plot_gene(
 )
 ```
 
-`plot_gene()` returns a ggplot object, so further layers can be added as usual.
+`plot_boxplot()` returns a ggplot object, so further layers can be added as usual.
 
 # Full scalable pipeline
 
@@ -247,7 +247,7 @@ pipeline
 
 One row per gene and contrast. `estimate()` contributes the gene column; `hypothesis()` adds the columns that make the run readable, unnested into the result rather than left in a list column, and `adjust()` its own table. Each row carries `log2_fold_change` and `pH0` for that contrast, the `fdr` those `pH0` values give across genes, and the convergence of that contrast's own draws: `rhat`, `ess_bulk`, and `mcse`, the Monte Carlo error of the reported `estimate`, which you can read against the width of the interval beside it. Those are diagnostics of the quantity being reported rather than of the parameters behind it, which is the distinction that matters in practice: a `cell` level that drifts between chains cancels in a difference of levels, so the contrast is often trustworthy when its parts are not. `ess_bulk` also bounds how far `pH0` can be trusted, since a probability counted from draws cannot resolve below `1 / ndraws` and correlated draws are worth fewer than their number. That denominator is not in the table, because it is a property of the fits rather than of any row; `estimate()` records it on the pipeline instead, which is what `plot_volcano()` reads it from below.
 
-The fits themselves are not in the result. A `brmsfit` carries its draws and its data, so twenty thousand of them cannot be held in one object, and at that scale the statistics are what you want anyway: they tell you which handful of genes to open. Those stay in the targets store; `targets::tar_read(brms_fit, branches = i, store = store)` reads branch `i`. With `bundle = 1` that is the gene's row in the result. The gene id is on the result, not on the fit: pass `feature = result$.feature[[i]]` to `plot_gene()`.
+The fits themselves are not in the result. A `brmsfit` carries its draws and its data, so twenty thousand of them cannot be held in one object, and at that scale the statistics are what you want anyway: they tell you which handful of genes to open. Those stay in the targets store; `targets::tar_read(brms_fit, branches = i, store = store)` reads branch `i`. With `bundle = 1` that is the gene's row in the result. The gene id is on the result, not on the fit: pass `feature = result$.feature[[i]]` to `plot_boxplot()`.
 
 ```{r diagnostics, eval = run_vignette}
 result <- pipeline |> tt_evaluate()
@@ -256,7 +256,7 @@ result
 # Open the gene whose contrast mixed worst. The gene id is on the result.
 worst <- which.max(result$rhat)
 targets::tar_read(brms_fit, branches = worst, store = store)
-# plot_gene(..., factor = "dex", feature = result$.feature[[worst]])
+# plot_boxplot(..., factor = "dex", feature = result$.feature[[worst]])
 ```
 
 ## Plotting the run
@@ -343,7 +343,7 @@ Pick `bundle` against a single job rather than against the gene count, because t
 | `estimate()` → `estimate_gene()` | `brms_fit` per gene, in the store | posterior fit; edgeR dispersion is the shape prior, not a fixed value |
 | `hypothesis()` | hypothesis table | `log2_fold_change` and `pH0` per gene, `rhat`/`ess_bulk`/`mcse` per contrast, plus `fdr` across genes |
 | `adjust()` | adjusted residuals / fitted | dex kept; random intercepts dropped |
-| `plot_gene()` | ggplot of one `brmsfit` | observed or adjusted counts across a factor, blue posterior predictive overlay |
+| `plot_boxplot()` | ggplot of one `brmsfit` | observed or adjusted counts across a factor, blue posterior predictive overlay |
 | `plot_volcano()` | ggplot of the pipeline | `log2_fold_change` against `pH0`, with everything below `1 / ndraws` jittered in a shaded band |
 
 # Dispersion priors at a glance

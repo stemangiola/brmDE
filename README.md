@@ -15,7 +15,7 @@ The archived [HPCell](https://github.com/MangiolaLaboratory/HPCell) tree and the
 | `hypothesis_gene()` | Posterior hypothesis tests on that fit |
 | `false_discovery_rate()` | Turn per-gene null probabilities into an FDR across genes |
 | `adjust_gene()` | Residual-plus-fitted adjustment, dropping nuisance covariates |
-| `plot_gene()` | Boxplot of one gene across a factor, with a posterior predictive overlay |
+| `plot_boxplot()` | Boxplot of one gene across a factor, with a posterior predictive overlay |
 | `plot_volcano()` | Volcano of a pipeline, with `pH0` below `1 / ndraws` jittered in a shaded band |
 | `brmDE()` | Start a [tidytargets](https://github.com/stemangiola/tidytargets) pipeline (`tt_initialise()` analogue) |
 | `estimate()` / `hypothesis()` / `adjust()` | `tt_iterate()` steps on that same graph |
@@ -37,8 +37,8 @@ fit <- estimate_gene(
 
 hypothesis_gene(fit, "dextrt")
 
-plot_gene(fit, factor = "dex", feature = "ENSG00000120129")
-plot_gene(fit, factor = "dex", feature = "ENSG00000120129",
+plot_boxplot(fit, factor = "dex", feature = "ENSG00000120129")
+plot_boxplot(fit, factor = "dex", feature = "ENSG00000120129",
           remove_unwanted_effects = TRUE)
 
 adjust_gene(

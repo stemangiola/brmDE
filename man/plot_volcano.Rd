@@ -83,5 +83,5 @@ pipeline |> plot_volcano()
 
 }
 \seealso{
-\code{\link[=hypothesis_gene]{hypothesis_gene()}}, \code{\link[=false_discovery_rate]{false_discovery_rate()}}, \code{\link[=plot_gene]{plot_gene()}}
+\code{\link[=hypothesis_gene]{hypothesis_gene()}}, \code{\link[=false_discovery_rate]{false_discovery_rate()}}, \code{\link[=plot_boxplot]{plot_boxplot()}}
 }
