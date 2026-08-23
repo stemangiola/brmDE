@@ -27,6 +27,17 @@ test_that("estimate, hypothesis, and adjust append to one tidytargets script", {
   expect_true("hypothesis_tbl" %in% names(pipeline))
   expect_true("adjust_tbl" %in% names(pipeline))
 
+  # The pipeline remembers what it asked for, and remembers it through the
+  # later steps. Nothing was said about sampling here, so those entries are
+  # estimate_gene()'s own defaults rather than gaps.
+  settings <- tidytargets::tt_metadata(pipeline)
+  expect_equal(settings$formula_abundance, "~dex")
+  expect_equal(settings$offset, "offset")
+  expect_equal(settings$dispersion, "dispersion")
+  expect_equal(settings$chains, 2)
+  expect_equal(settings$draws_warmup, 300)
+  expect_equal(settings$draws_sampling, 500)
+
   lines <- readLines(paste0(store, ".R"))
   script <- paste(lines, collapse = "\n")
   expect_match(script, "tt_factory")
@@ -238,27 +249,34 @@ test_that("bundled genes give one row per gene, as unbundled ones do", {
     add = TRUE
   )
 
-  out <- suppressWarnings(
-    se |>
-      brmDE(features = features, store = store) |>
-      estimate(
-        ~dex,
-        offset = "offset",
-        dispersion = "dispersion",
-        dispersion_degrees_freedom = "dispersion_degrees_freedom",
-        bundle = 2,
-        family = brms::negbinomial(),
-        chains = 1,
-        iter = 200,
-        warmup = 100,
-        cores = 1,
-        backend = "cmdstanr",
-        refresh = 0,
-        silent = 2
-      ) |>
-      hypothesis("dextrt = 0") |>
-      tt_evaluate()
+  pipeline <- se |>
+    brmDE(features = features, store = store) |>
+    estimate(
+      ~dex,
+      offset = "offset",
+      dispersion = "dispersion",
+      dispersion_degrees_freedom = "dispersion_degrees_freedom",
+      bundle = 2,
+      family = brms::negbinomial(),
+      chains = 1,
+      draws_warmup = 100,
+      draws_sampling = 100,
+      cores = 1,
+      backend = "cmdstanr",
+      refresh = 0,
+      silent = 2
+    ) |>
+    hypothesis("dextrt = 0")
+
+  # Nothing has been fitted yet: plotting evaluates the pipeline itself, as
+  # printing it would, and floors its band at 1 / 100 from the metadata alone.
+  band <- suppressWarnings(
+    ggplot2::ggplot_build(plot_volcano(pipeline))$data[[1]]
   )
+  expect_equal(sort(10^(-c(band$ymin, band$ymax))), c(1e-3, 1e-2))
+
+  # A second evaluation skips everything it already has.
+  out <- suppressWarnings(pipeline |> tt_evaluate())
 
   # Four genes, but only two fit targets were built.
   branches <- targets::tar_read_raw("brms_fit", store = store)
@@ -277,6 +295,9 @@ test_that("bundled genes give one row per gene, as unbundled ones do", {
     all(c("hypothesis", "pH0", "rhat", "ess_bulk", "mcse") %in% names(out))
   )
   expect_equal(out$hypothesis, rep("dextrt = 0", length(features)))
+
+  # The metadata the band came from is what the fits actually kept.
+  expect_true(all(vapply(fits, function(f) brms::ndraws(f) == 100, logical(1))))
 
   # Bundles keep gene order, so unpacking them lines the fits up with `.feature`.
   counts <- SummarizedExperiment::assay(se, "counts")
@@ -317,8 +338,8 @@ test_that("estimate |> hypothesis |> adjust evaluate as one pipeline", {
         dispersion_degrees_freedom = "dispersion_degrees_freedom",
         family = brms::negbinomial(),
         chains = 1,
-        iter = 250,
-        warmup = 100,
+        draws_warmup = 100,
+        draws_sampling = 150,
         cores = 1,
         backend = "cmdstanr",
         refresh = 0,

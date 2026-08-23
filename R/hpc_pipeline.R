@@ -408,7 +408,8 @@ brmDE <- function(.data,
 #'   inside one target, which is how you stop tens of thousands of genes from
 #'   swamping an HPC scheduler with tiny jobs. See *Bundling* below.
 #' @param target_output Name of the targets output.
-#' @param ... Passed to [estimate_gene()] (e.g. `family`, `chains`, `iter`).
+#' @param ... Passed to [estimate_gene()] (e.g. `family`, `chains`,
+#'   `draws_sampling`).
 #'
 #' @return The updated `tidytargets` pipeline.
 #'
@@ -422,6 +423,15 @@ brmDE <- function(.data,
 #' one with `targets::tar_read(brms_fit, branches = i, store = store)`, using
 #' the same `store` you passed to [brmDE()]; with `bundle = 1` the branch
 #' index is the gene's row in the result.
+#'
+#' @section What the pipeline remembers:
+#' What the fits were asked for goes onto the pipeline with
+#' [tidytargets::tt_metadata()]: the formulas, the column names, and every
+#' [estimate_gene()] argument the sampling depends on, defaults included, so
+#' the object carries its own specification while the fits stay in the store.
+#' Read it with `tt_metadata(pipeline)`. It is how [plot_volcano()] knows the
+#' `chains * draws_sampling` draws a `pH0` was counted from, and so why it
+#' takes the pipeline rather than the table.
 #'
 #' @section Bundling:
 #' One target per gene gives the scheduler tens of thousands of jobs whose
@@ -507,6 +517,25 @@ estimate.tidytargets <- function(input_hpc,
     ),
     as.list(substitute(list(...)))[-1L]
   ))
+
+  # What the fits were asked for rides along on the pipeline, since the fits
+  # themselves stay in the store: estimate_gene()'s arguments, with whatever
+  # `...` overrode, so nothing is repeated here and nothing is missing when it
+  # was left at a default. What any entry is for is up to whoever reads it;
+  # plot_volcano() multiplies chains by draws_sampling for the resolution of a
+  # counted probability.
+  settings <- utils::modifyList(as.list(formals(estimate_gene)), list(...))
+  input_hpc <- tidytargets::tt_metadata(
+    input_hpc,
+    formula_abundance = formula_text(formula_abundance),
+    formula_dispersion = formula_text(formula_dispersion),
+    offset = offset,
+    dispersion = dispersion,
+    dispersion_degrees_freedom = dispersion_degrees_freedom,
+    chains = settings$chains,
+    draws_warmup = settings$draws_warmup,
+    draws_sampling = settings$draws_sampling
+  )
 
   # The formulas and the arguments are targets of their own so that editing one
   # invalidates the fits that depend on it. They only assemble small objects, so

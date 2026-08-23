@@ -20,8 +20,8 @@ estimate_gene(
   prior = NULL,
   sample_prior = c("no", "yes", "only"),
   chains = 2,
-  iter = 800,
-  warmup = 300,
+  draws_warmup = 300,
+  draws_sampling = 500,
   backend = c("cmdstanr", "rstan"),
   cores = chains,
   init = "gene",
@@ -153,8 +153,14 @@ scale is disk you would rather keep. The default \code{"no"} omits them, since
 the default test in \code{\link[=hypothesis_gene]{hypothesis_gene()}} is directional and needs no prior
 draws. Set this to \code{"yes"} when you intend to ask for a Bayes factor.}
 
-\item{chains, iter, warmup}{MCMC settings. Defaults match the manuscript
-pipeline (2 chains, 600 iterations, 400 warmup).}
+\item{chains, draws_warmup, draws_sampling}{MCMC settings, counted in draws
+per chain rather than in brms' \code{iter} (which counts warmup and sampling
+together): brms is given \code{warmup = draws_warmup} and
+\code{iter = draws_warmup + draws_sampling}. The fit therefore keeps
+\code{chains * draws_sampling} draws, and that product is what bounds the
+resolution of a \code{pH0} counted from them, \code{1 / ndraws}. Defaults are the
+manuscript pipeline's: 2 chains of 300 warmup and 500 sampling draws, so
+1000 draws kept.}
 
 \item{backend}{Passed to \code{\link[brms:brm]{brms::brm()}}. Default \code{"cmdstanr"}.}
 
