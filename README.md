@@ -7,17 +7,37 @@ Each gene is fit with an arbitrary formula and a precomputed offset; hypothesis 
 
 The archived [HPCell](https://github.com/MangiolaLaboratory/HPCell) tree and the immuneBodyMap `dynamic_tar_script.R` are **not** part of this package.
 
+## Install
+
+```r
+# from this directory
+devtools::install()
+
+# CmdStan backend (same three-step setup as sccomp)
+install.packages(
+  "cmdstanr",
+  repos = c("https://stan-dev.r-universe.dev/", getOption("repos"))
+)
+cmdstanr::check_cmdstan_toolchain(fix = TRUE)
+cmdstanr::install_cmdstan()
+```
+
+`estimate_gene()` defaults to `backend = "cmdstanr"`. Vignette fitting chunks run only when `instantiate::stan_cmdstan_exists()` is true.
+
 ## Functions
 
 | Function | Role |
 |----------|------|
+| **Single-gene functions** | |
 | `estimate_gene()` | Fit one gene (ZINB mixed model by default) |
 | `hypothesis_gene()` | Posterior hypothesis tests on that fit |
 | `adjust_gene()` | Residual-plus-fitted adjustment, dropping nuisance covariates |
-| `plot_boxplot()` | Boxplot of one gene across a factor, with a posterior predictive overlay |
-| `plot_volcano()` | Volcano of a pipeline, with `pH0` below `1 / ndraws` jittered in a shaded band |
+| **High-performance computing functions** | |
 | `brmDE()` | Start a [tidytargets](https://github.com/stemangiola/tidytargets) pipeline (`tt_initialise()` analogue) |
 | `estimate()` / `hypothesis()` / `adjust()` | `tt_iterate()` steps on that same graph |
+| **Plotting functions** | |
+| `plot_boxplot()` | Boxplot of one gene across a factor, with a posterior predictive overlay |
+| `plot_volcano()` | Volcano of a pipeline, with `pH0` below `1 / ndraws` jittered in a shaded band |
 
 ```r
 library(brmDE)
@@ -104,20 +124,3 @@ vignette("brmDE", package = "brmDE")
 | `"gamma"` | `gamma(d_eff/2, d_eff * dispersion/2)` on `shape` directly, no submodel | Conjugate to edgeR's scaled inverse chi-square hierarchy; lighter tails |
 
 Both encode the same log-scale spread, `trigamma(d_eff / 2)`, because a chi-square *is* a gamma, and both put all their mass on a positive shape — the Student-t by exponentiating an unbounded parameter through brms' log link, the gamma by bounding it. They are not, however, reparameterisations of each other: the Student-t centres the *median* shape on edgeR's estimate while the gamma centres the *mean*, leaving their log-scale centres about `1/d_eff` apart. See `?estimate_gene` for the two parameterisations.
-
-## Install
-
-```r
-# from this directory
-devtools::install()
-
-# CmdStan backend (same three-step setup as sccomp)
-install.packages(
-  "cmdstanr",
-  repos = c("https://stan-dev.r-universe.dev/", getOption("repos"))
-)
-cmdstanr::check_cmdstan_toolchain(fix = TRUE)
-cmdstanr::install_cmdstan()
-```
-
-`estimate_gene()` defaults to `backend = "cmdstanr"`. Vignette fitting chunks run only when `instantiate::stan_cmdstan_exists()` is true.
