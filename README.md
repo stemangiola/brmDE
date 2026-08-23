@@ -1,5 +1,7 @@
 # brmDE
 
+[![R build status](https://github.com/MangiolaLaboratory/brmDE/workflows/rworkflows/badge.svg)](https://github.com/MangiolaLaboratory/brmDE/actions)
+
 Mixed-effect modelling for differential gene expression analyses, based on Bayesian regression through [brms](https://paul-buerkner.github.io/brms/).
 Each gene is fit with an arbitrary formula and a precomputed offset; hypothesis tests and covariate adjustment follow, including as a [tidytargets](https://github.com/stemangiola/tidytargets) `targets` pipeline.
 
