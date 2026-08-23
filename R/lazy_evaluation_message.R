@@ -54,7 +54,7 @@ pipeline_notice <- new.env(parent = emptyenv())
 #' @noRd
 pipeline_ready_message <- function() {
   message(
-    "The pipeline is ready to be evaluated lazily: print the object, ",
+    "brmDE says: The pipeline is ready to be evaluated lazily: print the object, ",
     "or call tt_evaluate(), to run it."
   )
 }
