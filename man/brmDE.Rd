@@ -94,7 +94,7 @@ se |>
   estimate(
     ~ dex + (1 | cell),
     offset = "offset",
-    dispersion = "dispersion",
+    dispersion = "dispersion_trended",
     dispersion_degrees_freedom = "dispersion_degrees_freedom",
     family = brms::negbinomial()
   ) |>
@@ -113,7 +113,7 @@ se |>
 #       )
 #     )
 #   ) |>
-#   estimate(~ dex + (1 | cell), offset = "offset", dispersion = "dispersion",
+#   estimate(~ dex + (1 | cell), offset = "offset", dispersion = "dispersion_trended",
 #            dispersion_degrees_freedom = "dispersion_degrees_freedom")
 }
 

@@ -43,7 +43,6 @@ test_that("default priors cover negbinomial as well as its zero-inflated form", 
     formula = formula,
     abundance = "counts",
     offset = "offset",
-    dispersion = NULL,
     dispersion_degrees_freedom = NULL,
     shape_prior_df = 3,
     shape_prior = "student_t"

@@ -119,12 +119,6 @@ formula_rhs_text <- function(formula, arg) {
   deparse1(formula[[2]])
 }
 
-dispersion_formula_has_terms <- function(formula_dispersion) {
-  rhs <- formula_rhs_text(formula_dispersion, "formula_dispersion")
-  labels <- attr(stats::terms(stats::as.formula(paste("~", rhs))), "term.labels")
-  length(labels) > 0L
-}
-
 # The shape submodel is assembled here rather than being handed in whole, so
 # that the edgeR dispersion always enters as an offset on brms' log link.
 # No dispersion means that offset is 0: the intercept is then log(shape)
@@ -178,26 +172,13 @@ prepare_formula <- function(formula_abundance,
   formula_abundance <- add_offset_term(formula_abundance, offset)
   announce_formula("Abundance model", formula_abundance, added_offset)
 
-  gamma_prior <- identical(check_shape_prior(shape_prior), "gamma")
-  if (gamma_prior && dispersion_formula_has_terms(formula_dispersion)) {
-    # The gamma prior is placed on the scalar `shape`, which no linear
-    # predictor can carry, so a dispersion model cannot be honoured here.
-    stop(
-      '`formula_dispersion` has terms, but shape_prior = "gamma" puts a ',
-      "prior on a scalar `shape` with no linear predictor. Use ",
-      'shape_prior = "student_t" to model the dispersion.',
-      call. = FALSE
-    )
-  }
+  check_shape_prior(shape_prior)
 
-  # The gamma prior sits on a scalar `shape`, which has no linear predictor.
-  # The Student-t prior always uses a shape submodel; the edgeR dispersion
-  # is an offset on that submodel, or 0 when it is omitted.
-  out <- if (gamma_prior) {
-    formula_abundance
-  } else {
-    add_dispersion_shape(formula_abundance, formula_dispersion, dispersion)
-  }
+  # Both shape priors use the same submodel, so the formula does not depend on
+  # `shape_prior` at all: the edgeR dispersion is an offset on brms' log link
+  # either way, or 0 when it is omitted. Only the prior on the intercept of
+  # that submodel differs, a Student-t on it or a gamma on its exponential.
+  out <- add_dispersion_shape(formula_abundance, formula_dispersion, dispersion)
   strip_formula_env(out)
 }
 
@@ -346,65 +327,51 @@ check_degrees_freedom_value <- function(data, dispersion_degrees_freedom) {
   d_eff
 }
 
-# Conjugate gamma prior on the brms `shape` parameter, i.e. on 1/phi.
+# Conjugate gamma prior on exp(Intercept_shape): the shape's multiplicative
+# deviation from the offset location.
 #
 # edgeR and limma model the gene-wise dispersion as a scaled inverse
 # chi-square with d_eff degrees of freedom centred on phi_g. Inverting a
 # scaled inverse chi-square gives a gamma, so the precision 1/phi -- exactly
 # what brms calls `shape` -- has prior Gamma(d_eff/2, rate = d_eff phi_g / 2).
-# Its mean is 1/phi_g, edgeR's point estimate, and because
-# Var(log X) = trigamma(shape) for a gamma, its log-scale spread is
-# trigamma(d_eff/2): identical to the Student-t route in
-# shape_intercept_scale(), which is unsurprising since chi^2_d is itself
-# Gamma(d/2, scale = 2). The two forms differ only in tail weight, the
-# Student-t being the more robust to a badly shrunk edgeR estimate.
 #
-# Falls back to brms' own vague gamma(0.01, 0.01) only when neither column
-# is asked for. The conjugate form needs both phi and d_eff, so supplying
-# exactly one is an error rather than a silent fallback; values that are
-# present but unusable are also an error.
-shape_gamma_parameters <- function(data,
-                                   dispersion,
-                                   dispersion_degrees_freedom,
-                                   default = list(shape = 0.01, rate = 0.01)) {
-  if (is.null(dispersion) && is.null(dispersion_degrees_freedom)) {
-    return(default)
-  }
-  if (is.null(dispersion) || is.null(dispersion_degrees_freedom)) {
+# The shape submodel writes shape = exp(Intercept_shape) / phi_g through
+# offset(log(1/phi_g)), and a gamma is closed under scaling, so that prior is
+# exactly exp(Intercept_shape) ~ Gamma(d_eff/2, rate = d_eff/2). Both
+# parameters are d_eff/2: the gene enters only through the offset, as it does
+# in the Student-t branch, and the prior on the deviation has mean 1. Placing
+# it here rather than on a scalar `shape` is what lets a dispersion submodel
+# carry covariates under either prior.
+#
+# Because Var(log X) = trigamma(shape) for a gamma, the log-scale spread is
+# trigamma(d_eff/2), identical to the Student-t route in
+# shape_intercept_scale() -- unsurprising, since chi^2_d is itself
+# Gamma(d/2, scale = 2). The two forms still are not reparameterisations of
+# each other: they agree on that spread, but the Student-t centres the median
+# shape on 1/phi_g while the gamma centres the mean, and the Student-t is the
+# more robust to a badly shrunk edgeR estimate.
+#
+# The gamma reads d_0/2 as its parameters, so it cannot be used without
+# `dispersion_degrees_freedom`. The Student-t can: it falls back to a
+# log-scale SD of 1.
+shape_gamma_parameters <- function(data, dispersion_degrees_freedom) {
+  if (is.null(dispersion_degrees_freedom)) {
     stop(
-      'shape_prior = "gamma" needs both `dispersion` and ',
-      "`dispersion_degrees_freedom` to form the conjugate gamma, or neither ",
-      "to use brms' vague gamma(0.01, 0.01).",
-      call. = FALSE
-    )
-  }
-  if (!dispersion %in% names(data)) {
-    stop(
-      "Dispersion column '", dispersion, "' was not found in `data`.",
+      '`shape_prior = "gamma"` requires `dispersion_degrees_freedom`. ',
+      'Use the default `shape_prior = "student_t"` if you do not have it.',
       call. = FALSE
     )
   }
   require_degrees_freedom_column(data, dispersion_degrees_freedom)
-  d_eff <- check_degrees_freedom_value(data, dispersion_degrees_freedom)
-  data <- check_dispersion_values(data, dispersion)
-  phi <- as.numeric(data[[dispersion]])[[1]]
-  list(shape = d_eff / 2, rate = d_eff * phi / 2)
+  a <- check_degrees_freedom_value(data, dispersion_degrees_freedom) / 2
+  list(shape = a, rate = a)
 }
 
 shape_student_t_prior <- function(data,
                                   formula,
                                   dispersion_degrees_freedom,
-                                  shape_prior_df,
-                                  shape_prior = "student_t") {
+                                  shape_prior_df) {
   nu <- check_student_df(shape_prior_df)
-  if (identical(shape_prior, "gamma")) {
-    stop(
-      'shape_prior = "gamma" puts a prior on a scalar `shape`, but the model ',
-      "has a shape submodel, which has no such parameter. Drop the ",
-      'submodel or use shape_prior = "student_t".',
-      call. = FALSE
-    )
-  }
   scale <- shape_intercept_scale(data, dispersion_degrees_freedom, nu)
   p <- brms::prior_string(
     sprintf("student_t(%s, 0, brmde_shape_scale)", format_prior_number(nu)),
@@ -459,16 +426,41 @@ location_priors <- function(data,
   )
 }
 
-shape_gamma_prior <- function(data, dispersion, dispersion_degrees_freedom) {
-  pars <- shape_gamma_parameters(data, dispersion, dispersion_degrees_freedom)
-  gene_prior(
-    prior = brms::prior_string(
-      "gamma(brmde_shape_gamma_shape, brmde_shape_gamma_rate)",
-      class = "shape"
+# The gamma sits on exp(Intercept_shape) rather than on the intercept itself,
+# and Stan has no log-gamma density for set_prior() to name, so the density is
+# added to the target directly. The trailing Intercept_shape is the
+# log-Jacobian of exp(). brms places a "model" stanvar ahead of its own
+# `if (!prior_only)` guard, so this contributes under sample_prior = "only"
+# as a prior must.
+shape_gamma_stancode <- function() {
+  brms::stanvar(
+    scode = paste(
+      "  // brmDE: gamma prior on exp(Intercept_shape), the shape's",
+      "  // multiplicative deviation from the log(1/dispersion) offset.",
+      "  target += gamma_lpdf(exp(Intercept_shape) | brmde_shape_gamma_shape,",
+      "                       brmde_shape_gamma_rate)",
+      "            + Intercept_shape;",
+      sep = "\n"
     ),
+    name = "shape_gamma_lprior",
+    block = "model"
+  )
+}
+
+shape_gamma_prior <- function(data, formula, dispersion_degrees_freedom) {
+  pars <- shape_gamma_parameters(data, dispersion_degrees_freedom)
+  # An empty prior string leaves brms' own intercept prior off, so the
+  # log-gamma added by shape_gamma_stancode() is the only one in play.
+  p <- brms::prior_string("", class = "Intercept", dpar = "shape")
+  if (shape_submodel_has_terms(formula)) {
+    p <- c(p, brms::prior(student_t(3, 0, 2), class = b, dpar = shape))
+  }
+  gene_prior(
+    prior = p,
     stanvars = combine_stanvars(
       gene_prior_stanvar("brmde_shape_gamma_shape", pars$shape),
-      gene_prior_stanvar("brmde_shape_gamma_rate", pars$rate)
+      gene_prior_stanvar("brmde_shape_gamma_rate", pars$rate),
+      shape_gamma_stancode()
     )
   )
 }
@@ -514,25 +506,23 @@ default_gene_priors <- function(data,
                                 formula,
                                 abundance,
                                 offset,
-                                dispersion,
                                 dispersion_degrees_freedom,
                                 shape_prior_df,
                                 shape_prior,
                                 coefficient_prior_scale =
                                   coefficient_prior_scale_default,
                                 coefficient_prior_df = 3) {
-  shape <- if (has_shape_submodel(formula)) {
+  shape <- if (!has_shape_submodel(formula)) {
+    gene_prior(brms::prior(student_t(3, 0, 2), class = shape))
+  } else if (identical(check_shape_prior(shape_prior), "gamma")) {
+    shape_gamma_prior(data, formula, dispersion_degrees_freedom)
+  } else {
     shape_student_t_prior(
       data,
       formula,
       dispersion_degrees_freedom,
-      shape_prior_df,
-      shape_prior
+      shape_prior_df
     )
-  } else if (identical(shape_prior, "gamma")) {
-    shape_gamma_prior(data, dispersion, dispersion_degrees_freedom)
-  } else {
-    gene_prior(brms::prior(student_t(3, 0, 2), class = shape))
   }
   combine_gene_priors(
     shape,
