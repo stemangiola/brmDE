@@ -159,6 +159,11 @@
 </tr>
 </tbody>
 </table>
+</div>
+</div>
+<div class="section level2">
+<h2 id="example-for-one-gene">Example for one gene<a class="anchor" aria-label="anchor" href="#example-for-one-gene"></a>
+</h2>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/MangiolaLaboratory" class="external-link">brmDE</a></span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"airway"</span>, package <span class="op">=</span> <span class="st">"airway"</span><span class="op">)</span></span>
@@ -190,6 +195,10 @@
 <p>The two models are given separately. <code>formula_abundance</code> is the mean model. For <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code> write the fixed-effect analogue of that model (<code>~ dex + cell</code> for <code>~ dex + (1 | cell)</code>): edgeR has no random effects. <code>formula_dispersion</code> (default <code>~1</code>) is the model for the negative binomial shape. Neither should carry an offset: the library size offset and the <code>log(1/dispersion)</code> offset are appended for you, and the assembled formulas are printed as a message so you can check them:</p>
 <pre><code>Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offset)
 Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))</code></pre>
+</div>
+<div class="section level2">
+<h2 id="example-for-many-genes-as-parallel-pipeline-easily-deployable-on-your-hpc">Example for many genes as parallel pipeline, easily deployable on your HPC<a class="anchor" aria-label="anchor" href="#example-for-many-genes-as-parallel-pipeline-easily-deployable-on-your-hpc"></a>
+</h2>
 <p>To run many genes as <strong>one</strong> tidytargets pipeline. The pipeline fits genes and nothing else, so the two whole-matrix quantities it consumes — the offset and the dispersion — are prepared first:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"airway"</span>, package <span class="op">=</span> <span class="st">"airway"</span><span class="op">)</span></span>
@@ -211,15 +220,19 @@ Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))<
 <span>  <span class="fu"><a href="reference/adjust.html">adjust</a></span><span class="op">(</span>nullify <span class="op">=</span> <span class="st">"dex"</span><span class="op">)</span></span></code></pre></div>
 <p>Printing that object runs the pipeline (<code>print</code> calls <code><a href="https://stemangiola.github.io/tidytargets/reference/tt_evaluate.html" class="external-link">tt_evaluate()</a></code>, as in tidytargets). Assigning it does not; an interactive session then says the pipeline is ready to be evaluated, rather than appearing to do nothing.</p>
 <p>The result is one row per gene and contrast. <code><a href="reference/estimate.html">estimate()</a></code> contributes the gene column, and <code><a href="https://paulbuerkner.com/brms/reference/hypothesis.brmsfit.html" class="external-link">hypothesis()</a></code> the statistics worth returning for all of them, unnested into the table: each contrast’s posterior summary together with the convergence of that contrast’s own draws (<code>rhat</code>, <code>ess_bulk</code>, <code>mcse</code>). The fits are not in the table — twenty thousand <code>brmsfit</code> objects will not fit in one — but they are in the targets store: <code>targets::tar_read(brms_fit, branches = i, store = store)</code> reads branch <code>i</code> (the gene’s row, when <code>bundle = 1</code>).</p>
+</div>
+<div class="section level2">
+<h2 id="plotting">Plotting<a class="anchor" aria-label="anchor" href="#plotting"></a>
+</h2>
 <p><code>plot_volcano(pipeline)</code> draws the run as a volcano, evaluating the pipeline first if printing it has not already. It takes the pipeline rather than the table because <code>pH0</code> is counted from draws and so cannot resolve below <code>1 / ndraws</code>, and only the pipeline knows that number: <code><a href="reference/estimate.html">estimate()</a></code> records the sampling settings on it with <code><a href="https://stemangiola.github.io/tidytargets/reference/tt_metadata.html" class="external-link">tt_metadata()</a></code>, while the fits themselves stay in the store. The genes that come back as exactly 0 are jittered across a shaded band one decade below the dashed resolution line, which reads as “smaller than these draws can measure” rather than as a probability.</p>
 <p>By default <code><a href="reference/estimate.html">estimate()</a></code> fits 10 genes per target. At transcriptome scale that can swamp an HPC scheduler with tiny jobs, so <code>estimate(bundle = 100)</code> fits 100 genes per target instead; the output is unchanged, one row per gene. Set <code>bundle = 1</code> for one target per gene.</p>
 <p>See the package vignette for the full walkthrough, including both shape-prior options:</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette</a></span><span class="op">(</span><span class="st">"brmDE"</span>, package <span class="op">=</span> <span class="st">"brmDE"</span><span class="op">)</span></span></code></pre></div>
 </div>
-<div class="section level3">
-<h3 id="dispersion-priors">Dispersion priors<a class="anchor" aria-label="anchor" href="#dispersion-priors"></a>
-</h3>
+<div class="section level2">
+<h2 id="dispersion-priors">Dispersion priors<a class="anchor" aria-label="anchor" href="#dispersion-priors"></a>
+</h2>
 <p><code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code> writes one <code>rowData</code> column per estimate, named by <code>dispersion_column</code> and <code>dispersion_degrees_freedom_column</code> (defaults <code>"dispersion"</code> for gene-wise (<em>g) and <code>"dispersion_degrees_freedom"</code> for (d</em>{} =  + )). Pass those same names to <code><a href="reference/estimate.html">estimate()</a></code> / <code><a href="reference/estimate_gene.html">estimate_gene()</a></code> as <code>dispersion=</code> and <code>dispersion_degrees_freedom=</code>. Those two default to <code>NULL</code> (<code>offset(0)</code> on the shape submodel, Student-t log-scale SD of 1); computing the columns and passing both names is the preferred starting point. <code><a href="reference/estimate_gene.html">estimate_gene()</a></code> turns that pair into a prior on the negative binomial shape — a location from (<em>g) and a tightness from (d</em>{}) — so data-driven evidence for that gene can still diverge from the external estimate. Choose the form with <code>shape_prior</code>:</p>
 <table class="table">
 <colgroup>
@@ -249,7 +262,6 @@ Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))<
 </tbody>
 </table>
 <p>Both encode the same log-scale spread, <code>trigamma(d_eff / 2)</code>, because a chi-square <em>is</em> a gamma, and both put all their mass on a positive shape — the Student-t by exponentiating an unbounded parameter through brms’ log link, the gamma by bounding it. They are not, however, reparameterisations of each other: the Student-t centres the <em>median</em> shape on edgeR’s estimate while the gamma centres the <em>mean</em>, leaving their log-scale centres about <code>1/d_eff</code> apart. See <code><a href="reference/estimate_gene.html">?estimate_gene</a></code> for the two parameterisations.</p>
-</div>
 </div>
 </div>
   </div>
