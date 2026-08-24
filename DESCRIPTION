@@ -3,7 +3,9 @@ Title: Mixed-Effect Modelling for Differential Gene Expression
 Version: 0.1.0
 Authors@R: c(
     person("Stefano", "Mangiola", email = "mangiolastefano@gmail.com",
-           role = c("aut", "cre"))
+           role = c("aut", "cre")),
+    person("Chen", "Zhan", email = "chen.zhan@adelaide.edu.au",
+           role = c("aut"))
     )
 Description: Mixed-effect modelling for differential gene expression
     analyses, based on Bayesian regression through brms. Fit, test, and
