@@ -16,7 +16,8 @@ dynamic_tar_script.R
 functions/
 archive/
 brmDE.Rproj
-vignettes/brmDE.html
+vignettes/*.html
+vignettes/dispersion-priors_files/
 
 # Local development scratch: benchmarks, profiling, throwaway scripts
 dev/
