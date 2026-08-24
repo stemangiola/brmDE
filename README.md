@@ -44,6 +44,8 @@ cmdstanr::install_cmdstan()
 | `plot_boxplot()` | Boxplot of one gene across a factor, with a posterior predictive overlay |
 | `plot_volcano()` | Volcano of a pipeline, with `pH0` below `1 / ndraws` jittered in a shaded band |
 
+## Example for one gene
+
 ```r
 library(brmDE)
 data("airway", package = "airway")
@@ -83,6 +85,8 @@ Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offs
 Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))
 ```
 
+## Example for many genes as parallel pipeline, easily deployable on your HPC
+
 To run many genes as **one** tidytargets pipeline. The pipeline fits genes and nothing else, so the two whole-matrix quantities it consumes — the offset and the dispersion — are prepared first:
 
 ```r
@@ -109,6 +113,8 @@ Printing that object runs the pipeline (`print` calls `tt_evaluate()`, as in tid
 
 The result is one row per gene and contrast. `estimate()` contributes the gene column, and `hypothesis()` the statistics worth returning for all of them, unnested into the table: each contrast's posterior summary together with the convergence of that contrast's own draws (`rhat`, `ess_bulk`, `mcse`). The fits are not in the table — twenty thousand `brmsfit` objects will not fit in one — but they are in the targets store: `targets::tar_read(brms_fit, branches = i, store = store)` reads branch `i` (the gene's row, when `bundle = 1`).
 
+## Plotting
+
 `plot_volcano(pipeline)` draws the run as a volcano, evaluating the pipeline first if printing it has not already. It takes the pipeline rather than the table because `pH0` is counted from draws and so cannot resolve below `1 / ndraws`, and only the pipeline knows that number: `estimate()` records the sampling settings on it with `tt_metadata()`, while the fits themselves stay in the store. The genes that come back as exactly 0 are jittered across a shaded band one decade below the dashed resolution line, which reads as "smaller than these draws can measure" rather than as a probability.
 
 By default `estimate()` fits 10 genes per target. At transcriptome scale that can swamp an HPC scheduler with tiny jobs, so `estimate(bundle = 100)` fits 100 genes per target instead; the output is unchanged, one row per gene. Set `bundle = 1` for one target per gene.
@@ -119,7 +125,7 @@ See the package vignette for the full walkthrough, including both shape-prior op
 vignette("brmDE", package = "brmDE")
 ```
 
-### Dispersion priors
+## Dispersion priors
 
 `tidybulk::estimate_dispersion()` writes one `rowData` column per estimate, named by `dispersion_column` and `dispersion_degrees_freedom_column` (defaults `"dispersion"` for gene-wise \(\phi_g\) and `"dispersion_degrees_freedom"` for \(d_{\mathrm{eff}} = \mathrm{df.residual} + \mathrm{prior.df}\)). Pass those same names to `estimate()` / `estimate_gene()` as `dispersion=` and `dispersion_degrees_freedom=`. Those two default to `NULL` (`offset(0)` on the shape submodel, Student-t log-scale SD of 1); computing the columns and passing both names is the preferred starting point. `estimate_gene()` turns that pair into a prior on the negative binomial shape — a location from \(\phi_g\) and a tightness from \(d_{\mathrm{eff}}\) — so data-driven evidence for that gene can still diverge from the external estimate. Choose the form with `shape_prior`:
 
