@@ -1,8 +1,5 @@
 #' Mark a tidytargets graph as a `brmDE` pipeline.
 #'
-#' Sets the `brmDE_hpc` class and, in an interactive session, schedules the
-#' ready notice for this object's store.
-#'
 #' @param x A tidytargets pipeline list.
 #'
 #' @return `x` with classes `brmDE_hpc` and `tidytargets`.
@@ -11,7 +8,6 @@
 #' @noRd
 as_brmde_hpc <- function(x) {
   class(x) <- unique(c("brmDE_hpc", "tidytargets", class(x)))
-  schedule_pipeline_ready_notice(x$initialisation$store)
   x
 }
 
@@ -794,7 +790,6 @@ localize_target_append <- function(script) {
 #' @exportS3Method tidytargets::tt_evaluate
 tt_evaluate.brmDE_hpc <- function(tt_input) {
   store <- tt_input$initialisation$store
-  mark_pipeline_evaluated(store)
   script <- paste0(store, ".R")
   localize_target_append(script)
   cat("target_list\n", file = script, append = TRUE)
