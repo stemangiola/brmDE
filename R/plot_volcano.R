@@ -14,7 +14,8 @@
 #'
 #' Those genes are drawn in a shaded band one decade below the resolution and
 #' jittered across it. The yellow square in the legend is that bound,
-#' `pH0 < 1 / ndraws`: smaller than these draws can measure. The spread
+#' `pH0 < 1e-3` (the resolution, in scientific notation): smaller than these
+#' draws can measure. The spread
 #' within the band carries no information beyond separating the points, so
 #' the axis is left unlabelled there. The dashed line is the resolution
 #' itself.
@@ -38,7 +39,7 @@
 #'
 #' @return A `ggplot` object.
 #'
-#' @seealso [hypothesis_gene()], [false_discovery_rate()], [plot_boxplot()]
+#' @seealso [hypothesis_gene()], [plot_boxplot()]
 #'
 #' @examples
 #' \dontrun{
@@ -137,11 +138,7 @@ volcano_ggplot <- function(hypotheses,
   )
 
   significance <- sprintf("%s < %s", probability, significance_threshold)
-  unresolved_label <- sprintf(
-    "%s < 1/%g",
-    probability,
-    round(1 / resolution)
-  )
+  unresolved_label <- sprintf("%s < %.0e", probability, resolution)
 
   ggplot2::ggplot(
     volcano_data,

@@ -3,7 +3,9 @@ Title: Mixed-Effect Modelling for Differential Gene Expression
 Version: 0.1.0
 Authors@R: c(
     person("Stefano", "Mangiola", email = "mangiolastefano@gmail.com",
-           role = c("aut", "cre"))
+           role = c("aut", "cre")),
+    person("Chen", "Zhan", email = "chen.zhan@adelaide.edu.au",
+           role = c("aut"))
     )
 Description: Mixed-effect modelling for differential gene expression
     analyses, based on Bayesian regression through brms. Fit, test, and
@@ -48,9 +50,10 @@ Suggests:
     tidybulk (>= 2.3.2),
     tidySummarizedExperiment,
     edgeR,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    withr
 VignetteBuilder: knitr
-SystemRequirements: CmdStan (https://mc-stan.org/users/interfaces/cmdstan), C++14
+SystemRequirements: CmdStan (https://mc-stan.org/users/interfaces/cmdstan)
 Remotes:
     stemangiola/tidytargets,
     stemangiola/tidybulk

@@ -379,7 +379,10 @@ shape_student_t_prior <- function(data,
     dpar = "shape"
   )
   if (shape_submodel_has_terms(formula)) {
-    p <- c(p, brms::prior(student_t(3, 0, 2), class = b, dpar = shape))
+    p <- c(
+      p,
+      brms::prior_string("student_t(3, 0, 2)", class = "b", dpar = "shape")
+    )
   }
   gene_prior(p, gene_prior_stanvar("brmde_shape_scale", scale))
 }

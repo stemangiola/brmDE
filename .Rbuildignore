@@ -8,3 +8,5 @@
 ^canvases$
 ^\.github$
 ^LICENSE\.md$
+^dev$
+^temp$

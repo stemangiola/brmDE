@@ -1,7 +1,11 @@
-# tidytargets grammar wrappers. The gene-wise engines stay in estimate_gene(),
-# hypothesis_gene(), and adjust_gene(); these methods only append them to a
-# tidytargets graph via tt_single() / tt_iterate().
-
+#' Mark a tidytargets graph as a `brmDE` pipeline.
+#'
+#' @param x A tidytargets pipeline list.
+#'
+#' @return `x` with classes `brmDE_hpc` and `tidytargets`.
+#'
+#' @keywords internal
+#' @noRd
 as_brmde_hpc <- function(x) {
   class(x) <- unique(c("brmDE_hpc", "tidytargets", class(x)))
   x
@@ -25,27 +29,19 @@ write_brmde_hpc_header <- function(script,
                                    update,
                                    garbage_collection,
                                    workspace_on_error) {
-  expr <- substitute(
-    {
-      library(tidytargets)
-      library(brmDE)
-      library(targets)
-
-      tar_option_set(
-        memory = "transient",
-        garbage_collection = GARBAGE,
-        storage = "main",
-        retrieval = "main",
-        debug = DEBUG,
-        cue = tar_cue(mode = UPDATE),
-        controller = readRDS(CONTROLLER),
-        packages = PACKAGES,
-        workspace_on_error = WORKSPACE,
-        format = "rds"
-      )
-
-      target_list <- list()
-    },
+  opt <- substitute(
+    tar_option_set(
+      memory = "transient",
+      garbage_collection = GARBAGE,
+      storage = "main",
+      retrieval = "main",
+      debug = DEBUG,
+      cue = tar_cue(mode = UPDATE),
+      controller = readRDS(CONTROLLER),
+      packages = PACKAGES,
+      workspace_on_error = WORKSPACE,
+      format = "rds"
+    ),
     list(
       GARBAGE = garbage_collection,
       DEBUG = debug_step,
@@ -56,10 +52,18 @@ write_brmde_hpc_header <- function(script,
     )
   )
 
-  lines <- deparse(expr, width.cutoff = 500L)
-  lines <- lines[-1]
-  lines <- lines[-length(lines)]
-  writeLines(lines, script)
+  writeLines(
+    c(
+      "library(tidytargets)",
+      "library(brmDE)",
+      "library(targets)",
+      "",
+      deparse(opt, width.cutoff = 500L),
+      "",
+      "target_list <- list()"
+    ),
+    script
+  )
 }
 
 check_features <- function(features) {
@@ -81,6 +85,12 @@ check_features <- function(features) {
   as.character(features)
 }
 
+#' Gene ids for HPC mapping
+#'
+#' @param se A `SummarizedExperiment`.
+#' @param features Optional character vector of gene ids.
+#'
+#' @return A list of gene ids, one per target branch.
 #' @keywords internal
 #' @export
 gene_ids_for_hpc <- function(se, features = NULL) {
@@ -98,6 +108,12 @@ gene_ids_for_hpc <- function(se, features = NULL) {
 # Splitting genes into fewer, larger elements trades scheduler overhead for
 # coarser invalidation: the ids in a bundle are hashed together, so changing
 # the gene set reshuffles the bundles and refits all of them.
+#' Bundle gene ids into HPC jobs
+#'
+#' @param ids Gene ids, typically a list from [gene_ids_for_hpc()].
+#' @param bundle Number of genes per branch.
+#'
+#' @return A list of character vectors of gene ids.
 #' @keywords internal
 #' @export
 bundle_gene_ids <- function(ids, bundle) {
@@ -107,6 +123,15 @@ bundle_gene_ids <- function(ids, bundle) {
 
 # Every branch returns a list of gene-wise results, one element per gene it was
 # given, whether or not genes were bundled. collect_branches() relies on that.
+#' Fit one HPC branch of genes
+#'
+#' @param se A `SummarizedExperiment`.
+#' @param feature_id Gene id or bundle of ids for this branch.
+#' @param formula_abundance,formula_dispersion Formulas stored as text on the
+#'   pipeline.
+#' @param args Named list of extra [estimate_gene()] arguments.
+#'
+#' @return A list of `brmsfit` objects, one per gene in the branch.
 #' @keywords internal
 #' @export
 estimate_gene_from_se <- function(se,
@@ -129,6 +154,12 @@ estimate_gene_from_se <- function(se,
   })
 }
 
+#' Test hypotheses for one HPC branch
+#'
+#' @param fit A `brmsfit`, or a list of them from one branch.
+#' @param args Named list of extra [hypothesis_gene()] arguments.
+#'
+#' @return A list of hypothesis tables, one per gene in the branch.
 #' @keywords internal
 #' @export
 hypothesis_gene_from_fit <- function(fit, args) {
@@ -137,6 +168,12 @@ hypothesis_gene_from_fit <- function(fit, args) {
   })
 }
 
+#' Adjust one HPC branch
+#'
+#' @param fit A `brmsfit`, or a list of them from one branch.
+#' @param args Named list of extra [adjust_gene()] arguments.
+#'
+#' @return A list of adjusted tables, one per gene in the branch.
 #' @keywords internal
 #' @export
 adjust_gene_from_fit <- function(fit, args) {
@@ -198,7 +235,9 @@ collect_brmde_hpc <- function(input_hpc) {
 #' header (`target_list`) and the shared steps (load SE, gene ids). Later
 #' calls to [estimate()], [hypothesis()], and [adjust()] append
 #' `tt_iterate()` branches onto the same graph. Printing the object (or
-#' calling [tt_evaluate()]) runs the pipeline, as in tidytargets.
+#' calling [tt_evaluate()]) runs the pipeline, as in tidytargets. Assigning
+#' it does not; an interactive session then says the pipeline is ready to be
+#' evaluated, rather than appearing to do nothing.
 #'
 #' The pipeline is gene-wise only. Anything estimated across the whole matrix,
 #' namely the library size offset and the dispersion, belongs upstream of
@@ -237,7 +276,8 @@ collect_brmde_hpc <- function(input_hpc) {
 #'   to `tar_option_set()` / `tar_cue()` as in tidytargets.
 #' @param verbosity Reporter passed to [targets::tar_make()].
 #'
-#' @return A `tidytargets` pipeline object (`brmDE_hpc`).
+#' @return A `tidytargets` pipeline object (`brmDE_hpc`). The graph is not
+#'   run until you print it or call [tt_evaluate()].
 #'
 #' @examples
 #' \dontrun{
@@ -609,7 +649,7 @@ estimate.tidytargets <- function(input_hpc,
 #' Collecting the pipeline adds an `fdr` column across genes when the tests
 #' took the directional route, which is the default. That is the one quantity
 #' a gene-wise target cannot compute, since it is a property of the gene set.
-#' See [false_discovery_rate()].
+#' The rate is the cumulative mean of `pH0` in ascending order.
 #'
 #' @param x A `tidytargets` pipeline from [brmDE()].
 #' @param hypothesis Effects to test, passed to [hypothesis_gene()].
@@ -772,6 +812,8 @@ tt_evaluate.brmDE_hpc <- function(tt_input) {
 }
 
 #' @rdname brmDE
+#' @param x A `brmDE_hpc` pipeline.
+#' @param ... Passed to [print()].
 #' @export
 print.brmDE_hpc <- function(x, ...) {
   x |>

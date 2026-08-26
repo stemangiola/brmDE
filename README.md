@@ -44,6 +44,8 @@ cmdstanr::install_cmdstan()
 | `plot_boxplot()` | Boxplot of one gene across a factor, with a posterior predictive overlay |
 | `plot_volcano()` | Volcano of a pipeline, with `pH0` below `1 / ndraws` jittered in a shaded band |
 
+## Example for one gene
+
 ```r
 library(brmDE)
 data("airway", package = "airway")
@@ -83,6 +85,8 @@ Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offs
 Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion_trended))
 ```
 
+## Example for many genes as parallel pipeline, easily deployable on your HPC
+
 To run many genes as **one** tidytargets pipeline. The pipeline fits genes and nothing else, so the two whole-matrix quantities it consumes — the offset and the dispersion — are prepared first:
 
 ```r
@@ -105,9 +109,11 @@ se |>
   adjust(nullify = "dex")
 ```
 
-Printing that object runs the pipeline (`print` calls `tt_evaluate()`, as in tidytargets).
+Printing that object runs the pipeline (`print` calls `tt_evaluate()`, as in tidytargets). Assigning it does not; an interactive session then says the pipeline is ready to be evaluated, rather than appearing to do nothing.
 
 The result is one row per gene and contrast. `estimate()` contributes the gene column, and `hypothesis()` the statistics worth returning for all of them, unnested into the table: each contrast's posterior summary together with the convergence of that contrast's own draws (`rhat`, `ess_bulk`, `mcse`). The fits are not in the table — twenty thousand `brmsfit` objects will not fit in one — but they are in the targets store: `targets::tar_read(brms_fit, branches = i, store = store)` reads branch `i` (the gene's row, when `bundle = 1`).
+
+## Plotting
 
 `plot_volcano(pipeline)` draws the run as a volcano, evaluating the pipeline first if printing it has not already. It takes the pipeline rather than the table because `pH0` is counted from draws and so cannot resolve below `1 / ndraws`, and only the pipeline knows that number: `estimate()` records the sampling settings on it with `tt_metadata()`, while the fits themselves stay in the store. The genes that come back as exactly 0 are jittered across a shaded band one decade below the dashed resolution line, which reads as "smaller than these draws can measure" rather than as a probability.
 
@@ -120,7 +126,7 @@ vignette("brmDE", package = "brmDE")
 vignette("dispersion-priors", package = "brmDE")
 ```
 
-### Dispersion priors
+## Dispersion priors
 
 `tidybulk::estimate_dispersion()` writes `dispersion_trended` (\(s_0^2\), the across-gene trend) and `dispersion_shrinked` (\(q_g^{post}\), the tagwise posterior). Pass `dispersion_trended` to `estimate()` / `estimate_gene()` as `dispersion=`: that is the prior location, information this gene has not yet contributed. Do not pass `dispersion_shrinked`, which already includes this gene's counts. Pair it with `dispersion_degrees_freedom`. Those arguments default to `NULL` (`offset(0)` on the shape submodel; log-scale SD of 1 under `"student_t"`). `"gamma"` requires `dispersion_degrees_freedom`. `estimate_gene()` turns the pair into a prior on the negative binomial shape. Choose the form with `shape_prior`:
 

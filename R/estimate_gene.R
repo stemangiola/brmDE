@@ -301,6 +301,10 @@ estimate_gene <- function(data,
   tpc <- floor(n_cores / chains)
   threads <- if (tpc <= 1L) NULL else brms::threading(tpc)
 
+  if (identical(backend, "cmdstanr")) {
+    check_and_install_cmdstanr()
+  }
+
   res <- brms::brm(
     formula = formula,
     data = data,
