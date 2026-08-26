@@ -78,11 +78,11 @@ Naming an effect on its own tests whether it clears `test_above_log2FC` (default
 
 Neither `estimate_gene()` nor `brmDE()` normalises. Compute the offset yourself on all genes (TMM, or anything else), store it as a `colData` column, and pass that name to `offset`. Dispersion is the same kind of whole-matrix quantity: run `tidybulk::estimate_dispersion()` before `brmDE()` and pass the two column names to `estimate()`. Those columns become a **prior** on the negative binomial shape, not a plug-in: the gene-wise likelihood can still pull the posterior away from the external estimate.
 
-The two models are given separately. `formula_abundance` is the mean model. For `tidybulk::estimate_dispersion()` write the fixed-effect analogue of that model (`~ dex + cell` for `~ dex + (1 | cell)`): edgeR has no random effects. `formula_dispersion` (default `~1`) is the model for the negative binomial shape. Neither should carry an offset: the library size offset and the `log(1/dispersion)` offset are appended for you, and the assembled formulas are printed as a message so you can check them:
+The two models are given separately. `formula_abundance` is the mean model. For `tidybulk::estimate_dispersion()` write the fixed-effect analogue of that model (`~ dex + cell` for `~ dex + (1 | cell)`): edgeR has no random effects. `formula_dispersion` (default `~1`) is the model for the negative binomial shape. Neither should carry an offset: the library size offset and the `log(1/dispersion_trended)` offset are appended for you, and the assembled formulas are printed as a message so you can check them:
 
 ```
 Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offset)
-Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))
+Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion_trended))
 ```
 
 ## Example for many genes as parallel pipeline, easily deployable on your HPC
@@ -101,7 +101,7 @@ se |>
   estimate(
     ~ dex + (1 | cell),
     offset = "offset",
-    dispersion = "dispersion",
+    dispersion = "dispersion_trended",
     dispersion_degrees_freedom = "dispersion_degrees_freedom",
     family = brms::negbinomial()
   ) |>
@@ -119,19 +119,20 @@ The result is one row per gene and contrast. `estimate()` contributes the gene c
 
 By default `estimate()` fits 10 genes per target. At transcriptome scale that can swamp an HPC scheduler with tiny jobs, so `estimate(bundle = 100)` fits 100 genes per target instead; the output is unchanged, one row per gene. Set `bundle = 1` for one target per gene.
 
-See the package vignette for the full walkthrough, including both shape-prior options:
+See the package vignette for the full walkthrough, including both shape-prior options, and `vignette("dispersion-priors")` for the derivation that connects edgeR's \(s_0^2\) and \(d_0\) to those priors:
 
 ```r
 vignette("brmDE", package = "brmDE")
+vignette("dispersion-priors", package = "brmDE")
 ```
 
 ## Dispersion priors
 
-`tidybulk::estimate_dispersion()` writes one `rowData` column per estimate, named by `dispersion_column` and `dispersion_degrees_freedom_column` (defaults `"dispersion"` for gene-wise \(\phi_g\) and `"dispersion_degrees_freedom"` for \(d_{\mathrm{eff}} = \mathrm{df.residual} + \mathrm{prior.df}\)). Pass those same names to `estimate()` / `estimate_gene()` as `dispersion=` and `dispersion_degrees_freedom=`. Those two default to `NULL` (`offset(0)` on the shape submodel, Student-t log-scale SD of 1); computing the columns and passing both names is the preferred starting point. `estimate_gene()` turns that pair into a prior on the negative binomial shape — a location from \(\phi_g\) and a tightness from \(d_{\mathrm{eff}}\) — so data-driven evidence for that gene can still diverge from the external estimate. Choose the form with `shape_prior`:
+`tidybulk::estimate_dispersion()` writes `dispersion_trended` (\(s_0^2\), the across-gene trend) and `dispersion_shrinked` (\(q_g^{post}\), the tagwise posterior). Pass `dispersion_trended` to `estimate()` / `estimate_gene()` as `dispersion=`: that is the prior location, information this gene has not yet contributed. Do not pass `dispersion_shrinked`, which already includes this gene's counts. Pair it with `dispersion_degrees_freedom`. Those arguments default to `NULL` (`offset(0)` on the shape submodel; log-scale SD of 1 under `"student_t"`). `"gamma"` requires `dispersion_degrees_freedom`. `estimate_gene()` turns the pair into a prior on the negative binomial shape. Choose the form with `shape_prior`:
 
 | `shape_prior` | Prior | Notes |
 | --- | --- | --- |
-| `"student_t"` (default) | `student_t` on the intercept of a `shape ~ 1 + offset(log(1/dispersion))` submodel (`offset(0)` if `dispersion` is omitted) | Heavier tails, tolerant of over-shrunk genes; leaves the submodel open to dispersion covariates |
-| `"gamma"` | `gamma(d_eff/2, d_eff * dispersion/2)` on `shape` directly, no submodel | Conjugate to edgeR's scaled inverse chi-square hierarchy; lighter tails |
+| `"student_t"` (default) | `student_t` on the intercept of a `shape ~ 1 + offset(log(1/dispersion_trended))` submodel (`offset(0)` if `dispersion` is omitted) | Heavier tails, tolerant of a trend that does not fit |
+| `"gamma"` | `gamma(d_0/2, d_0/2)` on `exp(intercept)` of the same submodel | Requires `dispersion_degrees_freedom`; conjugate to edgeR's scaled inverse chi-square hierarchy; lighter tails |
 
-Both encode the same log-scale spread, `trigamma(d_eff / 2)`, because a chi-square *is* a gamma, and both put all their mass on a positive shape — the Student-t by exponentiating an unbounded parameter through brms' log link, the gamma by bounding it. They are not, however, reparameterisations of each other: the Student-t centres the *median* shape on edgeR's estimate while the gamma centres the *mean*, leaving their log-scale centres about `1/d_eff` apart. See `?estimate_gene` for the two parameterisations.
+Both use the same shape submodel, so both accept dispersion covariates. Both encode the same log-scale spread, `trigamma(d_0 / 2)`, because a chi-square *is* a gamma, and both put all their mass on a positive shape by exponentiating. They are not, however, reparameterisations of each other: the Student-t centres the *median* shape on the trend while the gamma centres the *mean*, leaving their log-scale centres about `1/d_0` apart. See `?estimate_gene` for the two parameterisations, and `vignette("dispersion-priors")` for the references.

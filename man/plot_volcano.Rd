@@ -72,7 +72,7 @@ pipeline <- se |>
   estimate(
     ~ dex + (1 | cell),
     offset = "offset",
-    dispersion = "dispersion",
+    dispersion = "dispersion_trended",
     dispersion_degrees_freedom = "dispersion_degrees_freedom",
     family = brms::negbinomial()
   ) |>
@@ -84,5 +84,5 @@ pipeline |> plot_volcano()
 
 }
 \seealso{
-\code{\link[=hypothesis_gene]{hypothesis_gene()}}, \code{\link[=plot_boxplot]{plot_boxplot()}}
+\code{\link[=hypothesis_gene]{hypothesis_gene()}}, \code{\link[=false_discovery_rate]{false_discovery_rate()}}, \code{\link[=plot_boxplot]{plot_boxplot()}}
 }

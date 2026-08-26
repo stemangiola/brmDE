@@ -41,12 +41,11 @@ whose response may be omitted (\code{~ dex + (1 | donor)}); it is then set to
 than by you, and the assembled formula is reported with a message.}
 
 \item{formula_dispersion}{One-sided model for the negative binomial shape,
-\code{~1} by default. Used only when \code{shape_prior = "student_t"}, where it
-becomes a \verb{shape ~ <terms> + offset(...)} submodel. The offset is
-\verb{log(1/<dispersion>)} when \code{dispersion} is supplied, and \code{0} when it is
-\code{NULL}, so the terms you give describe departures from that external
-estimate or, with a zero offset, the log-shape itself. Do not write the
-offset yourself.}
+\code{~1} by default. It becomes a \verb{shape ~ <terms> + offset(...)} submodel
+under either \code{shape_prior}. The offset is \verb{log(1/<dispersion>)} when
+\code{dispersion} is supplied, and \code{0} when it is \code{NULL}, so the terms you
+give describe departures from that external estimate or, with a zero
+offset, the log-shape itself. Do not write the offset yourself.}
 
 \item{offset}{Required name of the precomputed offset column in \code{data}
 (or in \code{colData} if \code{data} is a \code{SummarizedExperiment}). The offset is
@@ -59,47 +58,64 @@ shape \code{1}. Use this when the sample size is large enough that an
 informative location from previous tools is unnecessary. When supplied,
 the column becomes \verb{offset(log(1/<dispersion>))} as described under
 \code{shape_prior}: that is the prior \emph{location} of the shape, which the
-gene's counts are then free to update. \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}
-writes this column; this function does not compute it.}
+gene's counts are then free to update. Pass
+\code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}'s \code{dispersion_trended} column: that is
+the across-gene trend \eqn{s_0^2}, information this gene has not yet
+contributed. Do not pass \code{dispersion_shrinked}, the tagwise posterior
+\eqn{q_g^{post}}, which already includes this gene's counts. See
+\code{vignette("dispersion-priors")}.}
 
-\item{dispersion_degrees_freedom}{Optional name of the effective degrees
-of freedom column that accompanies \code{dispersion}, as written by
-\code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}. Default \code{NULL} gives the Student-t
-shape intercept a log-scale SD of 1, so the prior scale does not depend
-on previous tools. Independent of \code{dispersion}: you can pass one, both,
-or neither.}
+\item{dispersion_degrees_freedom}{Optional name of the degrees of freedom
+column that accompanies \code{dispersion}, as written by
+\code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}} (\code{dispersion_degrees_freedom}).
+Default \code{NULL} targets a log-scale SD of 1 under \code{"student_t"}.
+\code{"gamma"} requires this column: it reads \(d_0/2\) as its parameters and
+has no fallback. Independent of \code{dispersion}: under \code{"student_t"} you
+can pass one, both, or neither.}
 
 \item{shape_prior}{How the external dispersion is turned into a prior on
 the shape parameter. The gene-wise posterior is not constrained to equal
 that estimate: both forms only locate and scale the prior, and the
-likelihood can move the shape away from it. Both imply the same
-log-scale spread, \code{trigamma(d_eff / 2)}, but they are not
-reparameterisations of one another: they differ in tail weight (how
-readily a gene may diverge), and they centre different summaries of the
-shape on the external estimate. Both put all prior mass on a positive
-shape, one by exponentiating an unbounded parameter and the other by
-bounding it.
+likelihood can move the shape away from it.
+
+Both use the same \verb{shape ~ <formula_dispersion> + offset(...)} submodel,
+so \code{dispersion} enters as an offset on brms' log link either way and the
+assembled formula does not depend on this argument. Both therefore put
+all prior mass on a positive shape by exponentiating, and both accept
+dispersion covariates. Both also imply the same log-scale spread,
+\code{trigamma(d_0 / 2)}. What differs is the prior on the submodel
+intercept, and hence tail weight and which summary of the shape is
+centred on the external estimate. They are not reparameterisations of
+one another.
 \itemize{
-\item \code{"student_t"} (default) adds a
-\code{shape ~ 1 + offset(log(1/dispersion))} submodel (or \code{offset(0)} when
-\code{dispersion} is \code{NULL}) and puts a Student-t prior on its intercept,
-scaled by \code{shape_prior_df}. brms gives the submodel a log link, so this
-is symmetric in \code{log(shape)} and centres the \emph{median} shape on
-\code{1/dispersion} (or on \code{1} when the offset is 0). Heavier-tailed, so
-more forgiving when edgeR has over-shrunk a gene, and the submodel
-stays available for dispersion covariates.
-\item \code{"gamma"} adds no submodel and instead puts
-\code{gamma(d_eff/2, d_eff * dispersion/2)} on \code{shape} directly. This is the
-conjugate form implied by the edgeR hierarchy, in which the dispersion
-is scaled inverse chi-square and hence the precision \code{1/dispersion} is
-gamma. It centres the \emph{mean} shape on \code{1/dispersion}, which sits
-\code{digamma(d_eff/2) - log(d_eff/2)}, roughly \code{-1/d_eff}, from the
-Student-t centre on the log scale. Lighter-tailed. Needs both
-\code{dispersion} and \code{dispersion_degrees_freedom}, or neither (in which
-case brms' vague \code{gamma(0.01, 0.01)} is used). A scalar \code{shape}
-carries no linear predictor, so a \code{formula_dispersion} with terms is an
-error here.
-}}
+\item \code{"student_t"} (default) puts a Student-t prior on the intercept,
+scaled by \code{shape_prior_df}. That is symmetric in \code{log(shape)}, so it
+centres the \emph{median} shape on \code{1/dispersion} (or on \code{1} when the
+offset is 0). Heavier-tailed, so more forgiving when edgeR has
+over-shrunk a gene.
+\item \code{"gamma"} requires \code{dispersion_degrees_freedom}. It puts
+\code{gamma(d_0/2, d_0/2)} on \code{exp(intercept)}, the
+shape's multiplicative deviation from the offset. Because a gamma is
+closed under scaling, the induced prior on the shape itself is exactly
+\code{gamma(d_0/2, d_0 * dispersion/2)}: the conjugate form implied by
+the edgeR hierarchy, in which the dispersion is scaled inverse
+chi-square and hence the precision \code{1/dispersion} is gamma. It centres
+the \emph{mean} shape on \code{1/dispersion}, which sits
+\code{digamma(d_0/2) - log(d_0/2)}, roughly \code{-1/d_0}, from the
+Student-t centre on the log scale. Lighter-tailed.
+}
+
+Stan has no log-gamma density, so the gamma form cannot be written as a
+\code{brms} prior on the intercept. It is added to the target directly through
+a \code{stanvar}, which means \code{\link[brms:prior_summary]{brms::prior_summary()}} reports the intercept as
+flat; the gamma is nonetheless the only prior acting on it, and its two
+parameters are recoverable from \code{fit$stanvars}.
+
+See \code{vignette("dispersion-priors")} for the scaled-chi-square
+hierarchy, why the prior location is the trend \eqn{s_0^2}
+(\code{dispersion_trended}) rather than the tagwise posterior, the trigamma
+identity that sets the shared log-scale spread, and why the two forms
+are not reparameterisations of each other.}
 
 \item{shape_prior_df}{Degrees of freedom \eqn{\nu} of the Student-t prior
 on the shape intercept, used only when \code{shape_prior = "student_t"}. This
@@ -108,7 +124,7 @@ the \code{scale}, because a Student-t has standard deviation
 \code{scale * sqrt(nu / (nu - 2))}; the scale is therefore
 \code{sd * sqrt((nu - 2) / nu)} for a target \code{sd}. Must exceed 2, since the
 Student-t standard deviation does not exist at or below 2 degrees of
-freedom. The target \code{sd} is \code{sqrt(trigamma(d_eff / 2))} when
+freedom. The target \code{sd} is \code{sqrt(trigamma(d_0 / 2))} when
 \code{dispersion_degrees_freedom} is supplied, and 1 when it is omitted.}
 
 \item{coefficient_prior_scale}{Scale of the Student-t prior on the

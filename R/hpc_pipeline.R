@@ -293,7 +293,7 @@ collect_brmde_hpc <- function(input_hpc) {
 #'   estimate(
 #'     ~ dex + (1 | cell),
 #'     offset = "offset",
-#'     dispersion = "dispersion",
+#'     dispersion = "dispersion_trended",
 #'     dispersion_degrees_freedom = "dispersion_degrees_freedom",
 #'     family = brms::negbinomial()
 #'   ) |>
@@ -312,7 +312,7 @@ collect_brmde_hpc <- function(input_hpc) {
 #' #       )
 #' #     )
 #' #   ) |>
-#' #   estimate(~ dex + (1 | cell), offset = "offset", dispersion = "dispersion",
+#' #   estimate(~ dex + (1 | cell), offset = "offset", dispersion = "dispersion_trended",
 #' #            dispersion_degrees_freedom = "dispersion_degrees_freedom")
 #' }
 #'
@@ -421,12 +421,14 @@ brmDE <- function(.data,
 #'   passed to [estimate_gene()]. `~1` by default.
 #' @param offset Required name of the precomputed offset column in `colData`
 #'   (the same argument as [estimate_gene()]).
-#' @param dispersion Optional name of the `rowData` dispersion column, as
-#'   written by [tidybulk::estimate_dispersion()]. Default `NULL` puts a zero
+#' @param dispersion Optional name of the `rowData` dispersion column.
+#'   Pass [tidybulk::estimate_dispersion()]'s `dispersion_trended`
+#'   (\eqn{s_0^2}), not `dispersion_shrinked`. Default `NULL` puts a zero
 #'   offset on the shape submodel (see [estimate_gene()]).
 #' @param dispersion_degrees_freedom Optional name of the effective degrees of
 #'   freedom column written alongside it by [tidybulk::estimate_dispersion()].
 #'   Default `NULL` uses a default Student-t SD of 1 on the log-shape intercept.
+#'   `"gamma"` requires this column.
 #'
 #' @details
 #' Neither the offset nor the dispersion is computed here. Run
@@ -436,9 +438,10 @@ brmDE <- function(.data,
 #' thing this pipeline does. The dispersion columns are a prior on the
 #' negative binomial shape (see [estimate_gene()]): they inform each gene
 #' without fixing the posterior to the external estimate. Omitting
-#' `dispersion` and/or `dispersion_degrees_freedom` is valid (zero shape
-#' offset, default prior SD) but computing and passing both is the preferred
-#' starting point.
+#' `dispersion` and/or `dispersion_degrees_freedom` is valid under the
+#' default Student-t (zero shape offset, log-scale SD of 1). `"gamma"`
+#' requires `dispersion_degrees_freedom`. Computing and passing both columns
+#' is the preferred starting point.
 #'
 #' Prior constants derived from each gene are passed to Stan as data, so every
 #' gene generates identical Stan code and cmdstanr compiles it at most once per

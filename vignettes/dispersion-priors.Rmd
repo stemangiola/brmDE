@@ -1,0 +1,619 @@
+---
+title: "Integrating fast frequentist empirical-Bayes gene-expression dispersion estimation as a prior"
+author: "Stefano Mangiola"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Integrating fast frequentist empirical-Bayes gene-expression dispersion estimation into the Bayesian framework}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 6,
+  fig.height = 3.8,
+  eval = FALSE
+)
+```
+
+`brmDE`, although very flexible, capable of mixed-effect models, native non-parametric smooth/spline models, and alternative distributions (NB and ZINB), fits one gene at a time to prioritise parallelisation. A single-gene likelihood cannot borrow strength across features, which is exactly what makes a feature-wise negative-binomial dispersion useful when there are small numbers of replicates.
+
+Frequentist methods estimate gene-wise dispersion through empirical Bayes very efficiently, although only for relatively simple fixed-effect models.
+
+The key idea is to cheaply estimate gene dispersion with empirical Bayes, for example through `edgeR` or `DESeq2`, and use it as an approximate prior for `brmDE`. With enough evidence from the data, the gene's own counts can still pull the posterior away from the upstream empirical-Bayes estimate.
+
+# Using empirical-Bayes dispersion estimation as prior
+
+`brmDE` offers two priors for the (zero-inflated) negative-binomial dispersion.
+
+Empirical-Bayes methods such as `edgeR` estimate a negative-binomial dispersion trend across genes, a moderated gene-wise dispersion, and a prior degrees of freedom that controls the strength of the gene-wise shrinkage.
+
+For a gene $g$, we denote:
+
+- $\phi_{\mathrm{trend},g}$ as edgeR's `trended.dispersion`, the negative-binomial dispersion expected for a gene with that abundance;
+- $\phi_{\mathrm{tagwise},g}$ as edgeR's `tagwise.dispersion`, the gene-specific negative-binomial dispersion after empirical-Bayes shrinkage;
+- $d_0$ as edgeR's `prior.df`, which measures the strength of the across-gene information used for shrinkage.
+
+`brmDE` uses $\phi_{\mathrm{trend},g}$ and $d_0$ to construct a Bayesian prior. The tagwise dispersion is not used as the prior location because it already contains gene-specific information from the same data that will subsequently be fitted by `brmDE`.
+
+Importantly, edgeR does not place a conjugate scaled-inverse-chi-square prior directly on the negative-binomial dispersion $\phi_g$. Its tagwise negative-binomial dispersions are obtained using weighted likelihood. The Gamma construction below is therefore a `brmDE` approximation that translates edgeR's dispersion trend and empirically estimated shrinkage strength into a conventional Bayesian prior.
+
+## Gamma prior
+
+edgeR provides two quantities that are useful for constructing a prior on the negative-binomial dispersion:
+
+$$
+\phi_{\mathrm{trend},g}
+$$
+
+the expected negative-binomial dispersion for a gene with the abundance of gene $g$, and
+
+$$
+d_0
+$$
+
+the prior degrees of freedom, which quantifies the strength of the across-gene shrinkage information.
+
+edgeR does not define a conjugate scaled-inverse-chi-square prior directly on $\phi_g$. To translate these two quantities into a Bayesian prior, `brmDE` uses the following approximation:
+
+$$
+\phi_g^{true}
+\overset{\mathrm{brmDE}}{\sim}
+\phi_{\mathrm{trend},g}
+\frac{d_0}{\chi^2_{d_0}}.
+$$
+
+This construction has the desired properties: the prior is centred according to the abundance-dependent edgeR dispersion trend, while $d_0$ controls its concentration. A large $d_0$ produces a narrow distribution around the trend, whereas a small $d_0$ produces a wider prior.
+
+`brms` parameterises the negative binomial by the precision-like parameter `shape`, which is the reciprocal of the edgeR dispersion:
+
+$$
+\mathrm{shape}
+=
+\frac{1}{\phi_g^{true}}.
+$$
+
+Under the `brmDE` approximation,
+
+$$
+\mathrm{shape}
+=
+\frac{\chi^2_{d_0}}
+{d_0\,\phi_{\mathrm{trend},g}}.
+$$
+
+A chi-square distribution is a special case of the Gamma distribution,
+
+$$
+\chi^2_d
+\equiv
+\mathrm{Gamma}\left(
+\frac{d}{2},
+\mathrm{scale}=2
+\right),
+$$
+
+and multiplying a Gamma-distributed variable by a positive constant produces another Gamma distribution. Therefore,
+
+$$
+\mathrm{shape}
+\sim
+\mathrm{Gamma}\left(
+\frac{d_0}{2},
+\mathrm{scale}
+=
+\frac{2}
+{d_0\,\phi_{\mathrm{trend},g}}
+\right),
+$$
+
+or equivalently,
+
+$$
+\boxed{
+\mathrm{shape}
+\sim
+\mathrm{Gamma}\left(
+\frac{d_0}{2},
+\mathrm{rate}
+=
+\frac{d_0\,\phi_{\mathrm{trend},g}}{2}
+\right).
+}
+$$
+
+| Quantity | Interpretation | As a Gamma |
+|----|----|----|
+| $\chi^2_{d_0}$ | chi-square random variable | $\mathrm{Gamma}(d_0/2,\ \mathrm{scale}=2)$ |
+| $\phi_g^{true}$ | `brmDE` scaled-inverse-chi-square approximation to the true NB dispersion | inverse-Gamma$(d_0/2,\ \mathrm{scale}=d_0\phi_{\mathrm{trend},g}/2)$ |
+| $1/\phi_g^{true}=\mathrm{shape}$ | reciprocal NB dispersion | $\mathrm{Gamma}(d_0/2,\ \mathrm{rate}=d_0\phi_{\mathrm{trend},g}/2)$ |
+| $\exp(b_0)=\mathrm{shape}\times\phi_{\mathrm{trend},g}$ | multiplicative deviation from the trend | $\mathrm{Gamma}(d_0/2,\ \mathrm{rate}=d_0/2)$ |
+
+### Simplifying the prior further: using $\phi_{\mathrm{trend},g}$ as offset
+
+`brms` puts `shape` behind a log link, so
+
+```r
+shape ~ 1 + offset(log(1/dispersion_trended))
+```
+
+corresponds to
+
+$$
+\log(\mathrm{shape})
+=
+b_0
++
+\log(1/\phi_{\mathrm{trend},g}).
+$$
+
+The intercept is therefore the log multiplicative deviation from the edgeR trend:
+
+$$
+b_0
+=
+\log(\mathrm{shape})
+-
+\log(1/\phi_{\mathrm{trend},g})
+=
+\log(
+\mathrm{shape}\times\phi_{\mathrm{trend},g}
+).
+$$
+
+Exponentiating gives
+
+$$
+\exp(b_0)
+=
+\mathrm{shape}\times\phi_{\mathrm{trend},g}.
+$$
+
+Under the Gamma approximation derived above,
+
+$$
+\boxed{
+\exp(b_0)
+\sim
+\mathrm{Gamma}\left(
+\frac{d_0}{2},
+\mathrm{rate}
+=
+\frac{d_0}{2}
+\right).
+}
+$$
+
+The resulting prior is the same for every gene on the multiplicative-deviation scale. Gene-specific abundance information enters through the offset $\phi_{\mathrm{trend},g}$, while $d_0$ determines the concentration of the prior.
+
+The trailing `+ Intercept_shape` is the log-Jacobian of the exponential transformation. Without it, the density would be misnormalised on the log scale and would no longer correspond to the Gamma distribution derived above. Both parameters arrive as data rather than literals, allowing the generated Stan code to remain identical across genes and the compiled model to be reused.
+
+## The Student-t prior (default)
+
+The Gamma prior provides a direct Bayesian approximation based on edgeR's negative-binomial dispersion trend and empirical-Bayes shrinkage strength. Its relatively thin tails, however, can make the upstream edgeR information influential when the `brmDE` model differs substantially from the fixed-effect negative-binomial model used to estimate that information.
+
+There are two important situations in which the edgeR dispersion trend can be systematically displaced from the dispersion estimated by `brmDE` (see [Appendix 1](#appendix-1)).
+
+- Because edgeR dispersion estimation cannot fit mixed-effects models, a mixed-effects `brmDE` model must be approximated by a fixed-effects model. For example, `~ treatment + (1 | hospital)` may be approximated by `~ treatment + hospital`. The fixed effects are estimated without partial pooling and can absorb more variation, potentially reducing the residual negative-binomial dispersion.
+
+- A zero-inflated negative-binomial model in `brmDE` must be approximated upstream by an ordinary negative-binomial model. Zero inflation can then be absorbed by the edgeR negative-binomial dispersion, potentially increasing the estimated dispersion.
+
+For these cases, `brmDE` provides a heavy-tailed Student-t alternative that uses the same edgeR trend as its prior location while allowing the gene's likelihood to move substantially further from it.
+
+### Simplifying the prior like for gamma: using $\phi_{\mathrm{trend},g}$ as offset
+
+The submodel is the one already assembled above. On
+
+```r
+shape ~ 1 + offset(log(1/dispersion_trended))
+```
+
+the intercept has a Student-t prior, `student_t(ν, 0, σ)`. The Gamma alternative puts $\mathrm{Gamma}(d_0/2,\; d_0/2)$ on $\exp(b_0)$ instead. The offset is the same; only the intercept prior changes.
+
+### From $d_0$ to a log-scale SD
+
+The Student-t prior uses the same edgeR-derived shrinkage strength as the Gamma approximation, but replaces the thin-tailed Gamma-derived distribution with a heavy-tailed distribution on the log scale.
+
+Under the reference Gamma approximation,
+
+$$
+\exp(b_0)
+\sim
+\mathrm{Gamma}\left(
+\frac{d_0}{2},
+\mathrm{rate}
+=
+\frac{d_0}{2}
+\right).
+$$
+
+The variance of the logarithm of a Gamma random variable depends only on its shape parameter. For
+
+$$
+X\sim\mathrm{Gamma}(a,\cdot),
+$$
+
+$$
+\mathrm{Var}(\log X)
+=
+\psi'(a),
+$$
+
+where $\psi'$ is the trigamma function.
+
+Using $a=d_0/2$, the log-scale standard deviation of the reference Gamma prior is therefore
+
+$$
+\boxed{
+\mathrm{SD}(b_0)
+=
+\sqrt{\psi'(d_0/2)}.
+}
+$$
+
+`brmDE` uses this standard deviation to calibrate the width of the Student-t prior. This is a deliberate variance-matching approximation: $d_0$ comes from edgeR's empirical-Bayes shrinkage estimation, while the Student-t distribution supplies heavier tails than the reference Gamma prior.
+
+### From SD to the Student-t scale
+
+`brms` writes `student_t(ν, μ, σ)` with a *scale*, not a standard deviation. For $\nu > 2$,
+
+$$
+\mathrm{SD}
+=
+\sigma\sqrt{\frac{\nu}{\nu-2}},
+\qquad
+\text{so}
+\qquad
+\sigma
+=
+\mathrm{SD}\sqrt{\frac{\nu-2}{\nu}}.
+$$
+
+At the default $\nu=3$,
+
+$$
+\sigma
+=
+\mathrm{SD}/\sqrt{3}.
+$$
+
+Putting both steps together, at the default $\nu=3$,
+
+$$
+\mathrm{SD}(b_0)
+=
+\sqrt{\psi'(d_0/2)},
+\qquad
+\sigma
+=
+\mathrm{SD}(b_0)\sqrt{\frac{\nu-2}{\nu}}
+=
+\frac{\sqrt{\psi'(d_0/2)}}{\sqrt{3}}.
+$$
+
+# Appendix 1: Background on empirical-Bayes estimation of dispersion in edgeR {#appendix-1}
+
+The negative-binomial dispersion used as the `brmDE` prior location and the quasi-likelihood dispersion used internally to estimate shrinkage strength are distinct quantities.
+
+For the negative-binomial model, edgeR estimates an abundance-dependent trend
+
+$$
+\phi_{\mathrm{trend},g},
+$$
+
+and gene-specific tagwise negative-binomial dispersions
+
+$$
+\phi_{\mathrm{tagwise},g}.
+$$
+
+The tagwise estimates are obtained by weighted-likelihood empirical Bayes rather than through a conjugate inverse-chi-square prior.
+
+However, `estimateDisp()` also needs to determine how strongly gene-specific dispersions should be shrunk towards the trend. The returned `prior.df`, denoted $d_0$, is estimated using residual quasi-likelihood variance machinery closely related to the empirical-Bayes framework used by `limma`.
+
+This appendix describes that calculation.
+
+## Sampling uncertainty of a variance estimate
+
+The connection between variance uncertainty and degrees of freedom comes from the classical sampling distribution of a sample variance. For normally distributed observations,
+
+$$
+\frac{d\,s^2}{\sigma^2}
+\sim
+\chi^2_d,
+$$
+
+where:
+
+- $s^2$ is the variance estimated from the observed sample;
+- $\sigma^2$ is the unknown true population variance;
+- $d$ is the residual degrees of freedom. For $n$ observations described only by their mean, $d=n-1$.
+
+The sample variance itself is not chi-square distributed. Its ratio to the true variance, after multiplication by its degrees of freedom, follows a chi-square distribution.
+
+edgeR applies the same variance-moderation principle to a residual quasi-likelihood dispersion. Using simplified notation,
+
+$$
+\frac{d\,q_g^{residual}}
+{q_g^{true}}
+\sim
+\chi^2_d.
+$$
+
+The correspondence with the classical result is
+
+$$
+s^2
+\longleftrightarrow
+q_g^{residual}
+$$
+
+and
+
+$$
+\sigma^2
+\longleftrightarrow
+q_g^{true}.
+$$
+
+Here, $q_g^{residual}$ is the observed noisy residual QL-dispersion estimate for gene $g$, while $q_g^{true}$ is its unknown true value.
+
+The observed residual QL dispersion is obtained approximately from the residual negative-binomial deviance:
+
+$$
+q_g^{residual}
+\approx
+\frac{D_{g,\mathrm{likelihood}}}{d},
+$$
+
+where
+
+$$
+D_{g,\mathrm{likelihood}}
+=
+2\left[
+\ell_g(\mathrm{saturated})
+-
+\ell_g(\mathrm{fitted})
+\right].
+$$
+
+Thus $D_{g,\mathrm{likelihood}}$ measures residual lack-of-fit of the negative-binomial model, and dividing by the residual degrees of freedom produces the variance-like quantity $q_g^{residual}$.
+
+## The unknown true QL dispersion
+
+From
+
+$$
+\frac{d\,q_g^{residual}}
+{q_g^{true}}
+\sim
+\chi^2_d,
+$$
+
+we cannot solve directly for $q_g^{true}$.
+
+Algebraically,
+
+$$
+q_g^{true}
+=
+\frac{d\,q_g^{residual}}
+{\chi^2_d},
+$$
+
+but the realised value of the $\chi^2_d$ random variable is unknown. The equation therefore describes the sampling distribution of $q_g^{residual}$ conditional on the unknown $q_g^{true}$.
+
+The empirical-Bayes model supplies the second level:
+
+$$
+q_g^{true}
+\sim
+s_{0g}^2
+\frac{d_0}{\chi^2_{d_0}},
+$$
+
+where $s_{0g}^2$ is the expected residual QL dispersion for a gene with the abundance of gene $g$, and $d_0$ is the prior degrees of freedom.
+
+The trend $s_{0g}^2$ is estimated from the collection of observed residual QL dispersions:
+
+$$
+\{
+q_1^{residual},
+q_2^{residual},
+\ldots,
+q_G^{residual}
+\}
+\longrightarrow
+s_{0g}^2.
+$$
+
+The three quantities therefore have distinct meanings:
+
+- $q_g^{residual}$ is the noisy residual QL-dispersion estimate obtained from gene $g$;
+- $s_{0g}^2$ is the expected residual QL dispersion from the across-gene abundance trend;
+- $q_g^{true}$ is the latent true residual QL dispersion of gene $g$.
+
+The hierarchy is
+
+$$
+s_{0g}^2
+\longrightarrow
+q_g^{true}
+\longrightarrow
+q_g^{residual}.
+$$
+
+## Joining the equations to estimate $d_0$
+
+At this stage:
+
+- $q_g^{residual}$ is observed/calculated for every gene;
+- $s_{0g}^2$ is estimated from the abundance trend;
+- $d$ is known from the experimental design;
+- $d_0$ is unknown;
+- $q_g^{true}$ is also unknown.
+
+The sampling model can be written as
+
+$$
+q_g^{residual}
+=
+q_g^{true}
+\frac{\chi^2_d}{d}.
+$$
+
+The prior model gives
+
+$$
+q_g^{true}
+=
+s_{0g}^2
+\frac{d_0}{\chi^2_{d_0}}.
+$$
+
+Substitution eliminates the latent $q_g^{true}$:
+
+$$
+q_g^{residual}
+=
+s_{0g}^2
+\frac{d_0}{\chi^2_{d_0}}
+\frac{\chi^2_d}{d}.
+$$
+
+Therefore,
+
+$$
+\boxed{
+\frac{q_g^{residual}}
+{s_{0g}^2}
+=
+\frac{\chi^2_d/d}
+{\chi^2_{d_0}/d_0}
+\sim
+F_{d,d_0}.
+}
+$$
+
+The $F$ distribution arises because the expression is a ratio of two independent chi-square random variables, each divided by its degrees of freedom.
+
+Across thousands of genes, edgeR has the observed ratios
+
+$$
+\frac{q_1^{residual}}{s_{01}^2},
+\frac{q_2^{residual}}{s_{02}^2},
+\ldots
+$$
+
+and uses their distribution to estimate $d_0$.
+
+Equivalently, on the log scale, the variance of the residual QL dispersions can be decomposed into sampling variability and genuine across-gene variability. For equal residual degrees of freedom $d$,
+
+$$
+\mathrm{Var}
+\left[
+\log
+\left(
+\frac{q_g^{residual}}{s_{0g}^2}
+\right)
+\right]
+=
+\psi'(d/2)
++
+\psi'(d_0/2).
+$$
+
+The first term is determined by the known residual degrees of freedom $d$. The remaining variation identifies $d_0$.
+
+A large $d_0$ means the true residual QL dispersions are tightly concentrated around their trend and supports stronger empirical-Bayes shrinkage. A small $d_0$ means greater genuine between-gene heterogeneity and supports weaker shrinkage.
+
+## How $d_0$ is used for the negative-binomial dispersion
+
+The important distinction is that the QL hierarchy above is used to estimate the **strength of shrinkage**, $d_0$. It does not imply that edgeR places the same scaled-inverse-chi-square prior directly on its negative-binomial dispersion $\phi_g$.
+
+For the negative-binomial dispersion, edgeR instead combines the gene-specific and shared adjusted profile likelihoods using weighted likelihood. Conceptually,
+
+$$
+\phi_{\mathrm{trend},g}
++
+\text{gene-specific NB likelihood}
++
+d_0
+\longrightarrow
+\phi_{\mathrm{tagwise},g}.
+$$
+
+Thus:
+
+- $\phi_{\mathrm{trend},g}$ is the negative-binomial dispersion trend that `brmDE` uses as its prior location;
+- $d_0$ describes the empirical-Bayes shrinkage strength;
+- $\phi_{\mathrm{tagwise},g}$ is edgeR's already-moderated gene-specific NB dispersion and is not passed to `brmDE` as a prior location.
+
+`brmDE` takes $\phi_{\mathrm{trend},g}$ and $d_0$ and translates them into the Gamma or Student-t prior constructions described above. The scaled-inverse-chi-square model applied directly to $\phi_g$ is therefore a `brmDE` approximation used to construct that Bayesian prior.
+
+# Appendix 2: Where edgeR's dispersion and the brms shape differ
+
+**The design.** `estimateDisp()` fits a fixed-effects GLM, so a random-effect term has to be handled somehow, and the two available choices bias $\phi_g$ in opposite directions. *Stripping* it, for example passing `~ dex` while brms fits `~ dex + (1 | cell)`, leaves the between-cell variance nowhere to go but $\phi_g$, inflating it. Passing the *fixed-effect analogue* (`~ dex + cell`) estimates those cell effects without shrinkage, so they absorb more variance than the mixed model's partially pooled ones will, leaving $\phi_g$ below the conditional shape brms is going to estimate. The target sits between the two:
+
+$$
+\phi^{(\sim\,\mathrm{dex}\,+\,\mathrm{cell})}_{\mathrm{edgeR}}
+\;\le\;
+\phi^{\mathrm{conditional}}_{\mathrm{brms}}
+\;\le\;
+\phi^{(\sim\,\mathrm{dex})}_{\mathrm{edgeR}},
+$$
+
+with the position depending on how hard the mixed model shrinks, which is not known before fitting.
+
+The fixed-effect analogue also costs residual degrees of freedom. On airway's 8 samples, `~ dex + cell` spans 5 columns and leaves $d=3$, whereas `~ dex` leaves $d=6$. This reduction in residual degrees of freedom increases the sampling uncertainty of the gene-wise residual dispersion estimates and can therefore affect the empirically estimated $d_0$. Because the `brmDE` prior width is ultimately calibrated from $d_0$, the choice of fixed-effect approximation can indirectly change the prior width.
+
+**The family.** The default is zero-inflated negative binomial. `shape` there is the same parameter as in `negbinomial()`, with the same NB kernel and the same log link; what differs is the estimand. It describes the count component, whereas edgeR fits a plain negative binomial to the marginal counts.
+
+Zero inflation contributes overdispersion quadratic in $\mu$ exactly as the NB dispersion does, so a marginal fit sees the two combined. Matching $\mathrm{Var}(Y) = \mathrm{E}[Y] + \phi\,\mathrm{E}[Y]^2$ against the zero-inflated moments gives
+
+$$
+\phi_{\mathrm{marginal}}
+=
+\frac{\phi+\pi}{1-\pi},
+\qquad
+\pi=\texttt{zi},
+$$
+
+which pins both the direction and the size of that mismatch. edgeR's estimate exceeds the ZINB component's $\phi$ whenever $\pi>0$, by roughly $\pi$ in absolute terms and $\pi/\phi$ in relative terms, so genes with small dispersion are the most distorted. The same expression is why `zi` and `shape` are only weakly separated: the mean-variance relationship constrains the combination, not the pair, leaving the shape of the zero mass as the main information that distinguishes them.
+
+## Which prior to use: rule of thumb
+
+- If you are fitting a mixed-effect model, a zero-inflated negative-binomial model, or any model that the frequentist dispersion estimator cannot fit directly, use the Student-t prior. Its heavier tails allow the data to deviate more easily from the upstream approximation when there is enough information.
+
+- If you are fitting a fixed-effect model that edgeR or DESeq2 can represent directly, using a negative-binomial distribution, and you place substantial trust in the upstream dispersion inference, use the Gamma prior.
+
+# Appendix 3: Examples of how to approximate a mixed-effect model with a fixed-effect one
+
+`edgeR` and `DESeq2` have no random effects. To obtain the most relevant dispersion estimate, we can approximate the model fitted in `brmDE` using its fixed-effect analogue: drop the `|` and promote the grouping factor to a fixed term. If the random term also has a slope, include the interaction.
+
+| Mixed-effect model (`brmDE`) | Fixed-effect analogue (`estimate_dispersion()`) |
+|----|----|
+| `~ treatment + (1 \| hospital)` | `~ treatment + hospital` |
+| `~ treatment + (1 \| hospital) + (1 \| batch)` | `~ treatment + hospital + batch` |
+| `~ treatment + (treatment \| hospital)` | `~ treatment * hospital` |
+
+The last row is the random-slope case: `(treatment | hospital)` is `(1 + treatment | hospital)`, so the analogue needs hospital-specific intercepts and hospital-specific treatment effects, which is `treatment * hospital`.
+
+Do not expand a nested random intercept `(1 | hospital/ward)` as `hospital / ward`. That formula is `hospital + hospital:ward`, which is rank-deficient when every ward belongs to one hospital, and edgeR will not fit it. Use the innermost grouping instead, uniquely coded: `~ treatment + ward`.
+
+# References
+
+Smyth GK (2004). Linear models and empirical Bayes methods for assessing differential expression in microarray experiments. *Statistical Applications in Genetics and Molecular Biology* **3**, 3. https://gksmyth.github.io/pubs/ebayes.pdf. The scaled inverse chi-square hierarchy, the identity $\mathrm{Var}(\log s^2) = \psi'(d/2)$, prior degrees of freedom, and the moderated $t$ / $F$.
+
+Robinson MD, McCarthy DJ, Smyth GK (2010). edgeR: a Bioconductor package for differential expression analysis of digital gene expression data. *Bioinformatics* **26**, 139--140. https://pmc.ncbi.nlm.nih.gov/articles/PMC2796818/. The negative binomial with quadratic overdispersion $\phi_g$.
+
+McCarthy DJ, Chen Y, Smyth GK (2012). Differential expression analysis of multifactor RNA-Seq experiments with respect to biological variation. *Nucleic Acids Research* **40**, 4288--4297. https://pmc.ncbi.nlm.nih.gov/articles/PMC3378882/. Cox--Reid adjusted profile likelihood for $\phi_g$ conditional on a design, and tagwise empirical-Bayes shrinkage towards the trend.
+
+Lund SP, Nettleton D, McCarthy DJ, Smyth GK (2012). Detecting differential expression in RNA-sequence data using quasi-likelihood with shrunken dispersion estimates. *Statistical Applications in Genetics and Molecular Biology* **11**, 8. https://doi.org/10.1515/1544-6115.1826. The QL $F$ test with `df.total = df.residual + df.prior`, applied to a residual dispersion rather than to $\phi_g$.
+
+Phipson B, Lee S, Majewski IJ, Alexander WS, Smyth GK (2016). Robust hyperparameter estimation protects against hypervariable genes and improves power to detect differential expression. *Annals of Applied Statistics* **10**, 946--963. https://doi.org/10.1214/16-AOAS920. `robust = TRUE`, gene-wise `prior.df`, and `prior.df = Inf` under complete shrinkage.
+
+Chen Y, Lun ATL, McCarthy DJ, Ritchie ME, Phipson B, Zhou X, Robinson MD, Smyth GK. `estimateDisp`. In *edgeR User's Guide*, Bioconductor. https://rdrr.io/bioc/edgeR/man/estimateDisp.html. Return value of `tagwise.dispersion`, `prior.df`, and `prior.n`; residual df is not returned.

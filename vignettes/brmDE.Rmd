@@ -84,11 +84,12 @@ se <- airway |>
 # `dex + (1|cell)` becomes `dex + cell` and `dex + (dex|cell)` becomes `dex*cell`.
 se <- se |> tidybulk::estimate_dispersion(formula_abundance = ~ dex + cell)
 
-# One rowData column per estimate, named by dispersion_column and
-# dispersion_degrees_freedom_column (defaults shown):
-#   dispersion                 = tagwise phi_g
-#   dispersion_degrees_freedom = d_eff = df.residual + prior.df
-head(as.data.frame(rowData(se)[, c("dispersion", "dispersion_degrees_freedom")]))
+# One rowData column per estimate, named by the corresponding arguments
+# (defaults shown):
+#   dispersion_trended            = s0^2, the across-gene trend (pass this)
+#   dispersion_shrinked           = q_post, tagwise posterior (do not pass)
+#   dispersion_degrees_freedom    = df.residual + prior.df
+head(as.data.frame(rowData(se)[, c("dispersion_trended", "dispersion_degrees_freedom")]))
 head(se$offset)
 
 ```
@@ -103,16 +104,16 @@ You write neither offset. Both are appended in the backend, and the assembled fo
 
 ```
 Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offset)
-Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))
+Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion_trended))
 ```
 
-The edgeR columns are a **prior**, not a plug-in. `estimate_gene()` centres the negative binomial shape on `1/dispersion` and uses `dispersion_degrees_freedom` to set how tightly; the gene-wise likelihood is then free to move the posterior away from that location. That is the point of bringing a whole-matrix estimate in this way: it informs the fit when the gene is sparse, without locking the shape to edgeR if the counts disagree. How far a gene can diverge is the prior scale (`d_eff`) and the tail of `shape_prior` (Student-t is more permissive than gamma).
+The edgeR columns are a **prior**, not a plug-in. Pass `dispersion_trended` (\(s_0^2\)), the across-gene trend, not `dispersion_shrinked` (\(q_g^{post}\)), which already contains this gene. `estimate_gene()` centres the negative binomial shape on `1/dispersion_trended` and uses `dispersion_degrees_freedom` to set how tightly; the gene-wise likelihood is then free to move the posterior away from that location. How far a gene can diverge is the prior scale and the tail of `shape_prior` (Student-t is more permissive than gamma). The derivation is in `vignette("dispersion-priors")`.
 
-`dispersion` and `dispersion_degrees_freedom` both default to `NULL`. Leaving `dispersion` unset puts a zero offset on the shape submodel (the intercept is then `log(shape)` itself), which is useful when the sample size is large enough that an informative location from edgeR is unnecessary. Leaving `dispersion_degrees_freedom` unset gives the Student-t intercept a log-scale SD of 1, so the prior scale does not depend on previous tools. Computing both columns with `tidybulk::estimate_dispersion()` and passing their names, as below, is the preferred starting point.
+`dispersion` and `dispersion_degrees_freedom` both default to `NULL`. Leaving `dispersion` unset puts a zero offset on the shape submodel (the intercept is then `log(shape)` itself), which is useful when the sample size is large enough that an informative location from edgeR is unnecessary. Leaving `dispersion_degrees_freedom` unset gives the Student-t intercept a log-scale SD of 1, so the prior scale does not depend on previous tools. `"gamma"` requires `dispersion_degrees_freedom`. Computing both columns with `tidybulk::estimate_dispersion()` and passing their names, as below, is the preferred starting point.
 
 ## Student-t shape prior (default)
 
-The default `shape_prior = "student_t"` builds the shape submodel from `formula_dispersion` and places a Student-t prior on its intercept. With `dispersion_degrees_freedom` passed in, the scale of that prior comes from `sqrt(trigamma(d_eff / 2))`. Because the dispersion enters as an offset on a log link, any terms you add to `formula_dispersion` describe departures from edgeR's per-gene estimate, on top of the intercept's ability to leave that estimate when the data warrant it.
+The default `shape_prior = "student_t"` builds the shape submodel from `formula_dispersion` and places a Student-t prior on its intercept. With `dispersion_degrees_freedom` passed in, the scale of that prior comes from `sqrt(trigamma(d_0 / 2))`. Because the dispersion enters as an offset on a log link, any terms you add to `formula_dispersion` describe departures from the trend, on top of the intercept's ability to leave that location when the data warrant it.
 
 ```{r one-gene-student, message = FALSE, warning = FALSE, eval = run_vignette}
 fit_t <- se |>
@@ -120,7 +121,7 @@ fit_t <- se |>
   estimate_gene(
     formula_abundance = ~ dex + (1 | cell),
     offset = "offset",
-    dispersion = "dispersion",
+    dispersion = "dispersion_trended",
     dispersion_degrees_freedom = "dispersion_degrees_freedom",
     family = brms::zero_inflated_negbinomial(),
     chains = 1,            # set for vignette build
@@ -226,7 +227,7 @@ pipeline <- se |>
   estimate(
     ~ dex + (1 | cell),
     offset = "offset",
-    dispersion = "dispersion",
+    dispersion = "dispersion_trended",
     dispersion_degrees_freedom = "dispersion_degrees_freedom",
     family = brms::zero_inflated_negbinomial(),
     chains = 1,            # set for vignette build
@@ -309,7 +310,7 @@ pipeline <- se |>
   estimate(
     ~ dex + (1 | cell),
     offset = "offset",
-    dispersion = "dispersion",
+    dispersion = "dispersion_trended",
     dispersion_degrees_freedom = "dispersion_degrees_freedom",
     family = brms::zero_inflated_negbinomial(),
     chains = 2,
@@ -363,7 +364,7 @@ pipeline <- se |>
   estimate(
     ~ dex + (1 | cell),
     offset = "offset",
-    dispersion = "dispersion",
+    dispersion = "dispersion_trended",
     dispersion_degrees_freedom = "dispersion_degrees_freedom",
     family = brms::negbinomial()
   ) |>
@@ -387,7 +388,7 @@ pipeline <- se |>
   estimate(
     ~ dex + (1 | cell),
     offset = "offset",
-    dispersion = "dispersion",
+    dispersion = "dispersion_trended",
     dispersion_degrees_freedom = "dispersion_degrees_freedom",
     bundle = 100    # 20,000 genes become 200 jobs of 100 fits each
   ) |>
@@ -401,7 +402,7 @@ Pick `bundle` against a single job rather than against the gene count, because t
 | Step | Column / target | Role |
 |------|-----------------|------|
 | tidybulk / tidySE, before `brmDE()` | `colData` `"multiplier"`, `"offset"` | TMM scale factor and `log(1 / multiplier)` |
-| `tidybulk::estimate_dispersion()`, before `brmDE()` | `rowData` `"dispersion"`, `"dispersion_degrees_freedom"` | edgeR \(\phi_g\) and \(d_{\mathrm{eff}}\) |
+| `tidybulk::estimate_dispersion()`, before `brmDE()` | `rowData` `"dispersion_trended"`, `"dispersion_degrees_freedom"` | \(s_0^2\) and its degrees of freedom (see `vignette("dispersion-priors")`) |
 | `estimate()` → `estimate_gene()` | `brms_fit` per gene, in the store | posterior fit; edgeR dispersion is the shape prior, not a fixed value |
 | `hypothesis()` | hypothesis table | `log2_fold_change` and `pH0` per gene, `rhat`/`ess_bulk`/`mcse` per contrast, plus `fdr` across genes |
 | `adjust()` | adjusted residuals / fitted | dex kept; random intercepts dropped |
@@ -412,10 +413,10 @@ Pick `bundle` against a single job rather than against the gene count, because t
 
 | `shape_prior` | Model for shape | Prior |
 |---------------|-----------------|-------|
-| `"student_t"` (default) | `shape ~ 1 + offset(log(1/dispersion))`, or `offset(0)` if `dispersion` is `NULL` | Student-t on the intercept; scale from `d_eff`, or log-scale SD 1 if `dispersion_degrees_freedom` is `NULL` |
-| `"gamma"` | scalar `shape` (no submodel) | `gamma(d_eff/2, d_eff * dispersion/2)` (needs both columns) |
+| `"student_t"` (default) | `shape ~ 1 + offset(log(1/dispersion_trended))`, or `offset(0)` if `dispersion` is `NULL` | Student-t on the intercept; scale from `d_0`, or log-scale SD 1 if `dispersion_degrees_freedom` is `NULL` |
+| `"gamma"` | the same submodel | `gamma(d_0/2, d_0/2)` on `exp(intercept)`; requires `dispersion_degrees_freedom` |
 
-`prior.df` from `estimateDisp()` is shared across genes (unless `robust = TRUE` in edgeR). What varies per gene is the tagwise `dispersion` that sets the prior location. In either form the gene-wise counts update that prior: the posterior shape is not forced to equal `1/dispersion`.
+`prior.df` from `estimateDisp()` is shared across genes (unless `robust = TRUE` in edgeR). What varies per gene is `dispersion_trended`, the trend that sets the prior location. Do not pass `dispersion_shrinked`. See `vignette("dispersion-priors")`.
 
 # Abundance priors at a glance
 
@@ -425,7 +426,6 @@ The default prior set applies whenever `prior` is left `NULL` and `family` is a 
 |-----------|-------|--------|
 | `Intercept` | `student_t(3, mean(log1p(counts / exp(offset))), 1.5)` | the gene's own data |
 | `b` (coefficients) | `student_t(coefficient_prior_df, 0, coefficient_prior_scale)`, `student_t(3, 0, 0.7)` by default, one log2 fold change | `coefficient_prior_scale`, `coefficient_prior_df` |
-| `Intercept` of `shape` | `student_t(shape_prior_df, 0, scale)` | `dispersion_degrees_freedom`, `shape_prior_df` |
-| `shape` (scalar) | `gamma(d_eff/2, d_eff * dispersion/2)` | `shape_prior = "gamma"` |
+| `Intercept` of `shape` | `student_t(shape_prior_df, 0, scale)`, or a gamma on `exp(intercept)` | `dispersion_degrees_freedom`, `shape_prior_df` / `shape_prior` |
 
 Passing your own `prior` replaces the whole set.

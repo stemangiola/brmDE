@@ -41,5 +41,6 @@ See \code{\link[=hypothesis_gene]{hypothesis_gene()}} for the columns.
 Collecting the pipeline adds an \code{fdr} column across genes when the tests
 took the directional route, which is the default. That is the one quantity
 a gene-wise target cannot compute, since it is a property of the gene set.
+See \code{\link[=false_discovery_rate]{false_discovery_rate()}}.
 The rate is the cumulative mean of \code{pH0} in ascending order.
 }

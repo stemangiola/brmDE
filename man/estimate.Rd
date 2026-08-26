@@ -49,13 +49,15 @@ passed to \code{\link[=estimate_gene]{estimate_gene()}}. \code{~1} by default.}
 \item{offset}{Required name of the precomputed offset column in \code{colData}
 (the same argument as \code{\link[=estimate_gene]{estimate_gene()}}).}
 
-\item{dispersion}{Optional name of the \code{rowData} dispersion column, as
-written by \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}. Default \code{NULL} puts a zero
+\item{dispersion}{Optional name of the \code{rowData} dispersion column.
+Pass \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}'s \code{dispersion_trended}
+(\eqn{s_0^2}), not \code{dispersion_shrinked}. Default \code{NULL} puts a zero
 offset on the shape submodel (see \code{\link[=estimate_gene]{estimate_gene()}}).}
 
 \item{dispersion_degrees_freedom}{Optional name of the effective degrees of
 freedom column written alongside it by \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}.
-Default \code{NULL} uses a default Student-t SD of 1 on the log-shape intercept.}
+Default \code{NULL} uses a default Student-t SD of 1 on the log-shape intercept.
+\code{"gamma"} requires this column.}
 
 \item{...}{Passed to \code{\link[=estimate_gene]{estimate_gene()}} (e.g. \code{family}, \code{chains},
 \code{draws_sampling}).}
@@ -82,9 +84,10 @@ input, then pass those column names here. Gene-wise fitting is the only
 thing this pipeline does. The dispersion columns are a prior on the
 negative binomial shape (see \code{\link[=estimate_gene]{estimate_gene()}}): they inform each gene
 without fixing the posterior to the external estimate. Omitting
-\code{dispersion} and/or \code{dispersion_degrees_freedom} is valid (zero shape
-offset, default prior SD) but computing and passing both is the preferred
-starting point.
+\code{dispersion} and/or \code{dispersion_degrees_freedom} is valid under the
+default Student-t (zero shape offset, log-scale SD of 1). \code{"gamma"}
+requires \code{dispersion_degrees_freedom}. Computing and passing both columns
+is the preferred starting point.
 
 Prior constants derived from each gene are passed to Stan as data, so every
 gene generates identical Stan code and cmdstanr compiles it at most once per
