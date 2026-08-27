@@ -15,11 +15,6 @@ name: rworkflows
 jobs:
   rworkflows:
     permissions: write-all
-    # R CMD build does not always source ~/.Rprofile, so pin the library path
-    # explicitly. Without this, Bioconductor Docker's system tidybulk can shadow
-    # the GitHub build from Remotes during vignette re-build.
-    env:
-      R_LIBS: ${{ runner.temp }}/Library
     runs-on: ${{ matrix.config.os }}
     name: ${{ matrix.config.os }} (${{ matrix.config.r }})
     container: ${{ matrix.config.cont }}
@@ -44,6 +39,11 @@ jobs:
           rspm: ~
     steps:
     - uses: neurogenomics/rworkflows@master
+      # R CMD build does not always source ~/.Rprofile, so pin the library path
+      # explicitly. Without this, Bioconductor Docker's system tidybulk can shadow
+      # the GitHub build from Remotes during vignette re-build.
+      env:
+        R_LIBS: ${{ runner.temp }}/Library
       with:
         run_telemetry: ${{ false }}
         run_bioccheck: ${{ false }}
