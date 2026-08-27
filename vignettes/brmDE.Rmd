@@ -26,16 +26,15 @@ run_vignette <- instantiate::stan_cmdstan_exists()
 
 # Overview
 
-`brmDE` does mixed-effect modelling for differential gene expression analyses, based on Bayesian regression through [brms](https://paul-buerkner.github.io/brms/). Each gene is fit on its own, then those fits compose into a [tidytargets](https://github.com/stemangiola/tidytargets) `targets` pipeline. The typical flow is:
+`brmDE` fits mixed-effect models for differential gene expression analyses, based on Bayesian regression through [brms](https://paul-buerkner.github.io/brms/). 
+The typical flow is:
 
-1. scale with TMM (`tidybulk::scale_abundance()`) and set `offset = log(1 / multiplier)`
-2. estimate **dispersion** once on the full matrix (`tidybulk::estimate_dispersion()`)
+1. Calculate offset/scaling, e.g. from TMM (`tidybulk::scale_abundance()`) and set `offset = log(1 / multiplier)`
+2. estimate **dispersion** once on the full matrix (`estimate_dispersion()`) to be used as prior for the negative binomial shadispersion
 3. fit each gene with `estimate_gene()`, using that dispersion as a **prior** on the negative binomial shape — the gene's own counts can still pull the posterior away from it
 4. optionally run posterior **hypothesis** tests, **adjust** for nuisance covariates, and **plot** a gene across a factor
 
 Step 1 happens outside `brmDE`. The package does no normalisation of its own: `brmDE()` and `estimate_gene()` both expect the offset column to be on the object already, so you stay in control of how library size is handled.
-
-Fitting chunks below are gated by `instantiate::stan_cmdstan_exists()`, so the vignette still builds when CmdStan is missing.
 
 # Install CmdStan
 
@@ -58,6 +57,12 @@ cmdstanr::check_cmdstan_toolchain(fix = TRUE)
 cmdstanr::install_cmdstan()
 ```
 
+# Install brmDE and dependencies
+
+```{r install-brmde, eval = FALSE}
+remotes::install_github("stemangiola/brmDE")
+```
+
 ```{r packages, message = FALSE}
 library(brmDE)
 library(tidybulk)
@@ -74,16 +79,17 @@ airway <- airway |>
 
 # One gene, with dispersion
 
-For a single gene you still prepare the offset and dispersion on a multi-gene matrix. After those columns exist, `filter()` the feature set you want to fit. These steps do not need CmdStan.
-
-Get the TMM `multiplier` from `tidybulk::scale_abundance()`, then form the library-size offset as `log(1 / multiplier)` with `mutate()` from tidySummarizedExperiment.
+Get the TMM `multiplier` from `tidybulk::scale_abundance()`, then form the library-size offset as `log(1 / multiplier)` with `mutate()`, here using tidySummarizedExperiment for convenience.
 
 ```{r one-gene-dispersion, message = FALSE}
 
 se <- airway |>
   identify_abundant(formula_design = ~ dex) |>
+
+  # This tidybulk utility enriches the SummarizedExperiment with TMM normalising factor and the multiplier scaling factor, which is that sample-wise multiplier you use to calculate scaled counts.  
   scale_abundance(method = "TMM") |>
-  # library size factor is the reciprocal of the multiplier
+
+  # The library-size offset that brmDE (abd brms) is the reciprocal of the multiplier
   mutate(offset = log(1 / multiplier))
 
 # Because tidybulk::estimate_dispersion() uses edgeR, which has no mixed
@@ -101,24 +107,18 @@ head(se$offset)
 
 ```
 
-## Two formulas, and the offsets brmDE adds
+## Differential abundance and variability
 
 `formula_abundance` is the mean model. For the gene-wise fit it can include random effects; the library size offset goes here. For `tidybulk::estimate_dispersion()` you already wrote the fixed-effect analogue that edgeR can use.
 
 `formula_dispersion` is the model for the negative binomial shape, `~1` by default. It is where the edgeR dispersion offset goes.
 
-You write neither offset. Both are appended in the backend, and the assembled formulas are printed so you can confirm what was fitted:
-
+Abundance and dispersion offset are added by brmDE in the background.
 ```
 Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offset)
 Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion_trended))
 ```
-
-The edgeR columns are a **prior**, not a plug-in. Pass `dispersion_trended` (\(s_0^2\)), the across-gene trend, not `dispersion_shrinked` (\(q_g^{post}\)), which already contains this gene. `estimate_gene()` centres the negative binomial shape on `1/dispersion_trended` and uses `dispersion_degrees_freedom` to set how tightly; the gene-wise likelihood is then free to move the posterior away from that location. How far a gene can diverge is the prior scale and the tail of `shape_prior` (Student-t is more permissive than gamma). The derivation is in `vignette("dispersion-priors")`.
-
-`dispersion` and `dispersion_degrees_freedom` both default to `NULL`. Leaving `dispersion` unset puts a zero offset on the shape submodel (the intercept is then `log(shape)` itself), which is useful when the sample size is large enough that an informative location from edgeR is unnecessary. Leaving `dispersion_degrees_freedom` unset gives the Student-t intercept a log-scale SD of 1, so the prior scale does not depend on previous tools. `"gamma"` requires `dispersion_degrees_freedom`. Computing both columns with `tidybulk::estimate_dispersion()` and passing their names, as below, is the preferred starting point.
-
-## Student-t shape prior (default)
+## Student-t dispersion prior (default)
 
 The default `shape_prior = "student_t"` builds the shape submodel from `formula_dispersion` and places a Student-t prior on its intercept. With `dispersion_degrees_freedom` passed in, the scale of that prior comes from `sqrt(trigamma(d_0 / 2))`. Because the dispersion enters as an offset on a log link, any terms you add to `formula_dispersion` describe departures from the trend, on top of the intercept's ability to leave that location when the data warrant it.
 
