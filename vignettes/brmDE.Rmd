@@ -96,7 +96,10 @@ se <- se |> tidybulk::estimate_dispersion(formula_abundance = ~ dex + cell)
 #   dispersion_trended            = s0^2, the across-gene trend (pass this)
 #   dispersion_shrinked           = q_post, tagwise posterior (do not pass)
 #   dispersion_degrees_freedom    = df.residual + prior.df
-head(as.data.frame(rowData(se)[, c("dispersion_trended", "dispersion_degrees_freedom")]))
+# GitHub tidybulk uses `dispersion_trended`; Bioconductor release may still
+# expose the same quantity as `dispersion`. brmDE expects the trend column.
+disp_cols <- grep("^dispersion", names(rowData(se)), value = TRUE)
+head(as.data.frame(rowData(se)[, disp_cols, drop = FALSE]))
 head(se$offset)
 
 ```
