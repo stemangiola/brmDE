@@ -222,9 +222,6 @@ estimate_gene <- function(data,
       call. = FALSE
     )
   }
-  if (identical(backend, "cmdstanr")) {
-    check_and_install_cmdstanr()
-  }
   if (!is.null(dispersion)) {
     dispersion <- check_dispersion_name(dispersion)
   }

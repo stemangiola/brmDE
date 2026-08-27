@@ -26,7 +26,12 @@ if (!requireNamespace("tidybulk", quietly = TRUE) ||
   if (!requireNamespace("remotes", quietly = TRUE)) {
     utils::install.packages("remotes", repos = "https://cloud.r-project.org")
   }
-  remotes::install_github("stemangiola/tidybulk", upgrade = "always")
+  lib <- Sys.getenv("R_LIBS_USER", unset = .libPaths()[1L])
+  remotes::install_github("stemangiola/tidybulk", lib = lib, upgrade = "always")
+  .libPaths(c(lib, .libPaths()))
+  if ("tidybulk" %in% loadedNamespaces()) {
+    unloadNamespace("tidybulk")
+  }
 }
 # Fitting chunks run only when CmdStan is available (same gate as sccomp).
 run_vignette <- instantiate::stan_cmdstan_exists()
