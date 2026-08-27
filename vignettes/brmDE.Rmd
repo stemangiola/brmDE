@@ -20,19 +20,6 @@ for (lib in c(Sys.getenv("R_LIBS"), Sys.getenv("R_LIBS_USER"))) {
     .libPaths(c(unlist(strsplit(lib, .Platform$path.sep)), .libPaths()))
   }
 }
-# estimate_dispersion() landed in GitHub tidybulk after Bioconductor release.
-if (!requireNamespace("tidybulk", quietly = TRUE) ||
-    !"estimate_dispersion" %in% getNamespaceExports("tidybulk")) {
-  if (!requireNamespace("remotes", quietly = TRUE)) {
-    utils::install.packages("remotes", repos = "https://cloud.r-project.org")
-  }
-  lib <- Sys.getenv("R_LIBS_USER", unset = .libPaths()[1L])
-  remotes::install_github("stemangiola/tidybulk", lib = lib, upgrade = "always")
-  .libPaths(c(lib, .libPaths()))
-  if ("tidybulk" %in% loadedNamespaces()) {
-    unloadNamespace("tidybulk")
-  }
-}
 # Fitting chunks run only when CmdStan is available (same gate as sccomp).
 run_vignette <- instantiate::stan_cmdstan_exists()
 ```
@@ -109,10 +96,7 @@ se <- se |> tidybulk::estimate_dispersion(formula_abundance = ~ dex + cell)
 #   dispersion_trended            = s0^2, the across-gene trend (pass this)
 #   dispersion_shrinked           = q_post, tagwise posterior (do not pass)
 #   dispersion_degrees_freedom    = df.residual + prior.df
-# GitHub tidybulk uses `dispersion_trended`; Bioconductor release may still
-# expose the same quantity as `dispersion`. brmDE expects the trend column.
-disp_cols <- grep("^dispersion", names(rowData(se)), value = TRUE)
-head(as.data.frame(rowData(se)[, disp_cols, drop = FALSE]))
+head(as.data.frame(rowData(se)[, c("dispersion_trended", "dispersion_degrees_freedom")]))
 head(se$offset)
 
 ```
