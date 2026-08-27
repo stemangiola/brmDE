@@ -44,6 +44,7 @@ jobs:
       # the GitHub build from Remotes during vignette re-build.
       env:
         R_LIBS: ${{ runner.temp }}/Library
+        R_LIBS_USER: ${{ runner.temp }}/Library
       with:
         run_telemetry: ${{ false }}
         run_bioccheck: ${{ false }}

@@ -13,6 +13,13 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
+# Prefer Remotes-installed Suggests over Bioconductor Docker system libraries
+# during R CMD build (see .github/workflows/rworkflows.yml).
+for (lib in c(Sys.getenv("R_LIBS"), Sys.getenv("R_LIBS_USER"))) {
+  if (nzchar(lib) && dir.exists(lib)) {
+    .libPaths(c(unlist(strsplit(lib, .Platform$path.sep)), .libPaths()))
+  }
+}
 # Fitting chunks run only when CmdStan is available (same gate as sccomp).
 run_vignette <- instantiate::stan_cmdstan_exists()
 ```
