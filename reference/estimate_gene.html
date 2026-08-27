@@ -80,9 +80,8 @@ overridden.</p>
 <span>  <span class="va">formula_abundance</span>,</span>
 <span>  formula_dispersion <span class="op">=</span> <span class="op">~</span><span class="fl">1</span>,</span>
 <span>  <span class="va">offset</span>,</span>
-<span>  dispersion <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  dispersion_degrees_freedom <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  shape_prior <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"student_t"</span>, <span class="st">"gamma"</span><span class="op">)</span>,</span>
+<span>  dispersion_prior_log_mean <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  dispersion_prior_log_sd <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  shape_prior_df <span class="op">=</span> <span class="fl">3</span>,</span>
 <span>  coefficient_prior_scale <span class="op">=</span> <span class="fl">0.7</span>,</span>
 <span>  coefficient_prior_df <span class="op">=</span> <span class="fl">3</span>,</span>
@@ -121,9 +120,9 @@ than by you, and the assembled formula is reported with a message.</p></dd>
 
 <dt id="arg-formula-dispersion">formula_dispersion<a class="anchor" aria-label="anchor" href="#arg-formula-dispersion"></a></dt>
 <dd><p>One-sided model for the negative binomial shape,
-<code>~1</code> by default. It becomes a <code>shape ~ &lt;terms&gt; + offset(...)</code> submodel
-under either <code>shape_prior</code>. The offset is <code>log(1/&lt;dispersion&gt;)</code> when
-<code>dispersion</code> is supplied, and <code>0</code> when it is <code>NULL</code>, so the terms you
+<code>~1</code> by default. It becomes a <code>shape ~ &lt;terms&gt; + offset(...)</code> submodel.
+The offset is <code>log(1/&lt;dispersion_prior_log_mean&gt;)</code> when
+<code>dispersion_prior_log_mean</code> is supplied, and <code>0</code> when it is <code>NULL</code>, so the terms you
 give describe departures from that external estimate or, with a zero
 offset, the log-shape itself. Do not write the offset yourself.</p></dd>
 
@@ -134,82 +133,45 @@ offset, the log-shape itself. Do not write the offset yourself.</p></dd>
 never calculated inside this function.</p></dd>
 
 
-<dt id="arg-dispersion">dispersion<a class="anchor" aria-label="anchor" href="#arg-dispersion"></a></dt>
-<dd><p>Optional name of a precomputed dispersion column
-in <code>rowData</code> (or in <code>data</code>). Default <code>NULL</code> puts a zero offset on the
-shape submodel: the intercept is then <code>log(shape)</code>, with prior median
+<dt id="arg-dispersion-prior-log-mean">dispersion_prior_log_mean<a class="anchor" aria-label="anchor" href="#arg-dispersion-prior-log-mean"></a></dt>
+<dd><p>Optional name of a precomputed dispersion
+column in <code>rowData</code> (or in <code>data</code>). Default <code>NULL</code> puts a zero offset on
+the shape submodel: the intercept is then <code>log(shape)</code>, with prior median
 shape <code>1</code>. Use this when the sample size is large enough that an
 informative location from previous tools is unnecessary. When supplied,
-the column becomes <code>offset(log(1/&lt;dispersion&gt;))</code> as described under
-<code>shape_prior</code>: that is the prior <em>location</em> of the shape, which the
-gene's counts are then free to update. Pass
-<code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code>'s <code>dispersion_trended</code> column: that is
-the across-gene trend \(s_0^2\), information this gene has not yet
-contributed. Do not pass <code>dispersion_shrinked</code>, the tagwise posterior
-\(q_g^{post}\), which already includes this gene's counts. See
+the column becomes <code>offset(log(1/&lt;dispersion_prior_log_mean&gt;))</code>: that is
+the prior <em>location</em> of the shape, which the gene's counts are then free
+to update. <code><a href="estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> writes this as
+<code>"dispersion_prior_log_mean"</code> (<code>trended.dispersion</code>, \(\phi_{\mathrm{trend}}\)).
+You can also pass <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code>'s <code>dispersion_trended</code>
+column: that is the same across-gene trend \(s_0^2\), information this
+gene has not yet contributed. Do not pass <code>dispersion_shrinked</code>, the
+tagwise posterior \(q_g^{post}\), which already includes this gene's
+counts. See <code><a href="../articles/dispersion-priors.html">vignette("dispersion-priors")</a></code>.</p></dd>
+
+
+<dt id="arg-dispersion-prior-log-sd">dispersion_prior_log_sd<a class="anchor" aria-label="anchor" href="#arg-dispersion-prior-log-sd"></a></dt>
+<dd><p>Optional name of a log-dispersion prior SD
+column written by <code><a href="estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> as
+<code>"dispersion_prior_log_sd"</code>. That function's <code>method</code> chooses the width:
+Laplace curvature of the shared log-likelihood, or the trigamma SD from
+the moderated df. The intercept prior is always Student-t
+(<code>student_t(shape_prior_df, 0, scale)</code>), with <code>scale</code> set so that its
+standard deviation equals this log-scale SD. Default <code>NULL</code> targets a
+log-scale SD of 1. The gene-wise posterior is not constrained to equal
+the external dispersion: this only scales the prior, and the likelihood
+can move the shape away from the offset location. See
 <code><a href="../articles/dispersion-priors.html">vignette("dispersion-priors")</a></code>.</p></dd>
-
-
-<dt id="arg-dispersion-degrees-freedom">dispersion_degrees_freedom<a class="anchor" aria-label="anchor" href="#arg-dispersion-degrees-freedom"></a></dt>
-<dd><p>Optional name of the degrees of freedom
-column that accompanies <code>dispersion</code>, as written by
-<code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code> (<code>dispersion_degrees_freedom</code>).
-Default <code>NULL</code> targets a log-scale SD of 1 under <code>"student_t"</code>.
-<code>"gamma"</code> requires this column: it reads \(d_0/2\) as its parameters and
-has no fallback. Independent of <code>dispersion</code>: under <code>"student_t"</code> you
-can pass one, both, or neither.</p></dd>
-
-
-<dt id="arg-shape-prior">shape_prior<a class="anchor" aria-label="anchor" href="#arg-shape-prior"></a></dt>
-<dd><p>How the external dispersion is turned into a prior on
-the shape parameter. The gene-wise posterior is not constrained to equal
-that estimate: both forms only locate and scale the prior, and the
-likelihood can move the shape away from it.</p>
-<p>Both use the same <code>shape ~ &lt;formula_dispersion&gt; + offset(...)</code> submodel,
-so <code>dispersion</code> enters as an offset on brms' log link either way and the
-assembled formula does not depend on this argument. Both therefore put
-all prior mass on a positive shape by exponentiating, and both accept
-dispersion covariates. Both also imply the same log-scale spread,
-<code>trigamma(d_0 / 2)</code>. What differs is the prior on the submodel
-intercept, and hence tail weight and which summary of the shape is
-centred on the external estimate. They are not reparameterisations of
-one another.</p><ul><li><p><code>"student_t"</code> (default) puts a Student-t prior on the intercept,
-scaled by <code>shape_prior_df</code>. That is symmetric in <code>log(shape)</code>, so it
-centres the <em>median</em> shape on <code>1/dispersion</code> (or on <code>1</code> when the
-offset is 0). Heavier-tailed, so more forgiving when edgeR has
-over-shrunk a gene.</p></li>
-<li><p><code>"gamma"</code> requires <code>dispersion_degrees_freedom</code>. It puts
-<code>gamma(d_0/2, d_0/2)</code> on <code>exp(intercept)</code>, the
-shape's multiplicative deviation from the offset. Because a gamma is
-closed under scaling, the induced prior on the shape itself is exactly
-<code>gamma(d_0/2, d_0 * dispersion/2)</code>: the conjugate form implied by
-the edgeR hierarchy, in which the dispersion is scaled inverse
-chi-square and hence the precision <code>1/dispersion</code> is gamma. It centres
-the <em>mean</em> shape on <code>1/dispersion</code>, which sits
-<code>digamma(d_0/2) - log(d_0/2)</code>, roughly <code>-1/d_0</code>, from the
-Student-t centre on the log scale. Lighter-tailed.</p></li>
-</ul><p>Stan has no log-gamma density, so the gamma form cannot be written as a
-<code>brms</code> prior on the intercept. It is added to the target directly through
-a <code>stanvar</code>, which means <code><a href="https://mc-stan.org/rstantools/reference/prior_summary.html" class="external-link">brms::prior_summary()</a></code> reports the intercept as
-flat; the gamma is nonetheless the only prior acting on it, and its two
-parameters are recoverable from <code>fit$stanvars</code>.</p>
-<p>See <code><a href="../articles/dispersion-priors.html">vignette("dispersion-priors")</a></code> for the scaled-chi-square
-hierarchy, why the prior location is the trend \(s_0^2\)
-(<code>dispersion_trended</code>) rather than the tagwise posterior, the trigamma
-identity that sets the shared log-scale spread, and why the two forms
-are not reparameterisations of each other.</p></dd>
 
 
 <dt id="arg-shape-prior-df">shape_prior_df<a class="anchor" aria-label="anchor" href="#arg-shape-prior-df"></a></dt>
 <dd><p>Degrees of freedom \(\nu\) of the Student-t prior
-on the shape intercept, used only when <code>shape_prior = "student_t"</code>. This
-single value sets both the <code>df</code> argument of <code>student_t(df, 0, scale)</code> and
-the <code>scale</code>, because a Student-t has standard deviation
-<code>scale * sqrt(nu / (nu - 2))</code>; the scale is therefore
+on the shape intercept. This single value sets both the <code>df</code> argument of
+<code>student_t(df, 0, scale)</code> and the <code>scale</code>, because a Student-t has
+standard deviation <code>scale * sqrt(nu / (nu - 2))</code>; the scale is therefore
 <code>sd * sqrt((nu - 2) / nu)</code> for a target <code>sd</code>. Must exceed 2, since the
 Student-t standard deviation does not exist at or below 2 degrees of
-freedom. The target <code>sd</code> is <code>sqrt(trigamma(d_0 / 2))</code> when
-<code>dispersion_degrees_freedom</code> is supplied, and 1 when it is omitted.</p></dd>
+freedom. The target <code>sd</code> comes from <code>dispersion_prior_log_sd</code>.</p></dd>
 
 
 <dt id="arg-coefficient-prior-scale">coefficient_prior_scale<a class="anchor" aria-label="anchor" href="#arg-coefficient-prior-scale"></a></dt>

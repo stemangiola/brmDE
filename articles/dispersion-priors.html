@@ -83,713 +83,701 @@ Mangiola</h4>
 
     
     
-<p><code>brmDE</code>, although very flexible, capable of mixed-effect
-models, native non-parametric smooth/spline models, and alternative
-distributions (NB and ZINB), fits one gene at a time to prioritise
-parallelisation. A single-gene likelihood cannot borrow strength across
-features, which is exactly what makes a feature-wise negative-binomial
-dispersion useful when there are small numbers of replicates.</p>
-<p>Frequentist methods estimate gene-wise dispersion through empirical
-Bayes very efficiently, although only for relatively simple fixed-effect
-models.</p>
-<p>The key idea is to cheaply estimate gene dispersion with empirical
+<p><code>brmDE</code>, although very flexible and capable of
+mixed-effect models, non-parametric smooth/spline models, and
+alternative distributions such as NB and ZINB, fits one gene at a time
+to prioritise parallelisation. A single-gene likelihood cannot borrow
+strength across features, which is exactly what makes empirical-Bayes
+estimation of feature-wise negative-binomial dispersion useful when the
+number of replicates is small.</p>
+<p>Frequentist methods such as <code>edgeR</code> estimate gene-wise
+dispersion through empirical Bayes very efficiently, although generally
+within more constrained fixed-effect model structures.</p>
+<p>The key idea is to estimate gene dispersion cheaply with empirical
 Bayes, for example through <code>edgeR</code> or <code>DESeq2</code>,
-and use it as an approximate prior for <code>brmDE</code>. With enough
-evidence from the data, the gene’s own counts can still pull the
-posterior away from the upstream empirical-Bayes estimate.</p>
+and use the resulting across-gene dispersion information as an
+approximate prior for <code>brmDE</code>. With enough information in the
+gene’s own counts, the posterior can still move away from the upstream
+empirical-Bayes estimate.</p>
+<p>The conceptual transition is from a likelihood over candidate
+dispersion values to a prior kernel for dispersion. For fixed observed
+data, the likelihood</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mi>g</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mi>p</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>y</mi><mi>g</mi></msub><mo>∣</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">
+L_g(\phi)
+=
+p(y_g\mid\phi)
+</annotation></semantics></math></p>
+<p>is a function of the candidate parameter value
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>ϕ</mi><annotation encoding="application/x-tex">\phi</annotation></semantics></math>.
+It is not itself a probability density for
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>ϕ</mi><annotation encoding="application/x-tex">\phi</annotation></semantics></math>.
+However, the empirical-Bayes machinery in <code>edgeR</code> constructs
+a weighted, abundance-smoothed log-likelihood contribution that
+represents information borrowed across genes. In <code>brmDE</code>, we
+use this weighted shared log-likelihood as an empirical prior kernel for
+the parameter that is actually modelled,
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\log(\phi)</annotation></semantics></math>.</p>
+<p>This is an explicit modelling approximation: the edgeR weighted
+shared likelihood is not itself a Bayesian prior, but it can be used to
+define one.</p>
+<p>The maximum of this weighted smoothed likelihood defines the
+<strong>mode</strong> of the prior. Under the local Normal approximation
+developed below, the mode is also used as the prior mean. The prior
+width is obtained from the local curvature of the same weighted smoothed
+likelihood.</p>
+<p>Because the smoothed dispersion trend is returned directly by
+<code>edgeR</code> as <code>trended.dispersion</code>, the less
+intuitive part is the transition from the weighted shared likelihood to
+the prior SD. That calculation is described below.</p>
 <div class="section level2">
-<h2 id="using-empirical-bayes-dispersion-estimation-as-prior">Using empirical-Bayes dispersion estimation as prior<a class="anchor" aria-label="anchor" href="#using-empirical-bayes-dispersion-estimation-as-prior"></a>
+<h2 id="from-smoothed-shrunk-likelihood-to-log-scale-sd">From smoothed shrunk likelihood to log-scale SD<a class="anchor" aria-label="anchor" href="#from-smoothed-shrunk-likelihood-to-log-scale-sd"></a>
 </h2>
-<p><code>brmDE</code> offers two priors for the (zero-inflated)
-negative-binomial dispersion.</p>
-<p>Empirical-Bayes methods such as <code>edgeR</code> estimate a
-negative-binomial dispersion trend across genes, a moderated gene-wise
-dispersion, and a prior degrees of freedom that controls the strength of
-the gene-wise shrinkage.</p>
-<p>For a gene
+<p><code>edgeR</code> estimates an abundance-smoothed shared
+log-likelihood and weights it through empirical Bayes. For gene
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>g</mi><annotation encoding="application/x-tex">g</annotation></semantics></math>,
-we denote:</p>
-<ul>
-<li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><annotation encoding="application/x-tex">\phi_{\mathrm{trend},g}</annotation></semantics></math>
-as edgeR’s <code>trended.dispersion</code>, the negative-binomial
-dispersion expected for a gene with that abundance;</li>
-<li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">g</mi><mi mathvariant="normal">w</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">s</mi><mi mathvariant="normal">e</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><annotation encoding="application/x-tex">\phi_{\mathrm{tagwise},g}</annotation></semantics></math>
-as edgeR’s <code>tagwise.dispersion</code>, the gene-specific
-negative-binomial dispersion after empirical-Bayes shrinkage;</li>
-<li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>
-as edgeR’s <code>prior.df</code>, which measures the strength of the
-across-gene information used for shrinkage.</li>
-</ul>
-<p><code>brmDE</code> uses
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><annotation encoding="application/x-tex">\phi_{\mathrm{trend},g}</annotation></semantics></math>
-and
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>
-to construct a Bayesian prior. The tagwise dispersion is not used as the
-prior location because it already contains gene-specific information
-from the same data that will subsequently be fitted by
-<code>brmDE</code>.</p>
-<p>Importantly, edgeR does not place a conjugate
-scaled-inverse-chi-square prior directly on the negative-binomial
-dispersion
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mi>g</mi></msub><annotation encoding="application/x-tex">\phi_g</annotation></semantics></math>.
-Its tagwise negative-binomial dispersions are obtained using weighted
-likelihood. The Gamma construction below is therefore a
-<code>brmDE</code> approximation that translates edgeR’s dispersion
-trend and empirically estimated shrinkage strength into a conventional
-Bayesian prior.</p>
-<div class="section level3">
-<h3 id="gamma-prior">Gamma prior<a class="anchor" aria-label="anchor" href="#gamma-prior"></a>
-</h3>
-<p>edgeR provides two quantities that are useful for constructing a
-prior on the negative-binomial dispersion:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><annotation encoding="application/x-tex">
-\phi_{\mathrm{trend},g}
-</annotation></semantics></math></p>
-<p>the expected negative-binomial dispersion for a gene with the
-abundance of gene
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>g</mi><annotation encoding="application/x-tex">g</annotation></semantics></math>,
-and</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">
-d_0
-</annotation></semantics></math></p>
-<p>the prior degrees of freedom, which quantifies the strength of the
-across-gene shrinkage information.</p>
-<p>edgeR does not define a conjugate scaled-inverse-chi-square prior
-directly on
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mi>g</mi></msub><annotation encoding="application/x-tex">\phi_g</annotation></semantics></math>.
-To translate these two quantities into a Bayesian prior,
-<code>brmDE</code> uses the following approximation:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>ϕ</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup><mover><mo>∼</mo><mrow><mi mathvariant="normal">b</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">D</mi><mi mathvariant="normal">E</mi></mrow></mover><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mfrac><msub><mi>d</mi><mn>0</mn></msub><msubsup><mi>χ</mi><msub><mi>d</mi><mn>0</mn></msub><mn>2</mn></msubsup></mfrac><mi>.</mi></mrow><annotation encoding="application/x-tex">
-\phi_g^{true}
-\overset{\mathrm{brmDE}}{\sim}
-\phi_{\mathrm{trend},g}
-\frac{d_0}{\chi^2_{d_0}}.
-</annotation></semantics></math></p>
-<p>This construction has the desired properties: the prior is centred
-according to the abundance-dependent edgeR dispersion trend, while
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>
-controls its concentration. A large
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>
-produces a narrow distribution around the trend, whereas a small
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>
-produces a wider prior.</p>
-<p><code>brms</code> parameterises the negative binomial by the
-precision-like parameter <code>shape</code>, which is the reciprocal of
-the edgeR dispersion:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">h</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">e</mi></mrow><mo>=</mo><mfrac><mn>1</mn><msubsup><mi>ϕ</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup></mfrac><mi>.</mi></mrow><annotation encoding="application/x-tex">
-\mathrm{shape}
-=
-\frac{1}{\phi_g^{true}}.
-</annotation></semantics></math></p>
-<p>Under the <code>brmDE</code> approximation,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">h</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">e</mi></mrow><mo>=</mo><mfrac><msubsup><mi>χ</mi><msub><mi>d</mi><mn>0</mn></msub><mn>2</mn></msubsup><mrow><msub><mi>d</mi><mn>0</mn></msub><mspace width="0.167em"></mspace><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub></mrow></mfrac><mi>.</mi></mrow><annotation encoding="application/x-tex">
-\mathrm{shape}
-=
-\frac{\chi^2_{d_0}}
-{d_0\,\phi_{\mathrm{trend},g}}.
-</annotation></semantics></math></p>
-<p>A chi-square distribution is a special case of the Gamma
-distribution,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>χ</mi><mi>d</mi><mn>2</mn></msubsup><mo>≡</mo><mrow><mi mathvariant="normal">G</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">a</mi></mrow><mrow><mo stretchy="true" form="prefix">(</mo><mfrac><mi>d</mi><mn>2</mn></mfrac><mo>,</mo><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">c</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">e</mi></mrow><mo>=</mo><mn>2</mn><mo stretchy="true" form="postfix">)</mo></mrow><mo>,</mo></mrow><annotation encoding="application/x-tex">
-\chi^2_d
-\equiv
-\mathrm{Gamma}\left(
-\frac{d}{2},
-\mathrm{scale}=2
-\right),
-</annotation></semantics></math></p>
-<p>and multiplying a Gamma-distributed variable by a positive constant
-produces another Gamma distribution. Therefore,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">h</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">e</mi></mrow><mo>∼</mo><mrow><mi mathvariant="normal">G</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">a</mi></mrow><mrow><mo stretchy="true" form="prefix">(</mo><mfrac><msub><mi>d</mi><mn>0</mn></msub><mn>2</mn></mfrac><mo>,</mo><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">c</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">e</mi></mrow><mo>=</mo><mfrac><mn>2</mn><mrow><msub><mi>d</mi><mn>0</mn></msub><mspace width="0.167em"></mspace><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub></mrow></mfrac><mo stretchy="true" form="postfix">)</mo></mrow><mo>,</mo></mrow><annotation encoding="application/x-tex">
-\mathrm{shape}
-\sim
-\mathrm{Gamma}\left(
-\frac{d_0}{2},
-\mathrm{scale}
-=
-\frac{2}
-{d_0\,\phi_{\mathrm{trend},g}}
-\right),
-</annotation></semantics></math></p>
-<p>or equivalently,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><menclose notation="box"><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">h</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">e</mi></mrow><mo>∼</mo><mrow><mi mathvariant="normal">G</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">a</mi></mrow><mrow><mo stretchy="true" form="prefix">(</mo><mfrac><msub><mi>d</mi><mn>0</mn></msub><mn>2</mn></mfrac><mo>,</mo><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">e</mi></mrow><mo>=</mo><mfrac><mrow><msub><mi>d</mi><mn>0</mn></msub><mspace width="0.167em"></mspace><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub></mrow><mn>2</mn></mfrac><mo stretchy="true" form="postfix">)</mo></mrow><mi>.</mi></mrow></menclose><annotation encoding="application/x-tex">
-\boxed{
-\mathrm{shape}
-\sim
-\mathrm{Gamma}\left(
-\frac{d_0}{2},
-\mathrm{rate}
-=
-\frac{d_0\,\phi_{\mathrm{trend},g}}{2}
-\right).
-}
-</annotation></semantics></math></p>
-<table class="table">
-<colgroup>
-<col width="33%">
-<col width="33%">
-<col width="33%">
-</colgroup>
-<thead><tr class="header">
-<th>Quantity</th>
-<th>Interpretation</th>
-<th>As a Gamma</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>χ</mi><msub><mi>d</mi><mn>0</mn></msub><mn>2</mn></msubsup><annotation encoding="application/x-tex">\chi^2_{d_0}</annotation></semantics></math></td>
-<td>chi-square random variable</td>
-<td><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">G</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">a</mi></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>d</mi><mn>0</mn></msub><mi>/</mi><mn>2</mn><mo>,</mo><mspace width="0.222em"></mspace><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">c</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">e</mi></mrow><mo>=</mo><mn>2</mn><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\mathrm{Gamma}(d_0/2,\ \mathrm{scale}=2)</annotation></semantics></math></td>
-</tr>
-<tr class="even">
-<td><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>ϕ</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup><annotation encoding="application/x-tex">\phi_g^{true}</annotation></semantics></math></td>
-<td>
-<code>brmDE</code> scaled-inverse-chi-square approximation to the
-true NB dispersion</td>
-<td>inverse-Gamma<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>d</mi><mn>0</mn></msub><mi>/</mi><mn>2</mn><mo>,</mo><mspace width="0.222em"></mspace><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">c</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">e</mi></mrow><mo>=</mo><msub><mi>d</mi><mn>0</mn></msub><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mi>/</mi><mn>2</mn><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(d_0/2,\ \mathrm{scale}=d_0\phi_{\mathrm{trend},g}/2)</annotation></semantics></math>
-</td>
-</tr>
-<tr class="odd">
-<td><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi>/</mi><msubsup><mi>ϕ</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup><mo>=</mo><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">h</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">e</mi></mrow></mrow><annotation encoding="application/x-tex">1/\phi_g^{true}=\mathrm{shape}</annotation></semantics></math></td>
-<td>reciprocal NB dispersion</td>
-<td><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">G</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">a</mi></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>d</mi><mn>0</mn></msub><mi>/</mi><mn>2</mn><mo>,</mo><mspace width="0.222em"></mspace><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">e</mi></mrow><mo>=</mo><msub><mi>d</mi><mn>0</mn></msub><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mi>/</mi><mn>2</mn><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\mathrm{Gamma}(d_0/2,\ \mathrm{rate}=d_0\phi_{\mathrm{trend},g}/2)</annotation></semantics></math></td>
-</tr>
-<tr class="even">
-<td><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">exp</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>b</mi><mn>0</mn></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">h</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">e</mi></mrow><mo>×</mo><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\exp(b_0)=\mathrm{shape}\times\phi_{\mathrm{trend},g}</annotation></semantics></math></td>
-<td>multiplicative deviation from the trend</td>
-<td><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">G</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">a</mi></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>d</mi><mn>0</mn></msub><mi>/</mi><mn>2</mn><mo>,</mo><mspace width="0.222em"></mspace><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">e</mi></mrow><mo>=</mo><msub><mi>d</mi><mn>0</mn></msub><mi>/</mi><mn>2</mn><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\mathrm{Gamma}(d_0/2,\ \mathrm{rate}=d_0/2)</annotation></semantics></math></td>
-</tr>
-</tbody>
-</table>
-<div class="section level4">
-<h4 id="simplifying-the-prior-further-using-phi_mathrmtrendg-as-offset">Simplifying the prior further: using
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><annotation encoding="application/x-tex">\phi_{\mathrm{trend},g}</annotation></semantics></math>
-as offset<a class="anchor" aria-label="anchor" href="#simplifying-the-prior-further-using-phi_mathrmtrendg-as-offset"></a>
-</h4>
-<p><code>brms</code> puts <code>shape</code> behind a log link, so</p>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">shape</span> <span class="op">~</span> <span class="fl">1</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/stats/offset.html" class="external-link">offset</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="fl">1</span><span class="op">/</span><span class="va">dispersion_trended</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p>corresponds to</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">h</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">e</mi></mrow><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msub><mi>b</mi><mn>0</mn></msub><mo>+</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mn>1</mn><mi>/</mi><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
-\log(\mathrm{shape})
-=
-b_0
-+
-\log(1/\phi_{\mathrm{trend},g}).
-</annotation></semantics></math></p>
-<p>The intercept is therefore the log multiplicative deviation from the
-edgeR trend:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>b</mi><mn>0</mn></msub><mo>=</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">h</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">e</mi></mrow><mo stretchy="false" form="postfix">)</mo><mo>−</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mn>1</mn><mi>/</mi><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">h</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">e</mi></mrow><mo>×</mo><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
-b_0
-=
-\log(\mathrm{shape})
--
-\log(1/\phi_{\mathrm{trend},g})
-=
-\log(
-\mathrm{shape}\times\phi_{\mathrm{trend},g}
-).
-</annotation></semantics></math></p>
-<p>Exponentiating gives</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">exp</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>b</mi><mn>0</mn></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">h</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">e</mi></mrow><mo>×</mo><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mi>.</mi></mrow><annotation encoding="application/x-tex">
-\exp(b_0)
-=
-\mathrm{shape}\times\phi_{\mathrm{trend},g}.
-</annotation></semantics></math></p>
-<p>Under the Gamma approximation derived above,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><menclose notation="box"><mrow><mrow><mi mathvariant="normal">exp</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>b</mi><mn>0</mn></msub><mo stretchy="false" form="postfix">)</mo><mo>∼</mo><mrow><mi mathvariant="normal">G</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">a</mi></mrow><mrow><mo stretchy="true" form="prefix">(</mo><mfrac><msub><mi>d</mi><mn>0</mn></msub><mn>2</mn></mfrac><mo>,</mo><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">e</mi></mrow><mo>=</mo><mfrac><msub><mi>d</mi><mn>0</mn></msub><mn>2</mn></mfrac><mo stretchy="true" form="postfix">)</mo></mrow><mi>.</mi></mrow></menclose><annotation encoding="application/x-tex">
-\boxed{
-\exp(b_0)
-\sim
-\mathrm{Gamma}\left(
-\frac{d_0}{2},
-\mathrm{rate}
-=
-\frac{d_0}{2}
-\right).
-}
-</annotation></semantics></math></p>
-<p>The resulting prior is the same for every gene on the
-multiplicative-deviation scale. Gene-specific abundance information
-enters through the offset
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><annotation encoding="application/x-tex">\phi_{\mathrm{trend},g}</annotation></semantics></math>,
-while
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>
-determines the concentration of the prior.</p>
-<p>The trailing <code>+ Intercept_shape</code> is the log-Jacobian of
-the exponential transformation. Without it, the density would be
-misnormalised on the log scale and would no longer correspond to the
-Gamma distribution derived above. Both parameters arrive as data rather
-than literals, allowing the generated Stan code to remain identical
-across genes and the compiled model to be reused.</p>
-</div>
-</div>
-<div class="section level3">
-<h3 id="the-student-t-prior-default">The Student-t prior (default)<a class="anchor" aria-label="anchor" href="#the-student-t-prior-default"></a>
-</h3>
-<p>The Gamma prior provides a direct Bayesian approximation based on
-edgeR’s negative-binomial dispersion trend and empirical-Bayes shrinkage
-strength. Its relatively thin tails, however, can make the upstream
-edgeR information influential when the <code>brmDE</code> model differs
-substantially from the fixed-effect negative-binomial model used to
-estimate that information.</p>
-<p>There are two important situations in which the edgeR dispersion
-trend can be systematically displaced from the dispersion estimated by
-<code>brmDE</code> (see <a href="#appendix-1">Appendix 1</a>).</p>
-<ul>
-<li><p>Because edgeR dispersion estimation cannot fit mixed-effects
-models, a mixed-effects <code>brmDE</code> model must be approximated by
-a fixed-effects model. For example,
-<code>~ treatment + (1 | hospital)</code> may be approximated by
-<code>~ treatment + hospital</code>. The fixed effects are estimated
-without partial pooling and can absorb more variation, potentially
-reducing the residual negative-binomial dispersion.</p></li>
-<li><p>A zero-inflated negative-binomial model in <code>brmDE</code>
-must be approximated upstream by an ordinary negative-binomial model.
-Zero inflation can then be absorbed by the edgeR negative-binomial
-dispersion, potentially increasing the estimated dispersion.</p></li>
-</ul>
-<p>For these cases, <code>brmDE</code> provides a heavy-tailed Student-t
-alternative that uses the same edgeR trend as its prior location while
-allowing the gene’s likelihood to move substantially further from
-it.</p>
-<div class="section level4">
-<h4 id="simplifying-the-prior-like-for-gamma-using-phi_mathrmtrendg-as-offset">Simplifying the prior like for gamma: using
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><annotation encoding="application/x-tex">\phi_{\mathrm{trend},g}</annotation></semantics></math>
-as offset<a class="anchor" aria-label="anchor" href="#simplifying-the-prior-like-for-gamma-using-phi_mathrmtrendg-as-offset"></a>
-</h4>
-<p>The submodel is the one already assembled above. On</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">shape</span> <span class="op">~</span> <span class="fl">1</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/stats/offset.html" class="external-link">offset</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="fl">1</span><span class="op">/</span><span class="va">dispersion_trended</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p>the intercept has a Student-t prior, <code>student_t(ν, 0, σ)</code>.
-The Gamma alternative puts
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">G</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">a</mi></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>d</mi><mn>0</mn></msub><mi>/</mi><mn>2</mn><mo>,</mo><mspace width="0.278em"></mspace><msub><mi>d</mi><mn>0</mn></msub><mi>/</mi><mn>2</mn><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\mathrm{Gamma}(d_0/2,\; d_0/2)</annotation></semantics></math>
-on
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">exp</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>b</mi><mn>0</mn></msub><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\exp(b_0)</annotation></semantics></math>
-instead. The offset is the same; only the intercept prior changes.</p>
-</div>
-<div class="section level4">
-<h4 id="from-d_0-to-a-log-scale-sd">From
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>
-to a log-scale SD<a class="anchor" aria-label="anchor" href="#from-d_0-to-a-log-scale-sd"></a>
-</h4>
-<p>The Student-t prior uses the same edgeR-derived shrinkage strength as
-the Gamma approximation, but replaces the thin-tailed Gamma-derived
-distribution with a heavy-tailed distribution on the log scale.</p>
-<p>Under the reference Gamma approximation,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">exp</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>b</mi><mn>0</mn></msub><mo stretchy="false" form="postfix">)</mo><mo>∼</mo><mrow><mi mathvariant="normal">G</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">a</mi></mrow><mrow><mo stretchy="true" form="prefix">(</mo><mfrac><msub><mi>d</mi><mn>0</mn></msub><mn>2</mn></mfrac><mo>,</mo><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">e</mi></mrow><mo>=</mo><mfrac><msub><mi>d</mi><mn>0</mn></msub><mn>2</mn></mfrac><mo stretchy="true" form="postfix">)</mo></mrow><mi>.</mi></mrow><annotation encoding="application/x-tex">
-\exp(b_0)
-\sim
-\mathrm{Gamma}\left(
-\frac{d_0}{2},
-\mathrm{rate}
-=
-\frac{d_0}{2}
-\right).
-</annotation></semantics></math></p>
-<p>The variance of the logarithm of a Gamma random variable depends only
-on its shape parameter. For</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>X</mi><mo>∼</mo><mrow><mi mathvariant="normal">G</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">a</mi></mrow><mo stretchy="false" form="prefix">(</mo><mi>a</mi><mo>,</mo><mi>⋅</mi><mo stretchy="false" form="postfix">)</mo><mo>,</mo></mrow><annotation encoding="application/x-tex">
-X\sim\mathrm{Gamma}(a,\cdot),
-</annotation></semantics></math></p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">V</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">r</mi></mrow><mo stretchy="false" form="prefix">(</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mi>X</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msup><mi>ψ</mi><mo>′</mo></msup><mo stretchy="false" form="prefix">(</mo><mi>a</mi><mo stretchy="false" form="postfix">)</mo><mo>,</mo></mrow><annotation encoding="application/x-tex">
-\mathrm{Var}(\log X)
-=
-\psi'(a),
-</annotation></semantics></math></p>
-<p>where
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msup><mi>ψ</mi><mo>′</mo></msup><annotation encoding="application/x-tex">\psi'</annotation></semantics></math>
-is the trigamma function.</p>
-<p>Using
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi><mo>=</mo><msub><mi>d</mi><mn>0</mn></msub><mi>/</mi><mn>2</mn></mrow><annotation encoding="application/x-tex">a=d_0/2</annotation></semantics></math>,
-the log-scale standard deviation of the reference Gamma prior is
-therefore</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><menclose notation="box"><mrow><mrow><mi mathvariant="normal">S</mi><mi mathvariant="normal">D</mi></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>b</mi><mn>0</mn></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msqrt><mrow><msup><mi>ψ</mi><mo>′</mo></msup><mo stretchy="false" form="prefix">(</mo><msub><mi>d</mi><mn>0</mn></msub><mi>/</mi><mn>2</mn><mo stretchy="false" form="postfix">)</mo></mrow></msqrt><mi>.</mi></mrow></menclose><annotation encoding="application/x-tex">
-\boxed{
-\mathrm{SD}(b_0)
-=
-\sqrt{\psi'(d_0/2)}.
-}
-</annotation></semantics></math></p>
-<p><code>brmDE</code> uses this standard deviation to calibrate the
-width of the Student-t prior. This is a deliberate variance-matching
-approximation:
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>
-comes from edgeR’s empirical-Bayes shrinkage estimation, while the
-Student-t distribution supplies heavier tails than the reference Gamma
-prior.</p>
-</div>
-<div class="section level4">
-<h4 id="from-sd-to-the-student-t-scale">From SD to the Student-t scale<a class="anchor" aria-label="anchor" href="#from-sd-to-the-student-t-scale"></a>
-</h4>
-<p><code>brms</code> writes <code>student_t(ν, μ, σ)</code> with a
-<em>scale</em>, not a standard deviation. For
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ν</mi><mo>&gt;</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">\nu &gt; 2</annotation></semantics></math>,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">S</mi><mi mathvariant="normal">D</mi></mrow><mo>=</mo><mi>σ</mi><msqrt><mfrac><mi>ν</mi><mrow><mi>ν</mi><mo>−</mo><mn>2</mn></mrow></mfrac></msqrt><mo>,</mo><mspace width="2.0em"></mspace><mtext mathvariant="normal">so</mtext><mspace width="2.0em"></mspace><mi>σ</mi><mo>=</mo><mrow><mi mathvariant="normal">S</mi><mi mathvariant="normal">D</mi></mrow><msqrt><mfrac><mrow><mi>ν</mi><mo>−</mo><mn>2</mn></mrow><mi>ν</mi></mfrac></msqrt><mi>.</mi></mrow><annotation encoding="application/x-tex">
-\mathrm{SD}
-=
-\sigma\sqrt{\frac{\nu}{\nu-2}},
-\qquad
-\text{so}
-\qquad
-\sigma
-=
-\mathrm{SD}\sqrt{\frac{\nu-2}{\nu}}.
-</annotation></semantics></math></p>
-<p>At the default
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ν</mi><mo>=</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">\nu=3</annotation></semantics></math>,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>σ</mi><mo>=</mo><mrow><mi mathvariant="normal">S</mi><mi mathvariant="normal">D</mi></mrow><mi>/</mi><msqrt><mn>3</mn></msqrt><mi>.</mi></mrow><annotation encoding="application/x-tex">
-\sigma
-=
-\mathrm{SD}/\sqrt{3}.
-</annotation></semantics></math></p>
-<p>Putting both steps together, at the default
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ν</mi><mo>=</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">\nu=3</annotation></semantics></math>,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">S</mi><mi mathvariant="normal">D</mi></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>b</mi><mn>0</mn></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msqrt><mrow><msup><mi>ψ</mi><mo>′</mo></msup><mo stretchy="false" form="prefix">(</mo><msub><mi>d</mi><mn>0</mn></msub><mi>/</mi><mn>2</mn><mo stretchy="false" form="postfix">)</mo></mrow></msqrt><mo>,</mo><mspace width="2.0em"></mspace><mi>σ</mi><mo>=</mo><mrow><mi mathvariant="normal">S</mi><mi mathvariant="normal">D</mi></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>b</mi><mn>0</mn></msub><mo stretchy="false" form="postfix">)</mo><msqrt><mfrac><mrow><mi>ν</mi><mo>−</mo><mn>2</mn></mrow><mi>ν</mi></mfrac></msqrt><mo>=</mo><mfrac><msqrt><mrow><msup><mi>ψ</mi><mo>′</mo></msup><mo stretchy="false" form="prefix">(</mo><msub><mi>d</mi><mn>0</mn></msub><mi>/</mi><mn>2</mn><mo stretchy="false" form="postfix">)</mo></mrow></msqrt><msqrt><mn>3</mn></msqrt></mfrac><mi>.</mi></mrow><annotation encoding="application/x-tex">
-\mathrm{SD}(b_0)
-=
-\sqrt{\psi'(d_0/2)},
-\qquad
-\sigma
-=
-\mathrm{SD}(b_0)\sqrt{\frac{\nu-2}{\nu}}
-=
-\frac{\sqrt{\psi'(d_0/2)}}{\sqrt{3}}.
-</annotation></semantics></math></p>
-</div>
-</div>
-</div>
-<div class="section level2">
-<h2 id="appendix-1">Appendix 1: Background on empirical-Bayes estimation of dispersion
-in edgeR<a class="anchor" aria-label="anchor" href="#appendix-1"></a>
-</h2>
-<p>The negative-binomial dispersion used as the <code>brmDE</code> prior
-location and the quasi-likelihood dispersion used internally to estimate
-shrinkage strength are distinct quantities.</p>
-<p>For the negative-binomial model, edgeR estimates an
-abundance-dependent trend</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo>,</mo></mrow><annotation encoding="application/x-tex">
-\phi_{\mathrm{trend},g},
-</annotation></semantics></math></p>
-<p>and gene-specific tagwise negative-binomial dispersions</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">g</mi><mi mathvariant="normal">w</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">s</mi><mi mathvariant="normal">e</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mi>.</mi></mrow><annotation encoding="application/x-tex">
-\phi_{\mathrm{tagwise},g}.
-</annotation></semantics></math></p>
-<p>The tagwise estimates are obtained by weighted-likelihood empirical
-Bayes rather than through a conjugate inverse-chi-square prior.</p>
-<p>However, <code>estimateDisp()</code> also needs to determine how
-strongly gene-specific dispersions should be shrunk towards the trend.
-The returned <code>prior.df</code>, denoted
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>,
-is estimated using residual quasi-likelihood variance machinery closely
-related to the empirical-Bayes framework used by <code>limma</code>.</p>
-<p>This appendix describes that calculation.</p>
-<div class="section level3">
-<h3 id="sampling-uncertainty-of-a-variance-estimate">Sampling uncertainty of a variance estimate<a class="anchor" aria-label="anchor" href="#sampling-uncertainty-of-a-variance-estimate"></a>
-</h3>
-<p>The connection between variance uncertainty and degrees of freedom
-comes from the classical sampling distribution of a sample variance. For
-normally distributed observations,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mfrac><mrow><mi>d</mi><mspace width="0.167em"></mspace><msup><mi>s</mi><mn>2</mn></msup></mrow><msup><mi>σ</mi><mn>2</mn></msup></mfrac><mo>∼</mo><msubsup><mi>χ</mi><mi>d</mi><mn>2</mn></msubsup><mo>,</mo></mrow><annotation encoding="application/x-tex">
-\frac{d\,s^2}{\sigma^2}
-\sim
-\chi^2_d,
-</annotation></semantics></math></p>
-<p>where:</p>
-<ul>
-<li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msup><mi>s</mi><mn>2</mn></msup><annotation encoding="application/x-tex">s^2</annotation></semantics></math>
-is the variance estimated from the observed sample;</li>
-<li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msup><mi>σ</mi><mn>2</mn></msup><annotation encoding="application/x-tex">\sigma^2</annotation></semantics></math>
-is the unknown true population variance;</li>
-<li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>d</mi><annotation encoding="application/x-tex">d</annotation></semantics></math>
-is the residual degrees of freedom. For
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>n</mi><annotation encoding="application/x-tex">n</annotation></semantics></math>
-observations described only by their mean,
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>=</mo><mi>n</mi><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">d=n-1</annotation></semantics></math>.</li>
-</ul>
-<p>The sample variance itself is not chi-square distributed. Its ratio
-to the true variance, after multiplication by its degrees of freedom,
-follows a chi-square distribution.</p>
-<p>edgeR applies the same variance-moderation principle to a residual
-quasi-likelihood dispersion. Using simplified notation,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mfrac><mrow><mi>d</mi><mspace width="0.167em"></mspace><msubsup><mi>q</mi><mi>g</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup></mrow><msubsup><mi>q</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup></mfrac><mo>∼</mo><msubsup><mi>χ</mi><mi>d</mi><mn>2</mn></msubsup><mi>.</mi></mrow><annotation encoding="application/x-tex">
-\frac{d\,q_g^{residual}}
-{q_g^{true}}
-\sim
-\chi^2_d.
-</annotation></semantics></math></p>
-<p>The correspondence with the classical result is</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>s</mi><mn>2</mn></msup><mo>↔</mo><msubsup><mi>q</mi><mi>g</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup></mrow><annotation encoding="application/x-tex">
-s^2
-\longleftrightarrow
-q_g^{residual}
-</annotation></semantics></math></p>
-<p>and</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>σ</mi><mn>2</mn></msup><mo>↔</mo><msubsup><mi>q</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup><mi>.</mi></mrow><annotation encoding="application/x-tex">
-\sigma^2
-\longleftrightarrow
-q_g^{true}.
-</annotation></semantics></math></p>
-<p>Here,
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>q</mi><mi>g</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><annotation encoding="application/x-tex">q_g^{residual}</annotation></semantics></math>
-is the observed noisy residual QL-dispersion estimate for gene
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>g</mi><annotation encoding="application/x-tex">g</annotation></semantics></math>,
-while
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>q</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup><annotation encoding="application/x-tex">q_g^{true}</annotation></semantics></math>
-is its unknown true value.</p>
-<p>The observed residual QL dispersion is obtained approximately from
-the residual negative-binomial deviance:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>q</mi><mi>g</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><mo>≈</mo><mfrac><msub><mi>D</mi><mrow><mi>g</mi><mo>,</mo><mrow><mi mathvariant="normal">l</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">k</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">h</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">d</mi></mrow></mrow></msub><mi>d</mi></mfrac><mo>,</mo></mrow><annotation encoding="application/x-tex">
-q_g^{residual}
-\approx
-\frac{D_{g,\mathrm{likelihood}}}{d},
+we denote this as</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi><mspace width="0.167em"></mspace><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo>,</mo></mrow><annotation encoding="application/x-tex">
+w\,\ell_{\mathrm{smooth},g}(\phi),
 </annotation></semantics></math></p>
 <p>where</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>D</mi><mrow><mi>g</mi><mo>,</mo><mrow><mi mathvariant="normal">l</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">k</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">h</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">d</mi></mrow></mrow></msub><mo>=</mo><mn>2</mn><mrow><mo stretchy="true" form="prefix">[</mo><msub><mi>ℓ</mi><mi>g</mi></msub><mo stretchy="false" form="prefix">(</mo><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">u</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">d</mi></mrow><mo stretchy="false" form="postfix">)</mo><mo>−</mo><msub><mi>ℓ</mi><mi>g</mi></msub><mo stretchy="false" form="prefix">(</mo><mrow><mi mathvariant="normal">f</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">d</mi></mrow><mo stretchy="false" form="postfix">)</mo><mo stretchy="true" form="postfix">]</mo></mrow><mi>.</mi></mrow><annotation encoding="application/x-tex">
-D_{g,\mathrm{likelihood}}
-=
-2\left[
-\ell_g(\mathrm{saturated})
--
-\ell_g(\mathrm{fitted})
-\right].
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi><mo>=</mo><mtext mathvariant="monospace">𝚙𝚛𝚒𝚘𝚛.𝚗</mtext><mi>.</mi></mrow><annotation encoding="application/x-tex">
+w=\texttt{prior.n}.
 </annotation></semantics></math></p>
-<p>Thus
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>D</mi><mrow><mi>g</mi><mo>,</mo><mrow><mi mathvariant="normal">l</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">k</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">h</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">d</mi></mrow></mrow></msub><annotation encoding="application/x-tex">D_{g,\mathrm{likelihood}}</annotation></semantics></math>
-measures residual lack-of-fit of the negative-binomial model, and
-dividing by the residual degrees of freedom produces the variance-like
-quantity
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>q</mi><mi>g</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><annotation encoding="application/x-tex">q_g^{residual}</annotation></semantics></math>.</p>
-</div>
-<div class="section level3">
-<h3 id="the-unknown-true-ql-dispersion">The unknown true QL dispersion<a class="anchor" aria-label="anchor" href="#the-unknown-true-ql-dispersion"></a>
-</h3>
-<p>From</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mfrac><mrow><mi>d</mi><mspace width="0.167em"></mspace><msubsup><mi>q</mi><mi>g</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup></mrow><msubsup><mi>q</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup></mfrac><mo>∼</mo><msubsup><mi>χ</mi><mi>d</mi><mn>2</mn></msubsup><mo>,</mo></mrow><annotation encoding="application/x-tex">
-\frac{d\,q_g^{residual}}
-{q_g^{true}}
-\sim
-\chi^2_d,
+<p>In <code>brmDE</code>, the dispersion parameter is handled on the log
+scale. We therefore define the prior kernel directly as a function of
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\log(\phi)</annotation></semantics></math>:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><msub><mi>p</mi><mi>g</mi></msub><mspace width="-0.167em"></mspace><mrow><mo stretchy="true" form="prefix">(</mo><mi mathvariant="normal">log</mi><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo stretchy="true" form="postfix">)</mo></mrow><mo>∝</mo><mi>w</mi><mspace width="0.167em"></mspace><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mrow><mo stretchy="true" form="prefix">(</mo><msup><mi>e</mi><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo></mrow></msup><mo stretchy="true" form="postfix">)</mo></mrow><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\log p_g\!\left(\log(\phi)\right)
+\propto
+w\,\ell_{\mathrm{smooth},g}\left(e^{\log(\phi)}\right).
 </annotation></semantics></math></p>
-<p>we cannot solve directly for
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>q</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup><annotation encoding="application/x-tex">q_g^{true}</annotation></semantics></math>.</p>
-<p>Algebraically,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>q</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup><mo>=</mo><mfrac><mrow><mi>d</mi><mspace width="0.167em"></mspace><msubsup><mi>q</mi><mi>g</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup></mrow><msubsup><mi>χ</mi><mi>d</mi><mn>2</mn></msubsup></mfrac><mo>,</mo></mrow><annotation encoding="application/x-tex">
-q_g^{true}
-=
-\frac{d\,q_g^{residual}}
-{\chi^2_d},
-</annotation></semantics></math></p>
-<p>but the realised value of the
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>χ</mi><mi>d</mi><mn>2</mn></msubsup><annotation encoding="application/x-tex">\chi^2_d</annotation></semantics></math>
-random variable is unknown. The equation therefore describes the
-sampling distribution of
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>q</mi><mi>g</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><annotation encoding="application/x-tex">q_g^{residual}</annotation></semantics></math>
-conditional on the unknown
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>q</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup><annotation encoding="application/x-tex">q_g^{true}</annotation></semantics></math>.</p>
-<p>The empirical-Bayes model supplies the second level:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>q</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup><mo>∼</mo><msubsup><mi>s</mi><mrow><mn>0</mn><mi>g</mi></mrow><mn>2</mn></msubsup><mfrac><msub><mi>d</mi><mn>0</mn></msub><msubsup><mi>χ</mi><msub><mi>d</mi><mn>0</mn></msub><mn>2</mn></msubsup></mfrac><mo>,</mo></mrow><annotation encoding="application/x-tex">
-q_g^{true}
-\sim
-s_{0g}^2
-\frac{d_0}{\chi^2_{d_0}},
+<p>This avoids introducing an unnecessary change-of-variable step from a
+density defined with respect to
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>ϕ</mi></mrow><annotation encoding="application/x-tex">d\phi</annotation></semantics></math>
+to one defined with respect to
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">d\log(\phi)</annotation></semantics></math>.
+We are explicitly defining the prior on the scale used by
+<code>brmDE</code>.</p>
+<p>The maximum of this prior kernel occurs at</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mrow><mo stretchy="true" form="prefix">(</mo><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="true" form="postfix">)</mo></mrow><mo>,</mo></mrow><annotation encoding="application/x-tex">
+\log\left(\phi_{\mathrm{trend},g}\right),
 </annotation></semantics></math></p>
 <p>where
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>s</mi><mrow><mn>0</mn><mi>g</mi></mrow><mn>2</mn></msubsup><annotation encoding="application/x-tex">s_{0g}^2</annotation></semantics></math>
-is the expected residual QL dispersion for a gene with the abundance of
-gene
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>g</mi><annotation encoding="application/x-tex">g</annotation></semantics></math>,
-and
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>
-is the prior degrees of freedom.</p>
-<p>The trend
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>s</mi><mrow><mn>0</mn><mi>g</mi></mrow><mn>2</mn></msubsup><annotation encoding="application/x-tex">s_{0g}^2</annotation></semantics></math>
-is estimated from the collection of observed residual QL
-dispersions:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">{</mo><msubsup><mi>q</mi><mn>1</mn><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><mo>,</mo><msubsup><mi>q</mi><mn>2</mn><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><mo>,</mo><mi>…</mi><mo>,</mo><msubsup><mi>q</mi><mi>G</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><mo stretchy="false" form="postfix">}</mo><mo>→</mo><msubsup><mi>s</mi><mrow><mn>0</mn><mi>g</mi></mrow><mn>2</mn></msubsup><mi>.</mi></mrow><annotation encoding="application/x-tex">
-\{
-q_1^{residual},
-q_2^{residual},
-\ldots,
-q_G^{residual}
-\}
-\longrightarrow
-s_{0g}^2.
-</annotation></semantics></math></p>
-<p>The three quantities therefore have distinct meanings:</p>
-<ul>
-<li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>q</mi><mi>g</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><annotation encoding="application/x-tex">q_g^{residual}</annotation></semantics></math>
-is the noisy residual QL-dispersion estimate obtained from gene
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>g</mi><annotation encoding="application/x-tex">g</annotation></semantics></math>;</li>
-<li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>s</mi><mrow><mn>0</mn><mi>g</mi></mrow><mn>2</mn></msubsup><annotation encoding="application/x-tex">s_{0g}^2</annotation></semantics></math>
-is the expected residual QL dispersion from the across-gene abundance
-trend;</li>
-<li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>q</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup><annotation encoding="application/x-tex">q_g^{true}</annotation></semantics></math>
-is the latent true residual QL dispersion of gene
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>g</mi><annotation encoding="application/x-tex">g</annotation></semantics></math>.</li>
-</ul>
-<p>The hierarchy is</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>s</mi><mrow><mn>0</mn><mi>g</mi></mrow><mn>2</mn></msubsup><mo>→</mo><msubsup><mi>q</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup><mo>→</mo><msubsup><mi>q</mi><mi>g</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><mi>.</mi></mrow><annotation encoding="application/x-tex">
-s_{0g}^2
-\longrightarrow
-q_g^{true}
-\longrightarrow
-q_g^{residual}.
-</annotation></semantics></math></p>
-</div>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><annotation encoding="application/x-tex">\phi_{\mathrm{trend},g}</annotation></semantics></math>
+is returned by <code>edgeR</code> as
+<code>trended.dispersion</code>.</p>
+<p>The weighted edgeR curve is not itself a Bayesian prior density. For
+constructing the <code>brmDE</code> prior, we use its local shape around
+the maximum.</p>
+<p><strong>Intuitive route from weighted smoothed likelihood to prior
+SD:</strong></p>
+<ol style="list-style-type: decimal">
+<li>Treat the weighted smoothed curve as an unnormalised log-density on
+the
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\log(\phi)</annotation></semantics></math>
+scale.</li>
+<li>Exponentiate it to obtain an unnormalised probability density.</li>
+<li>Normalise it so that its total area is 1.</li>
+<li>Calculate the mean and SD of that probability distribution.</li>
+<li>Equivalently, one could sample from the normalised density and
+calculate the empirical SD.</li>
+<li>A faster local approximation is to estimate the SD from the
+curvature around the mode.</li>
+</ol>
 <div class="section level3">
-<h3 id="joining-the-equations-to-estimate-d_0">Joining the equations to estimate
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math><a class="anchor" aria-label="anchor" href="#joining-the-equations-to-estimate-d_0"></a>
+<h3 id="why-curvature-can-be-calculated-directly-from-the-weighted-log-likelihood">Why curvature can be calculated directly from the weighted
+log-likelihood<a class="anchor" aria-label="anchor" href="#why-curvature-can-be-calculated-directly-from-the-weighted-log-likelihood"></a>
 </h3>
-<p>At this stage:</p>
-<ul>
-<li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>q</mi><mi>g</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><annotation encoding="application/x-tex">q_g^{residual}</annotation></semantics></math>
-is observed/calculated for every gene;</li>
-<li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>s</mi><mrow><mn>0</mn><mi>g</mi></mrow><mn>2</mn></msubsup><annotation encoding="application/x-tex">s_{0g}^2</annotation></semantics></math>
-is estimated from the abundance trend;</li>
-<li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>d</mi><annotation encoding="application/x-tex">d</annotation></semantics></math>
-is known from the experimental design;</li>
-<li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>
-is unknown;</li>
-<li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>q</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup><annotation encoding="application/x-tex">q_g^{true}</annotation></semantics></math>
-is also unknown.</li>
-</ul>
-<p>The sampling model can be written as</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>q</mi><mi>g</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><mo>=</mo><msubsup><mi>q</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup><mfrac><msubsup><mi>χ</mi><mi>d</mi><mn>2</mn></msubsup><mi>d</mi></mfrac><mi>.</mi></mrow><annotation encoding="application/x-tex">
-q_g^{residual}
+<p>We are calculating the curvature of the <strong>log of the normalised
+probability density</strong>, as a proxy for the curvature of the
+probability density itself.</p>
+<p>Define the weighted smoothed log-likelihood on the log-dispersion
+scale as</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>q</mi><mi>g</mi></msub><mspace width="-0.167em"></mspace><mrow><mo stretchy="true" form="prefix">(</mo><mi mathvariant="normal">log</mi><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo stretchy="true" form="postfix">)</mo></mrow><mo>=</mo><mi>w</mi><mspace width="0.167em"></mspace><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mrow><mo stretchy="true" form="prefix">(</mo><msup><mi>e</mi><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo></mrow></msup><mo stretchy="true" form="postfix">)</mo></mrow><mi>.</mi></mrow><annotation encoding="application/x-tex">
+q_g\!\left(\log(\phi)\right)
 =
-q_g^{true}
-\frac{\chi^2_d}{d}.
+w\,\ell_{\mathrm{smooth},g}\left(e^{\log(\phi)}\right).
 </annotation></semantics></math></p>
-<p>The prior model gives</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>q</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup><mo>=</mo><msubsup><mi>s</mi><mrow><mn>0</mn><mi>g</mi></mrow><mn>2</mn></msubsup><mfrac><msub><mi>d</mi><mn>0</mn></msub><msubsup><mi>χ</mi><msub><mi>d</mi><mn>0</mn></msub><mn>2</mn></msubsup></mfrac><mi>.</mi></mrow><annotation encoding="application/x-tex">
-q_g^{true}
+<p>The corresponding normalised prior density can be written as</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>p</mi><mi>g</mi></msub><mspace width="-0.167em"></mspace><mrow><mo stretchy="true" form="prefix">(</mo><mi mathvariant="normal">log</mi><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo stretchy="true" form="postfix">)</mo></mrow><mo>=</mo><mfrac><mrow><mrow><mi mathvariant="normal">exp</mi><mo>⁡</mo></mrow><mrow><mo stretchy="true" form="prefix">[</mo><msub><mi>q</mi><mi>g</mi></msub><mspace width="-0.167em"></mspace><mrow><mo stretchy="true" form="prefix">(</mo><mi mathvariant="normal">log</mi><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo stretchy="true" form="postfix">)</mo></mrow><mo stretchy="true" form="postfix">]</mo></mrow></mrow><mi>Z</mi></mfrac><mo>,</mo></mrow><annotation encoding="application/x-tex">
+p_g\!\left(\log(\phi)\right)
 =
-s_{0g}^2
-\frac{d_0}{\chi^2_{d_0}}.
+\frac{
+\exp\left[
+q_g\!\left(\log(\phi)\right)
+\right]
+}{
+Z
+},
 </annotation></semantics></math></p>
-<p>Substitution eliminates the latent
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>q</mi><mi>g</mi><mrow><mi>t</mi><mi>r</mi><mi>u</mi><mi>e</mi></mrow></msubsup><annotation encoding="application/x-tex">q_g^{true}</annotation></semantics></math>:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>q</mi><mi>g</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><mo>=</mo><msubsup><mi>s</mi><mrow><mn>0</mn><mi>g</mi></mrow><mn>2</mn></msubsup><mfrac><msub><mi>d</mi><mn>0</mn></msub><msubsup><mi>χ</mi><msub><mi>d</mi><mn>0</mn></msub><mn>2</mn></msubsup></mfrac><mfrac><msubsup><mi>χ</mi><mi>d</mi><mn>2</mn></msubsup><mi>d</mi></mfrac><mi>.</mi></mrow><annotation encoding="application/x-tex">
-q_g^{residual}
+<p>where
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>Z</mi><annotation encoding="application/x-tex">Z</annotation></semantics></math>
+is the normalising constant.</p>
+<p>Taking the logarithm gives</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><msub><mi>p</mi><mi>g</mi></msub><mspace width="-0.167em"></mspace><mrow><mo stretchy="true" form="prefix">(</mo><mi mathvariant="normal">log</mi><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo stretchy="true" form="postfix">)</mo></mrow><mo>=</mo><msub><mi>q</mi><mi>g</mi></msub><mspace width="-0.167em"></mspace><mrow><mo stretchy="true" form="prefix">(</mo><mi mathvariant="normal">log</mi><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo stretchy="true" form="postfix">)</mo></mrow><mo>−</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mi>Z</mi><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\log p_g\!\left(\log(\phi)\right)
 =
-s_{0g}^2
-\frac{d_0}{\chi^2_{d_0}}
-\frac{\chi^2_d}{d}.
+q_g\!\left(\log(\phi)\right)-\log Z.
+</annotation></semantics></math></p>
+<p>Since
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mi>Z</mi></mrow><annotation encoding="application/x-tex">\log Z</annotation></semantics></math>
+is constant with respect to
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\log(\phi)</annotation></semantics></math>,</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mfrac><msup><mi>d</mi><mn>2</mn></msup><mrow><mi>d</mi><mo stretchy="false" form="prefix">[</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><msup><mo stretchy="false" form="postfix">]</mo><mn>2</mn></msup></mrow></mfrac><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><msub><mi>p</mi><mi>g</mi></msub><mspace width="-0.167em"></mspace><mrow><mo stretchy="true" form="prefix">(</mo><mi mathvariant="normal">log</mi><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo stretchy="true" form="postfix">)</mo></mrow><mo>=</mo><mfrac><msup><mi>d</mi><mn>2</mn></msup><mrow><mi>d</mi><mo stretchy="false" form="prefix">[</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><msup><mo stretchy="false" form="postfix">]</mo><mn>2</mn></msup></mrow></mfrac><msub><mi>q</mi><mi>g</mi></msub><mspace width="-0.167em"></mspace><mrow><mo stretchy="true" form="prefix">(</mo><mi mathvariant="normal">log</mi><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo stretchy="true" form="postfix">)</mo></mrow><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\frac{d^2}{d[\log(\phi)]^2}
+\log p_g\!\left(\log(\phi)\right)
+=
+\frac{d^2}{d[\log(\phi)]^2}
+q_g\!\left(\log(\phi)\right).
 </annotation></semantics></math></p>
 <p>Therefore,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><menclose notation="box"><mrow><mfrac><msubsup><mi>q</mi><mi>g</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><msubsup><mi>s</mi><mrow><mn>0</mn><mi>g</mi></mrow><mn>2</mn></msubsup></mfrac><mo>=</mo><mfrac><mrow><msubsup><mi>χ</mi><mi>d</mi><mn>2</mn></msubsup><mi>/</mi><mi>d</mi></mrow><mrow><msubsup><mi>χ</mi><msub><mi>d</mi><mn>0</mn></msub><mn>2</mn></msubsup><mi>/</mi><msub><mi>d</mi><mn>0</mn></msub></mrow></mfrac><mo>∼</mo><msub><mi>F</mi><mrow><mi>d</mi><mo>,</mo><msub><mi>d</mi><mn>0</mn></msub></mrow></msub><mi>.</mi></mrow></menclose><annotation encoding="application/x-tex">
-\boxed{
-\frac{q_g^{residual}}
-{s_{0g}^2}
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">curvature of the log normalised prior</mtext><mo>=</mo><mtext mathvariant="normal">curvature of the weighted smoothed log-likelihood</mtext><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\text{curvature of the log normalised prior}
 =
-\frac{\chi^2_d/d}
-{\chi^2_{d_0}/d_0}
-\sim
-F_{d,d_0}.
-}
+\text{curvature of the weighted smoothed log-likelihood}.
 </annotation></semantics></math></p>
-<p>The
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>F</mi><annotation encoding="application/x-tex">F</annotation></semantics></math>
-distribution arises because the expression is a ratio of two independent
-chi-square random variables, each divided by its degrees of freedom.</p>
-<p>Across thousands of genes, edgeR has the observed ratios</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mfrac><msubsup><mi>q</mi><mn>1</mn><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><msubsup><mi>s</mi><mn>01</mn><mn>2</mn></msubsup></mfrac><mo>,</mo><mfrac><msubsup><mi>q</mi><mn>2</mn><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><msubsup><mi>s</mi><mn>02</mn><mn>2</mn></msubsup></mfrac><mo>,</mo><mi>…</mi></mrow><annotation encoding="application/x-tex">
-\frac{q_1^{residual}}{s_{01}^2},
-\frac{q_2^{residual}}{s_{02}^2},
-\ldots
-</annotation></semantics></math></p>
-<p>and uses their distribution to estimate
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>.</p>
-<p>Equivalently, on the log scale, the variance of the residual QL
-dispersions can be decomposed into sampling variability and genuine
-across-gene variability. For equal residual degrees of freedom
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>d</mi><annotation encoding="application/x-tex">d</annotation></semantics></math>,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">V</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">r</mi></mrow><mrow><mo stretchy="true" form="prefix">[</mo><mi mathvariant="normal">log</mi><mrow><mo stretchy="true" form="prefix">(</mo><mfrac><msubsup><mi>q</mi><mi>g</mi><mrow><mi>r</mi><mi>e</mi><mi>s</mi><mi>i</mi><mi>d</mi><mi>u</mi><mi>a</mi><mi>l</mi></mrow></msubsup><msubsup><mi>s</mi><mrow><mn>0</mn><mi>g</mi></mrow><mn>2</mn></msubsup></mfrac><mo stretchy="true" form="postfix">)</mo></mrow><mo stretchy="true" form="postfix">]</mo></mrow><mo>=</mo><msup><mi>ψ</mi><mo>′</mo></msup><mo stretchy="false" form="prefix">(</mo><mi>d</mi><mi>/</mi><mn>2</mn><mo stretchy="false" form="postfix">)</mo><mo>+</mo><msup><mi>ψ</mi><mo>′</mo></msup><mo stretchy="false" form="prefix">(</mo><msub><mi>d</mi><mn>0</mn></msub><mi>/</mi><mn>2</mn><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
-\mathrm{Var}
-\left[
-\log
-\left(
-\frac{q_g^{residual}}{s_{0g}^2}
-\right)
-\right]
-=
-\psi'(d/2)
-+
-\psi'(d_0/2).
-</annotation></semantics></math></p>
-<p>The first term is determined by the known residual degrees of freedom
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>d</mi><annotation encoding="application/x-tex">d</annotation></semantics></math>.
-The remaining variation identifies
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>.</p>
-<p>A large
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>
-means the true residual QL dispersions are tightly concentrated around
-their trend and supports stronger empirical-Bayes shrinkage. A small
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>
-means greater genuine between-gene heterogeneity and supports weaker
-shrinkage.</p>
+<p>This means that the conceptual exponentiation and normalisation steps
+do not need to be carried out explicitly when estimating curvature.</p>
 </div>
 <div class="section level3">
-<h3 id="how-d_0-is-used-for-the-negative-binomial-dispersion">How
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>
-is used for the negative-binomial dispersion<a class="anchor" aria-label="anchor" href="#how-d_0-is-used-for-the-negative-binomial-dispersion"></a>
+<h3 id="numerical-curvature-from-the-edger-likelihood-grid">Numerical curvature from the edgeR likelihood grid<a class="anchor" aria-label="anchor" href="#numerical-curvature-from-the-edger-likelihood-grid"></a>
 </h3>
-<p>The important distinction is that the QL hierarchy above is used to
-estimate the <strong>strength of shrinkage</strong>,
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>.
-It does not imply that edgeR places the same scaled-inverse-chi-square
-prior directly on its negative-binomial dispersion
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mi>g</mi></msub><annotation encoding="application/x-tex">\phi_g</annotation></semantics></math>.</p>
-<p>For the negative-binomial dispersion, edgeR instead combines the
-gene-specific and shared adjusted profile likelihoods using weighted
-likelihood. Conceptually,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo>+</mo><mtext mathvariant="normal">gene-specific NB likelihood</mtext><mo>+</mo><msub><mi>d</mi><mn>0</mn></msub><mo>→</mo><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">g</mi><mi mathvariant="normal">w</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">s</mi><mi mathvariant="normal">e</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mi>.</mi></mrow><annotation encoding="application/x-tex">
-\phi_{\mathrm{trend},g}
-+
-\text{gene-specific NB likelihood}
-+
-d_0
-\longrightarrow
-\phi_{\mathrm{tagwise},g}.
-</annotation></semantics></math></p>
-<p>Thus:</p>
+<p>The abundance-smoothed shared log-likelihood is available numerically
+over a finite dispersion grid, so we estimate its local curvature from
+those grid values.</p>
+<p>Suppose there are
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>G</mi><annotation encoding="application/x-tex">G</annotation></semantics></math>
+genes and
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>K</mi><annotation encoding="application/x-tex">K</annotation></semantics></math>
+dispersion-grid points.</p>
 <ul>
 <li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><annotation encoding="application/x-tex">\phi_{\mathrm{trend},g}</annotation></semantics></math>
-is the negative-binomial dispersion trend that <code>brmDE</code> uses
-as its prior location;</li>
+<code>shared.loglik</code> is a
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>G</mi><mo>×</mo><mi>K</mi></mrow><annotation encoding="application/x-tex">G \times K</annotation></semantics></math>
+matrix. Rows correspond to genes and columns correspond to
+dispersion-grid points.</li>
 <li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>
-describes the empirical-Bayes shrinkage strength;</li>
+<code>shared.loglik[g, ]</code> is therefore a numeric vector of
+length
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>K</mi><annotation encoding="application/x-tex">K</annotation></semantics></math>.
+It gives the y-values of the abundance-smoothed shared log-likelihood
+for gene
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>g</mi><annotation encoding="application/x-tex">g</annotation></semantics></math>
+across candidate dispersions.</li>
 <li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">g</mi><mi mathvariant="normal">w</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">s</mi><mi mathvariant="normal">e</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><annotation encoding="application/x-tex">\phi_{\mathrm{tagwise},g}</annotation></semantics></math>
-is edgeR’s already-moderated gene-specific NB dispersion and is not
-passed to <code>brmDE</code> as a prior location.</li>
+<code>spline.pts</code> is a numeric vector of length
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>K</mi><annotation encoding="application/x-tex">K</annotation></semantics></math>.
+It gives the grid coordinates corresponding to the
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>K</mi><annotation encoding="application/x-tex">K</annotation></semantics></math>
+columns of <code>shared.loglik</code>.</li>
+<li>
+<code>prior.n</code> is the weight applied to the shared likelihood.
+In the standard non-robust case it is a scalar; with robust estimation
+it may be gene-specific.</li>
 </ul>
-<p><code>brmDE</code> takes
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><annotation encoding="application/x-tex">\phi_{\mathrm{trend},g}</annotation></semantics></math>
+<p>The x-axis used for the local fit is</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mi>k</mi></msub><mo>=</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mi>k</mi></msub><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
+x_k
+=
+\log(\phi_k).
+</annotation></semantics></math></p>
+<p>The corresponding y-axis is</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mi>k</mi></msub><mo>=</mo><msub><mi>w</mi><mi>g</mi></msub><mo>×</mo><mtext mathvariant="monospace">𝚜𝚑𝚊𝚛𝚎𝚍.𝚕𝚘𝚐𝚕𝚒𝚔</mtext><mo stretchy="false" form="prefix">[</mo><mi>g</mi><mo>,</mo><mi>k</mi><mo stretchy="false" form="postfix">]</mo><mo>,</mo></mrow><annotation encoding="application/x-tex">
+y_k
+=
+w_g
+\times
+\texttt{shared.loglik}[g,k],
+</annotation></semantics></math></p>
+<p>where
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>w</mi><mi>g</mi></msub><annotation encoding="application/x-tex">w_g</annotation></semantics></math>
+is <code>prior.n</code> for gene
+$g<code>when gene-specific weights are used, or the common scalar</code>prior.n`
+otherwise.</p>
+<p>Thus, for gene
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>g</mi><annotation encoding="application/x-tex">g</annotation></semantics></math>,
+the local fit uses the paired points</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mo stretchy="true" form="prefix">(</mo><msub><mi>x</mi><mi>k</mi></msub><mo>,</mo><msub><mi>y</mi><mi>k</mi></msub><mo stretchy="true" form="postfix">)</mo></mrow><mo>=</mo><mrow><mo stretchy="true" form="prefix">(</mo><mi mathvariant="normal">log</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mi>k</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mspace width="0.278em"></mspace><msub><mi>w</mi><mi>g</mi></msub><mo>×</mo><mtext mathvariant="monospace">𝚜𝚑𝚊𝚛𝚎𝚍.𝚕𝚘𝚐𝚕𝚒𝚔</mtext><mo stretchy="false" form="prefix">[</mo><mi>g</mi><mo>,</mo><mi>k</mi><mo stretchy="false" form="postfix">]</mo><mo stretchy="true" form="postfix">)</mo></mrow><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\left(
+x_k,
+y_k
+\right)
+=
+\left(
+\log(\phi_k),
+\;
+w_g
+\times
+\texttt{shared.loglik}[g,k]
+\right).
+</annotation></semantics></math></p>
+</div>
+<div class="section level3">
+<h3 id="local-quadratic-fit">Local quadratic fit<a class="anchor" aria-label="anchor" href="#local-quadratic-fit"></a>
+</h3>
+<p>Rather than trying to derive probability distribution from smooth
+shrinked likelihood and sample from it to get the standard deviation, we
+use an approximate method.</p>
+<p>We estimate the curvature around the expected mode</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo>=</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mrow><mo stretchy="true" form="prefix">(</mo><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="true" form="postfix">)</mo></mrow><mi>.</mi></mrow><annotation encoding="application/x-tex">
+x_{\mathrm{trend},g}
+=
+\log\left(\phi_{\mathrm{trend},g}\right).
+</annotation></semantics></math></p>
+<p>We select a small number of grid points around the grid location
+closest to
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>x</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><annotation encoding="application/x-tex">x_{\mathrm{trend},g}</annotation></semantics></math>
+and define</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>z</mi><mi>k</mi></msub><mo>=</mo><msub><mi>x</mi><mi>k</mi></msub><mo>−</mo><msub><mi>x</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mi>.</mi></mrow><annotation encoding="application/x-tex">
+z_k
+=
+x_k
+-
+x_{\mathrm{trend},g}.
+</annotation></semantics></math></p>
+<p>Since, smooth likelihood around their maximum tend to be quadratic in
+shape, we then fit the local quadratic model</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mi>k</mi></msub><mo>=</mo><mi>a</mi><mo>+</mo><mi>b</mi><msub><mi>z</mi><mi>k</mi></msub><mo>+</mo><mi>c</mi><msubsup><mi>z</mi><mi>k</mi><mn>2</mn></msubsup><mi>.</mi></mrow><annotation encoding="application/x-tex">
+y_k
+=
+a
++
+b z_k
++
+c z_k^2.
+</annotation></semantics></math></p>
+<p>This can be fitted directly with base R <code><a href="https://rdrr.io/r/stats/lm.html" class="external-link">stats::lm()</a></code>
+because the model is linear in the coefficients
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>a</mi><annotation encoding="application/x-tex">a</annotation></semantics></math>,
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>b</mi><annotation encoding="application/x-tex">b</annotation></semantics></math>,
 and
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mn>0</mn></msub><annotation encoding="application/x-tex">d_0</annotation></semantics></math>
-and translates them into the Gamma or Student-t prior constructions
-described above. The scaled-inverse-chi-square model applied directly to
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mi>g</mi></msub><annotation encoding="application/x-tex">\phi_g</annotation></semantics></math>
-is therefore a <code>brmDE</code> approximation used to construct that
-Bayesian prior.</p>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>c</mi><annotation encoding="application/x-tex">c</annotation></semantics></math>.</p>
+<p>In R, the design formula is</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">y</span><span class="op">[</span><span class="va">idx</span><span class="op">]</span> <span class="op">~</span> <span class="va">z</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/AsIs.html" class="external-link">I</a></span><span class="op">(</span><span class="va">z</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span></span></code></pre></div>
+<p>where</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">z</span> <span class="op">&lt;-</span> <span class="va">x</span><span class="op">[</span><span class="va">idx</span><span class="op">]</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="va">phi_trend_g</span><span class="op">)</span></span></code></pre></div>
+<p>and <code>idx</code> identifies a small neighbourhood of grid points
+around the trended dispersion.</p>
+<p>The fitted design matrix has three columns:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mtable><mtr><mtd columnalign="center" style="text-align: center"></mtd><mtd columnalign="center" style="text-align: center"><mtext mathvariant="normal">intercept</mtext></mtd><mtd columnalign="center" style="text-align: center"><mi>z</mi></mtd><mtd columnalign="center" style="text-align: center"><msup><mi>z</mi><mn>2</mn></msup></mtd></mtr><mtr><mtd columnalign="center" style="text-align: center"><mn>1</mn></mtd><mtd columnalign="center" style="text-align: center"><mn>1</mn></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>z</mi><mn>1</mn></msub></mtd><mtd columnalign="center" style="text-align: center"><msubsup><mi>z</mi><mn>1</mn><mn>2</mn></msubsup></mtd></mtr><mtr><mtd columnalign="center" style="text-align: center"><mn>2</mn></mtd><mtd columnalign="center" style="text-align: center"><mn>1</mn></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>z</mi><mn>2</mn></msub></mtd><mtd columnalign="center" style="text-align: center"><msubsup><mi>z</mi><mn>2</mn><mn>2</mn></msubsup></mtd></mtr><mtr><mtd columnalign="center" style="text-align: center"><mi>⋮</mi></mtd><mtd columnalign="center" style="text-align: center"><mi>⋮</mi></mtd><mtd columnalign="center" style="text-align: center"><mi>⋮</mi></mtd><mtd columnalign="center" style="text-align: center"><mi>⋮</mi></mtd></mtr><mtr><mtd columnalign="center" style="text-align: center"><mi>n</mi></mtd><mtd columnalign="center" style="text-align: center"><mn>1</mn></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>z</mi><mi>n</mi></msub></mtd><mtd columnalign="center" style="text-align: center"><msubsup><mi>z</mi><mi>n</mi><mn>2</mn></msubsup></mtd></mtr></mtable><annotation encoding="application/x-tex">
+\begin{array}{c|ccc}
+ &amp; \text{intercept} &amp; z &amp; z^2\\
+\hline
+1 &amp; 1 &amp; z_1 &amp; z_1^2\\
+2 &amp; 1 &amp; z_2 &amp; z_2^2\\
+\vdots &amp; \vdots &amp; \vdots &amp; \vdots\\
+n &amp; 1 &amp; z_n &amp; z_n^2
+\end{array}
+</annotation></semantics></math></p>
+<p>and <code><a href="https://rdrr.io/r/stats/lm.html" class="external-link">lm()</a></code> estimates</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi><mo>,</mo><mspace width="0.278em"></mspace><mi>b</mi><mo>,</mo><mspace width="0.278em"></mspace><mi>c</mi><mi>.</mi></mrow><annotation encoding="application/x-tex">
+a,\;b,\;c.
+</annotation></semantics></math></p>
+<p>The fitted function is therefore a parabola, not a straight line.</p>
+<p>The second derivative of the fitted quadratic is</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mfrac><msup><mi>d</mi><mn>2</mn></msup><mrow><mi>d</mi><msup><mi>z</mi><mn>2</mn></msup></mrow></mfrac><mrow><mo stretchy="true" form="prefix">(</mo><mi>a</mi><mo>+</mo><mi>b</mi><mi>z</mi><mo>+</mo><mi>c</mi><msup><mi>z</mi><mn>2</mn></msup><mo stretchy="true" form="postfix">)</mo></mrow><mo>=</mo><mn>2</mn><mi>c</mi><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\frac{d^2}{dz^2}
+\left(
+a+bz+cz^2
+\right)
+=
+2c.
+</annotation></semantics></math></p>
+<p>At a valid local maximum,</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi><mo>&lt;</mo><mn>0</mn><mi>.</mi></mrow><annotation encoding="application/x-tex">
+c&lt;0.
+</annotation></semantics></math></p>
+<p>We therefore define the positive local curvature as</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>I</mi><mi>g</mi></msub><mo>=</mo><mi>−</mi><mn>2</mn><mi>c</mi><mi>.</mi></mrow><annotation encoding="application/x-tex">
+I_g
+=
+-2c.
+</annotation></semantics></math></p>
+<p>This estimates</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>I</mi><mi>g</mi></msub><mo>=</mo><mi>−</mi><msub><mrow><mfrac><msup><mi>d</mi><mn>2</mn></msup><mrow><mi>d</mi><mo stretchy="false" form="prefix">[</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><msup><mo stretchy="false" form="postfix">]</mo><mn>2</mn></msup></mrow></mfrac><mrow><mo stretchy="true" form="prefix">[</mo><mi>w</mi><mspace width="0.167em"></mspace><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo stretchy="true" form="postfix">]</mo></mrow><mo stretchy="true" form="postfix">|</mo></mrow><mrow><mi>ϕ</mi><mo>=</mo><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub></mrow></msub><mi>.</mi></mrow><annotation encoding="application/x-tex">
+I_g
+=
+-
+\left.
+\frac{d^2}{d[\log(\phi)]^2}
+\left[
+w\,\ell_{\mathrm{smooth},g}(\phi)
+\right]
+\right|_{\phi=\phi_{\mathrm{trend},g}}.
+</annotation></semantics></math></p>
+<p>A sharper peak gives larger positive curvature,</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">sharp peak</mtext><mspace width="1.0em"></mspace><mo>⇒</mo><mspace width="1.0em"></mspace><msub><mi>I</mi><mi>g</mi></msub><mrow><mspace width="0.333em"></mspace><mtext mathvariant="normal"> large</mtext></mrow><mo>,</mo></mrow><annotation encoding="application/x-tex">
+\text{sharp peak}
+\quad\Longrightarrow\quad
+I_g\text{ large},
+</annotation></semantics></math></p>
+<p>whereas a flatter peak gives smaller curvature,</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">flat peak</mtext><mspace width="1.0em"></mspace><mo>⇒</mo><mspace width="1.0em"></mspace><msub><mi>I</mi><mi>g</mi></msub><mrow><mspace width="0.333em"></mspace><mtext mathvariant="normal"> small</mtext></mrow><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\text{flat peak}
+\quad\Longrightarrow\quad
+I_g\text{ small}.
+</annotation></semantics></math></p>
+</div>
+<div class="section level3">
+<h3 id="convert-curvature-into-a-brms-prior-standard-deviation">Convert curvature into a <code>brms</code> prior standard
+deviation<a class="anchor" aria-label="anchor" href="#convert-curvature-into-a-brms-prior-standard-deviation"></a>
+</h3>
+<p>The final step is a local Normal, or Laplace, approximation.</p>
+<p>Near its mode, a sufficiently smooth log-density can be approximated
+by a quadratic. For a Normal distribution,</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mi>p</mi><mo stretchy="false" form="prefix">(</mo><mi>x</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mi>C</mi><mo>−</mo><mfrac><mrow><mo stretchy="false" form="prefix">(</mo><mi>x</mi><mo>−</mo><mi>μ</mi><msup><mo stretchy="false" form="postfix">)</mo><mn>2</mn></msup></mrow><mrow><mn>2</mn><msup><mi>σ</mi><mn>2</mn></msup></mrow></mfrac><mo>,</mo></mrow><annotation encoding="application/x-tex">
+\log p(x)
+=
+C
+-
+\frac{
+(x-\mu)^2
+}{
+2\sigma^2
+},
+</annotation></semantics></math></p>
+<p>so its curvature at the mode is</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mfrac><mn>1</mn><msup><mi>σ</mi><mn>2</mn></msup></mfrac><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\frac{1}{\sigma^2}.
+</annotation></semantics></math></p>
+<p>Matching the Normal curvature to the local quadratic fit gives</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>I</mi><mi>g</mi></msub><mo>=</mo><mfrac><mn>1</mn><msubsup><mi>σ</mi><mi>g</mi><mn>2</mn></msubsup></mfrac><mi>.</mi></mrow><annotation encoding="application/x-tex">
+I_g
+=
+\frac{1}{\sigma_g^2}.
+</annotation></semantics></math></p>
+<p>Since</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>I</mi><mi>g</mi></msub><mo>=</mo><mi>−</mi><mn>2</mn><mi>c</mi><mo>,</mo></mrow><annotation encoding="application/x-tex">
+I_g=-2c,
+</annotation></semantics></math></p>
+<p>the prior variance is</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>σ</mi><mi>g</mi><mn>2</mn></msubsup><mo>=</mo><mi>−</mi><mfrac><mn>1</mn><mrow><mn>2</mn><mi>c</mi></mrow></mfrac><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\sigma_g^2
+=
+-\frac{1}{2c}.
+</annotation></semantics></math></p>
+<p>Therefore the local Normal approximation for the <code>brmDE</code>
+log-dispersion prior is</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><menclose notation="box"><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mi>g</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>≈</mo><mi>N</mi><mrow><mo stretchy="true" form="prefix">(</mo><mi mathvariant="normal">log</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mi>−</mi><mfrac><mn>1</mn><mrow><mn>2</mn><msub><mi>c</mi><mi>g</mi></msub></mrow></mfrac><mo stretchy="true" form="postfix">)</mo></mrow></mrow></menclose><annotation encoding="application/x-tex">
+\boxed{
+\log(\phi_g)
+\approx
+N\left(
+\log(\phi_{\mathrm{trend},g}),
+-\frac{1}{2c_g}
+\right)
+}
+</annotation></semantics></math></p>
+<p>with</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mi>g</mi></msub><mo>&lt;</mo><mn>0</mn><mi>.</mi></mrow><annotation encoding="application/x-tex">
+c_g&lt;0.
+</annotation></semantics></math></p>
+<p>The centre of the prior therefore comes from
+<code>trended.dispersion</code>, while its width is derived from the
+local curvature of the weighted shared edgeR likelihood.</p>
+<p>In <code>brmDE</code> the default width is the Laplace SD.
+<code><a href="../reference/estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> writes two columns:
+<code>dispersion_prior_log_mean</code> (<code>trended.dispersion</code>)
+and <code>dispersion_prior_log_sd</code> (a width on
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mi>ϕ</mi></mrow><annotation encoding="application/x-tex">\log\phi</annotation></semantics></math>).
+<code>method = "curvature"</code> (default) fills that SD from the local
+quadratic of the weighted shared log-likelihood;
+<code>method = "degrees_freedom"</code> fills it from the trigamma SD of
+the moderated df. Pass both names to <code><a href="../reference/estimate_gene.html">estimate_gene()</a></code> /
+<code><a href="../reference/estimate.html">estimate()</a></code>. The location is the offset on
+<code>shape ~ 1 + offset(log(1/dispersion_prior_log_mean))</code>. The
+intercept prior is Student-t, with scale chosen so that its standard
+deviation equals that log-scale
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>σ</mi><mi>g</mi></msub><annotation encoding="application/x-tex">\sigma_g</annotation></semantics></math>.</p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="appendix-1-edger-calculation-of-the-smoothed-weighted-likelihood">Appendix 1: edgeR calculation of the smoothed weighted
+likelihood<a class="anchor" aria-label="anchor" href="#appendix-1-edger-calculation-of-the-smoothed-weighted-likelihood"></a>
+</h2>
+<p><strong> disclamer: the following section should not be taken as
+substitute of the official <code>edgeR</code> literature (see
+references). It is just a convenient complement. For any divergence, the
+official literature should be considered instead.</strong></p>
+<div class="section level3">
+<h3 id="each-gene-has-a-likelihood-curve-over-candidate-dispersions">1. Each gene has a likelihood curve over candidate dispersions<a class="anchor" aria-label="anchor" href="#each-gene-has-a-likelihood-curve-over-candidate-dispersions"></a>
+</h3>
+<p>For gene
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>g</mi><annotation encoding="application/x-tex">g</annotation></semantics></math>,
+with observed counts
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>y</mi><mi>g</mi></msub><annotation encoding="application/x-tex">y_g</annotation></semantics></math>,
+edgeR evaluates the negative-binomial likelihood</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mi>g</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mi>p</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>y</mi><mi>g</mi></msub><mo>∣</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
+L_g(\phi)
+=
+p(y_g\mid\phi).
+</annotation></semantics></math></p>
+<p>Usually we work with the log-likelihood</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ℓ</mi><mi>g</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mi>p</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>y</mi><mi>g</mi></msub><mo>∣</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\ell_g(\phi)
+=
+\log p(y_g\mid\phi).
+</annotation></semantics></math></p>
+<p>The data
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>y</mi><mi>g</mi></msub><annotation encoding="application/x-tex">y_g</annotation></semantics></math>
+are fixed, while
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>ϕ</mi><annotation encoding="application/x-tex">\phi</annotation></semantics></math>
+varies over a grid of candidate dispersion values,</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ϕ</mi><mn>1</mn></msub><mo>,</mo><msub><mi>ϕ</mi><mn>2</mn></msub><mo>,</mo><mi>…</mi><mo>,</mo><msub><mi>ϕ</mi><mi>K</mi></msub><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\phi_1,\phi_2,\ldots,\phi_K.
+</annotation></semantics></math></p>
+<p>Across genes, this produces a matrix such as</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mtable><mtr><mtd columnalign="center" style="text-align: center"></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ϕ</mi><mn>1</mn></msub></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ϕ</mi><mn>2</mn></msub></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ϕ</mi><mn>3</mn></msub></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ϕ</mi><mn>4</mn></msub></mtd></mtr><mtr><mtd columnalign="center" style="text-align: center"><msub><mi>g</mi><mn>1</mn></msub></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ℓ</mi><mn>1</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mn>1</mn></msub><mo stretchy="false" form="postfix">)</mo></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ℓ</mi><mn>1</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mn>2</mn></msub><mo stretchy="false" form="postfix">)</mo></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ℓ</mi><mn>1</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mn>3</mn></msub><mo stretchy="false" form="postfix">)</mo></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ℓ</mi><mn>1</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mn>4</mn></msub><mo stretchy="false" form="postfix">)</mo></mtd></mtr><mtr><mtd columnalign="center" style="text-align: center"><msub><mi>g</mi><mn>2</mn></msub></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ℓ</mi><mn>2</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mn>1</mn></msub><mo stretchy="false" form="postfix">)</mo></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ℓ</mi><mn>2</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mn>2</mn></msub><mo stretchy="false" form="postfix">)</mo></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ℓ</mi><mn>2</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mn>3</mn></msub><mo stretchy="false" form="postfix">)</mo></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ℓ</mi><mn>2</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mn>4</mn></msub><mo stretchy="false" form="postfix">)</mo></mtd></mtr><mtr><mtd columnalign="center" style="text-align: center"><msub><mi>g</mi><mn>3</mn></msub></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ℓ</mi><mn>3</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mn>1</mn></msub><mo stretchy="false" form="postfix">)</mo></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ℓ</mi><mn>3</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mn>2</mn></msub><mo stretchy="false" form="postfix">)</mo></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ℓ</mi><mn>3</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mn>3</mn></msub><mo stretchy="false" form="postfix">)</mo></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ℓ</mi><mn>3</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mn>4</mn></msub><mo stretchy="false" form="postfix">)</mo></mtd></mtr></mtable><annotation encoding="application/x-tex">
+\begin{array}{c|cccc}
+ &amp; \phi_1 &amp; \phi_2 &amp; \phi_3 &amp; \phi_4\\
+\hline
+g_1 &amp; \ell_1(\phi_1) &amp; \ell_1(\phi_2) &amp; \ell_1(\phi_3) &amp; \ell_1(\phi_4)\\
+g_2 &amp; \ell_2(\phi_1) &amp; \ell_2(\phi_2) &amp; \ell_2(\phi_3) &amp; \ell_2(\phi_4)\\
+g_3 &amp; \ell_3(\phi_1) &amp; \ell_3(\phi_2) &amp; \ell_3(\phi_3) &amp; \ell_3(\phi_4)
+\end{array}
+</annotation></semantics></math></p>
+<p>Each row is one gene-specific log-likelihood curve over
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>ϕ</mi><annotation encoding="application/x-tex">\phi</annotation></semantics></math>.</p>
+</div>
+<div class="section level3">
+<h3 id="edger-smooths-each-dispersion-column-over-abundance">2. edgeR smooths each dispersion column over abundance<a class="anchor" aria-label="anchor" href="#edger-smooths-each-dispersion-column-over-abundance"></a>
+</h3>
+<p>Each gene also has an abundance value</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mi>g</mi></msub><mi>.</mi></mrow><annotation encoding="application/x-tex">
+A_g.
+</annotation></semantics></math></p>
+<p>For one fixed candidate dispersion
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mi>k</mi></msub><annotation encoding="application/x-tex">\phi_k</annotation></semantics></math>,
+edgeR has the values</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ℓ</mi><mn>1</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mi>k</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><msub><mi>ℓ</mi><mn>2</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mi>k</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mi>…</mi><mo>,</mo><msub><mi>ℓ</mi><mi>G</mi></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mi>k</mi></msub><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\ell_1(\phi_k),
+\ell_2(\phi_k),
+\ldots,
+\ell_G(\phi_k).
+</annotation></semantics></math></p>
+<p>It smooths these values against abundance:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mi>g</mi></msub><mo>→</mo><msub><mi>ℓ</mi><mi>g</mi></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mi>k</mi></msub><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
+A_g
+\longrightarrow
+\ell_g(\phi_k).
+</annotation></semantics></math></p>
+<p>With the default edgeR implementation, this smoothing uses local
+regression through <code>locfit</code>.</p>
+<p>For every fixed candidate dispersion
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mi>k</mi></msub><annotation encoding="application/x-tex">\phi_k</annotation></semantics></math>,
+edgeR therefore obtains a smooth function of abundance,</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mi>k</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>A</mi><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
+f_k(A).
+</annotation></semantics></math></p>
+<p>For example,</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mn>1</mn></msub><mo stretchy="false" form="prefix">(</mo><mi>A</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">
+f_1(A)
+</annotation></semantics></math></p>
+<p>describes the expected log-likelihood at dispersion
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mn>1</mn></msub><annotation encoding="application/x-tex">\phi_1</annotation></semantics></math>
+for a gene of abundance
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>A</mi><annotation encoding="application/x-tex">A</annotation></semantics></math>,
+while</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mn>2</mn></msub><mo stretchy="false" form="prefix">(</mo><mi>A</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">
+f_2(A)
+</annotation></semantics></math></p>
+<p>does the same for
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mn>2</mn></msub><annotation encoding="application/x-tex">\phi_2</annotation></semantics></math>,
+and so on.</p>
+</div>
+<div class="section level3">
+<h3 id="for-one-abundance-reconstruct-the-smoothed-log-likelihood-curve-over-dispersion">3. For one abundance, reconstruct the smoothed log-likelihood curve
+over dispersion<a class="anchor" aria-label="anchor" href="#for-one-abundance-reconstruct-the-smoothed-log-likelihood-curve-over-dispersion"></a>
+</h3>
+<p>Consider a particular gene
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>g</mi><annotation encoding="application/x-tex">g</annotation></semantics></math>
+with abundance</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mi>g</mi></msub><mi>.</mi></mrow><annotation encoding="application/x-tex">
+A_g.
+</annotation></semantics></math></p>
+<p>For every candidate dispersion,</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ϕ</mi><mn>1</mn></msub><mo>,</mo><msub><mi>ϕ</mi><mn>2</mn></msub><mo>,</mo><mi>…</mi><mo>,</mo><msub><mi>ϕ</mi><mi>K</mi></msub><mo>,</mo></mrow><annotation encoding="application/x-tex">
+\phi_1,\phi_2,\ldots,\phi_K,
+</annotation></semantics></math></p>
+<p>edgeR evaluates the corresponding abundance-smoothed function at
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>A</mi><mi>g</mi></msub><annotation encoding="application/x-tex">A_g</annotation></semantics></math>:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mn>1</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>A</mi><mi>g</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><msub><mi>f</mi><mn>2</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>A</mi><mi>g</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mi>…</mi><mo>,</mo><msub><mi>f</mi><mi>K</mi></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>A</mi><mi>g</mi></msub><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
+f_1(A_g),
+f_2(A_g),
+\ldots,
+f_K(A_g).
+</annotation></semantics></math></p>
+<p>These values are placed side by side across dispersion:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mtable><mtr><mtd columnalign="center" style="text-align: center"><mi>ϕ</mi></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ϕ</mi><mn>1</mn></msub></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ϕ</mi><mn>2</mn></msub></mtd><mtd columnalign="center" style="text-align: center"><mi>⋯</mi></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ϕ</mi><mi>K</mi></msub></mtd></mtr><mtr><mtd columnalign="center" style="text-align: center"><mtext mathvariant="normal">smoothed log-likelihood</mtext></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mn>1</mn></msub><mo stretchy="false" form="postfix">)</mo></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mn>2</mn></msub><mo stretchy="false" form="postfix">)</mo></mtd><mtd columnalign="center" style="text-align: center"><mi>⋯</mi></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mi>K</mi></msub><mo stretchy="false" form="postfix">)</mo></mtd></mtr></mtable><annotation encoding="application/x-tex">
+\begin{array}{c|cccc}
+\phi &amp;
+\phi_1 &amp;
+\phi_2 &amp;
+\cdots &amp;
+\phi_K\\
+\hline
+\text{smoothed log-likelihood} &amp;
+\ell_{\mathrm{smooth},g}(\phi_1) &amp;
+\ell_{\mathrm{smooth},g}(\phi_2) &amp;
+\cdots &amp;
+\ell_{\mathrm{smooth},g}(\phi_K)
+\end{array}
+</annotation></semantics></math></p>
+<p>Together, these values define the function</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\ell_{\mathrm{smooth},g}(\phi).
+</annotation></semantics></math></p>
+<p>This corresponds to edgeR’s internal notation
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>m</mi><mrow><mn>0</mn><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">m_{0g}(\phi)</annotation></semantics></math>;
+for clarity, we use
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\ell_{\mathrm{smooth},g}(\phi)</annotation></semantics></math>
+throughout.</p>
+<p>In the edgeR implementation:</p>
+<ul>
+<li>
+<code>trended.dispersion</code> is returned by
+<code>estimateDisp()</code> and gives the abundance-dependent dispersion
+trend;</li>
+<li>
+<code>m0</code> is the internal matrix of local shared
+log-likelihoods;</li>
+<li>
+<code>prior.n</code> is the weight applied to the shared likelihood
+contribution;</li>
+<li>
+<code>tagwise.dispersion</code> is the final gene-specific moderated
+dispersion estimate.</li>
+</ul>
+<p>Thus,</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo>↔</mo><mtext mathvariant="monospace">𝚖𝟶</mtext><mo>,</mo></mrow><annotation encoding="application/x-tex">
+\ell_{\mathrm{smooth},g}(\phi)
+\longleftrightarrow
+\texttt{m0},
+</annotation></semantics></math></p>
+<p>and</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi><mo>↔</mo><mtext mathvariant="monospace">𝚙𝚛𝚒𝚘𝚛.𝚗</mtext><mi>.</mi></mrow><annotation encoding="application/x-tex">
+w
+\longleftrightarrow
+\texttt{prior.n}.
+</annotation></semantics></math></p>
+<p>The abundance-dependent maximum of the shared likelihood corresponds
+to</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo>↔</mo><mtext mathvariant="monospace">𝚝𝚛𝚎𝚗𝚍𝚎𝚍.𝚍𝚒𝚜𝚙𝚎𝚛𝚜𝚒𝚘𝚗</mtext><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\phi_{\mathrm{trend},g}
+\longleftrightarrow
+\texttt{trended.dispersion}.
+</annotation></semantics></math></p>
+<p><code>m0</code> is an internal intermediate quantity and is not
+normally retained as a component of the <code>DGEList</code> returned by
+<code>estimateDisp()</code>. If <code>brmDE</code> needs the full shared
+likelihood curve, the relevant edgeR internal calculation must therefore
+be called, reproduced, or wrapped so that this matrix is retained.</p>
+<p>The whole curve</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">
+\ell_{\mathrm{smooth},g}(\phi)
+</annotation></semantics></math></p>
+<p>can be interpreted as:</p>
+<blockquote>
+<p>According to the likelihood behaviour of genes with similar
+abundance, how compatible is each candidate dispersion
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>ϕ</mi><annotation encoding="application/x-tex">\phi</annotation></semantics></math>?</p>
+</blockquote>
+</div>
+<div class="section level3">
+<h3 id="the-maximum-of-this-curve-gives-the-trended-dispersion">4. The maximum of this curve gives the trended dispersion<a class="anchor" aria-label="anchor" href="#the-maximum-of-this-curve-gives-the-trended-dispersion"></a>
+</h3>
+<p>edgeR finds the dispersion value at which the smoothed log-likelihood
+is maximal:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo>=</mo><mrow><mi mathvariant="normal">arg</mi><mo>⁡</mo></mrow><munder><mi mathvariant="normal">max</mi><mi>ϕ</mi></munder><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\phi_{\mathrm{trend},g}
+=
+\arg\max_{\phi}
+\ell_{\mathrm{smooth},g}(\phi).
+</annotation></semantics></math></p>
+<p>Thus
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\ell_{\mathrm{smooth},g}(\phi)</annotation></semantics></math>
+is the whole curve, whereas
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><annotation encoding="application/x-tex">\phi_{\mathrm{trend},g}</annotation></semantics></math>
+is one value of
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>ϕ</mi><annotation encoding="application/x-tex">\phi</annotation></semantics></math>:
+the dispersion preferred by the across-gene information for a gene with
+abundance
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>A</mi><mi>g</mi></msub><annotation encoding="application/x-tex">A_g</annotation></semantics></math>.</p>
+<p>Repeating this operation over abundance produces the
+dispersion-abundance trend,</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mo>→</mo><msub><mi>ϕ</mi><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><mi>A</mi><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
+A
+\longrightarrow
+\phi_{\mathrm{trend}}(A).
+</annotation></semantics></math></p>
+</div>
+<div class="section level3">
+<h3 id="edger-weights-the-across-gene-log-likelihood-curve">5. edgeR weights the across-gene log-likelihood curve<a class="anchor" aria-label="anchor" href="#edger-weights-the-across-gene-log-likelihood-curve"></a>
+</h3>
+<p>edgeR estimates prior degrees of freedom through its empirical-Bayes
+procedure and converts these into the likelihood weight used by the
+weighted-likelihood machinery.</p>
+<p>In the standard non-robust implementation,</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="monospace">𝚙𝚛𝚒𝚘𝚛.𝚗</mtext><mo>=</mo><mfrac><mtext mathvariant="monospace">𝚙𝚛𝚒𝚘𝚛.𝚍𝚏</mtext><mrow><mtext mathvariant="monospace">𝚗𝚕𝚒𝚋𝚜</mtext><mo>−</mo><mtext mathvariant="monospace">𝚗𝚌𝚘𝚎𝚏𝚜</mtext></mrow></mfrac><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\texttt{prior.n}
+=
+\frac{
+\texttt{prior.df}
+}{
+\texttt{nlibs}-\texttt{ncoefs}
+}.
+</annotation></semantics></math></p>
+<p>With robust estimation, <code>prior.df</code> and therefore
+<code>prior.n</code> may be gene-specific.</p>
+<p>The weight controls how strongly the across-gene information
+contributes relative to the likelihood of the individual gene.</p>
+<p>A larger weight means stronger shrinkage towards the across-gene
+dispersion trend.</p>
+<p>The weighted curve is</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi><mspace width="0.167em"></mspace><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
+w\,\ell_{\mathrm{smooth},g}(\phi).
+</annotation></semantics></math></p>
+<p>Multiplying the log-likelihood by a positive weight does not change
+the location of its maximum:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">arg</mi><mo>⁡</mo></mrow><munder><mi mathvariant="normal">max</mi><mi>ϕ</mi></munder><mi>w</mi><mspace width="0.167em"></mspace><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msub><mi>ϕ</mi><mrow><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\arg\max_{\phi}
+w\,\ell_{\mathrm{smooth},g}(\phi)
+=
+\phi_{\mathrm{trend},g}.
+</annotation></semantics></math></p>
+<p>It does change the sharpness of the curve.</p>
+<p>A larger
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>w</mi><annotation encoding="application/x-tex">w</annotation></semantics></math>
+amplifies differences between candidate dispersion values and produces a
+sharper curve. A smaller
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>w</mi><annotation encoding="application/x-tex">w</annotation></semantics></math>
+produces a flatter curve.</p>
+<p>On the ordinary likelihood scale, multiplying the log-likelihood by
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>w</mi><annotation encoding="application/x-tex">w</annotation></semantics></math>
+is equivalent to raising the likelihood to the power
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>w</mi><annotation encoding="application/x-tex">w</annotation></semantics></math>:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">exp</mi><mo>⁡</mo></mrow><mrow><mo stretchy="true" form="prefix">[</mo><mi>w</mi><mspace width="0.167em"></mspace><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo stretchy="true" form="postfix">]</mo></mrow><mo>=</mo><msup><mrow><mo stretchy="true" form="prefix">[</mo><mi mathvariant="normal">exp</mi><mrow><mo stretchy="true" form="prefix">(</mo><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo stretchy="true" form="postfix">)</mo></mrow><mo stretchy="true" form="postfix">]</mo></mrow><mi>w</mi></msup><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\exp\left[
+w\,\ell_{\mathrm{smooth},g}(\phi)
+\right]
+=
+\left[
+\exp\left(
+\ell_{\mathrm{smooth},g}(\phi)
+\right)
+\right]^w.
+</annotation></semantics></math></p>
+<p>For the edgeR tagwise dispersion, this weighted across-gene component
+is combined with the gene’s own log-likelihood.</p>
+<p>For <code>brmDE</code>, the gene’s own likelihood should not be
+included in the prior because the same gene will subsequently be fitted
+by <code>brms</code>. The relevant prior information is therefore the
+weighted across-gene curve</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi><mspace width="0.167em"></mspace><msub><mi>ℓ</mi><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">h</mi></mrow><mo>,</mo><mi>g</mi></mrow></msub><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
+w\,\ell_{\mathrm{smooth},g}(\phi).
+</annotation></semantics></math></p>
 </div>
 </div>
 <div class="section level2">
@@ -865,24 +853,43 @@ distorted. The same expression is why <code>zi</code> and
 relationship constrains the combination, not the pair, leaving the shape
 of the zero mass as the main information that distinguishes them.</p>
 <div class="section level3">
-<h3 id="which-prior-to-use-rule-of-thumb">Which prior to use: rule of thumb<a class="anchor" aria-label="anchor" href="#which-prior-to-use-rule-of-thumb"></a>
+<h3 id="the-student-t-prior">The Student-t prior<a class="anchor" aria-label="anchor" href="#the-student-t-prior"></a>
 </h3>
+<p>There are two important situations in which the edgeR dispersion
+trend can be systematically displaced from the dispersion estimated by
+<code>brmDE</code> (see <a href="#appendix-1">Appendix 1</a>).</p>
 <ul>
-<li><p>If you are fitting a mixed-effect model, a zero-inflated
-negative-binomial model, or any model that the frequentist dispersion
-estimator cannot fit directly, use the Student-t prior. Its heavier
-tails allow the data to deviate more easily from the upstream
-approximation when there is enough information.</p></li>
-<li><p>If you are fitting a fixed-effect model that edgeR or DESeq2 can
-represent directly, using a negative-binomial distribution, and you
-place substantial trust in the upstream dispersion inference, use the
-Gamma prior.</p></li>
+<li><p>Because edgeR dispersion estimation cannot fit mixed-effects
+models, a mixed-effects <code>brmDE</code> model must be approximated by
+a fixed-effects model. For example,
+<code>~ treatment + (1 | hospital)</code> may be approximated by
+<code>~ treatment + hospital</code>. The fixed effects are estimated
+without partial pooling and can absorb more variation, potentially
+reducing the residual negative-binomial dispersion.</p></li>
+<li><p>A zero-inflated negative-binomial model in <code>brmDE</code>
+must be approximated upstream by an ordinary negative-binomial model.
+Zero inflation can then be absorbed by the edgeR negative-binomial
+dispersion, potentially increasing the estimated dispersion.</p></li>
 </ul>
+<p>For these cases, call
+<code>estimate_dispersion_log_sd(..., method = "degrees_freedom")</code>:
+the same Student-t intercept prior, but with
+<code>dispersion_prior_log_sd</code> filled from the log-scale SD
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msqrt><mrow><msup><mi>ψ</mi><mo>′</mo></msup><mo stretchy="false" form="prefix">(</mo><msub><mi>d</mi><mrow><mi mathvariant="normal">e</mi><mi mathvariant="normal">f</mi><mi mathvariant="normal">f</mi></mrow></msub><mi>/</mi><mn>2</mn><mo stretchy="false" form="postfix">)</mo></mrow></msqrt><annotation encoding="application/x-tex">\sqrt{\psi'(d_{\mathrm{eff}}/2)}</annotation></semantics></math>
+implied by the <strong>moderated</strong> effective df
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>d</mi><mrow><mi mathvariant="normal">e</mi><mi mathvariant="normal">f</mi><mi mathvariant="normal">f</mi></mrow></msub><mo>=</mo><msub><mi>d</mi><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">s</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">d</mi><mi mathvariant="normal">u</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">l</mi></mrow></msub><mo>+</mo><msub><mi>d</mi><mn>0</mn></msub></mrow><annotation encoding="application/x-tex">d_{\mathrm{eff}} = d_{\mathrm{residual}} + d_0</annotation></semantics></math>
+(<code>prior.df</code> from <code>squeezeVar()</code> /
+<code>estimateDisp()</code>). tidybulk writes the df as
+<code>dispersion_degrees_freedom</code>; convert it with the same
+trigamma formula, or let <code><a href="../reference/estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> do
+it. The default <code>method = "curvature"</code> is the local Laplace
+approximation of the weighted smoothed shared log-likelihood derived
+above.</p>
 </div>
 </div>
 <div class="section level2">
-<h2 id="appendix-3-examples-of-how-to-approximate-a-mixed-effect-model-with-a-fixed-effect-one">Appendix 3: Examples of how to approximate a mixed-effect model with
-a fixed-effect one<a class="anchor" aria-label="anchor" href="#appendix-3-examples-of-how-to-approximate-a-mixed-effect-model-with-a-fixed-effect-one"></a>
+<h2 id="appendix-3-examples-of-how-to-use-r-formulas-approximate-a-mixed-effect-model-with-a-fixed-effect-one">Appendix 3: Examples of how to use R formulas approximate a
+mixed-effect model with a fixed-effect one<a class="anchor" aria-label="anchor" href="#appendix-3-examples-of-how-to-use-r-formulas-approximate-a-mixed-effect-model-with-a-fixed-effect-one"></a>
 </h2>
 <p><code>edgeR</code> and <code>DESeq2</code> have no random effects. To
 obtain the most relevant dispersion estimate, we can approximate the
@@ -970,6 +977,192 @@ MD, Smyth GK. <code>estimateDisp</code>. In <em>edgeR User’s Guide</em>,
 Bioconductor. <a href="https://rdrr.io/bioc/edgeR/man/estimateDisp.html" class="external-link uri">https://rdrr.io/bioc/edgeR/man/estimateDisp.html</a>. Return
 value of <code>tagwise.dispersion</code>, <code>prior.df</code>, and
 <code>prior.n</code>; residual df is not returned.</p>
+</div>
+<div class="section level2">
+<h2 id="illustration-the-local-quadratic-approximation-on-airway">Illustration: the local quadratic approximation on airway<a class="anchor" aria-label="anchor" href="#illustration-the-local-quadratic-approximation-on-airway"></a>
+</h2>
+<p>The default prior width
+(<code>estimate_dispersion_log_sd(..., method = "curvature")</code>)
+treats edgeR’s weighted, abundance-smoothed shared log-likelihood as an
+unnormalised log-density on
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\log(\phi)</annotation></semantics></math>,
+and replaces it with a Normal whose SD matches the local curvature at
+the mode. That is a <em>local</em> quadratic, not a claim that the whole
+curve is Gaussian.</p>
+<p>The following uses the airway dexamethasone experiment to look at
+that approximation. After dropping low-count genes, the shared
+log-likelihood is rebuilt on the same Cox–Reid grid and
+<code>WLEB()</code> smooth that <code>estimateDisp()</code> uses.
+<code>plotBCV()</code> shows the abundance–dispersion trend those curves
+sit on. Then 25 genes spanning the abundance range are drawn as</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mi>k</mi></msub><mo>=</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mi>k</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mspace width="2.0em"></mspace><msub><mi>y</mi><mi>k</mi></msub><mo>=</mo><msub><mtext mathvariant="monospace">𝚙𝚛𝚒𝚘𝚛.𝚗</mtext><mi>g</mi></msub><mo>×</mo><mtext mathvariant="monospace">𝚜𝚑𝚊𝚛𝚎𝚍.𝚕𝚘𝚐𝚕𝚒𝚔</mtext><mo stretchy="false" form="prefix">[</mo><mi>g</mi><mo>,</mo><mi>k</mi><mo stretchy="false" form="postfix">]</mo><mo>,</mo></mrow><annotation encoding="application/x-tex">
+x_k = \log(\phi_k),
+\qquad
+y_k = \texttt{prior.n}_g \times \texttt{shared.loglik}[g, k],
+</annotation></semantics></math></p>
+<p>the same <code>plot(x, y)</code>
+<code><a href="../reference/estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> builds internally. The dashed
+vertical line is
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mtext mathvariant="monospace">𝚝𝚛𝚎𝚗𝚍𝚎𝚍.𝚍𝚒𝚜𝚙𝚎𝚛𝚜𝚒𝚘𝚗</mtext><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\log(\texttt{trended.dispersion})</annotation></semantics></math>,
+the mode at which the quadratic is fitted. The orange curve is the
+Laplace Normal on that same log-density scale:
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo stretchy="false" form="prefix">(</mo><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><msub><mi>ϕ</mi><mrow><mi mathvariant="normal">t</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow></msub><mo>,</mo><msup><mi>σ</mi><mn>2</mn></msup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">N(\log\phi_{\mathrm{trend}}, \sigma^2)</annotation></semantics></math>
+with
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>σ</mi><annotation encoding="application/x-tex">\sigma</annotation></semantics></math>
+from the local curvature, shifted to agree with
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>y</mi><annotation encoding="application/x-tex">y</annotation></semantics></math>
+at the mode.</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/MangiolaLaboratory" class="external-link">brmDE</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/stemangiola/tidybulk" class="external-link">tidybulk</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/stemangiola/tidySummarizedExperiment" class="external-link">tidySummarizedExperiment</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://bioconductor.org/packages/SummarizedExperiment" class="external-link">SummarizedExperiment</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://ggplot2.tidyverse.org" class="external-link">ggplot2</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"airway"</span>, package <span class="op">=</span> <span class="st">"airway"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">airway</span> <span class="op">&lt;-</span> <span class="va">airway</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span></span>
+<span>    dex <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/relevel.html" class="external-link">relevel</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">dex</span><span class="op">)</span>, ref <span class="op">=</span> <span class="st">"untrt"</span><span class="op">)</span>,</span>
+<span>    cell <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/droplevels.html" class="external-link">droplevels</a></span><span class="op">(</span><span class="va">cell</span><span class="op">)</span></span>
+<span>  <span class="op">)</span></span>
+<span></span>
+<span><span class="va">se</span> <span class="op">&lt;-</span> <span class="va">airway</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/tidybulk/man/keep_abundant.html" class="external-link">keep_abundant</a></span><span class="op">(</span>formula_design <span class="op">=</span> <span class="op">~</span> <span class="va">dex</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">se</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 15926</span></span></code></pre></div>
+<p><code><a href="https://rdrr.io/pkg/tidybulk/man/keep_abundant.html" class="external-link">keep_abundant()</a></code> drops the low-count genes
+(<code><a href="https://rdrr.io/pkg/tidybulk/man/identify_abundant-methods.html" class="external-link">identify_abundant()</a></code> would only flag them). The design is
+the fixed-effect analogue of <code>~ dex + (1 | cell)</code>.</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">design</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/model.matrix.html" class="external-link">model.matrix</a></span><span class="op">(</span></span>
+<span>  <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="va">cell</span>,</span>
+<span>  data <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">colData</a></span><span class="op">(</span><span class="va">se</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="va">shared</span> <span class="op">&lt;-</span> <span class="fu">brmDE</span><span class="fu">:::</span><span class="fu">edger_shared_loglik</span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">assay</a></span><span class="op">(</span><span class="va">se</span>, <span class="st">"counts"</span><span class="op">)</span>,</span>
+<span>  <span class="va">design</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># x &lt;- log(0.1 * 2^spline.pts). estimateDisp() uses 21 points on</span></span>
+<span><span class="co"># spline.pts in [-10, 10]; we use 61 on [-20, 10] so the curve is not</span></span>
+<span><span class="co"># stuck on two coarse ticks.</span></span>
+<span><span class="va">x</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="va">shared</span><span class="op">$</span><span class="va">phi</span><span class="op">)</span></span></code></pre></div>
+<p>edgeR’s <code>plotBCV()</code> is the abundance–dispersion trend on
+the same filtered matrix and design. BCV is
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msqrt><mi>ϕ</mi></msqrt><annotation encoding="application/x-tex">\sqrt{\phi}</annotation></semantics></math>.
+Each point is a gene’s tagwise estimate; the line is
+<code>trended.dispersion</code>, the mode of the shared curve in the
+facets below. On airway that trend is real but narrow, which is why
+those peaks sit near the same
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\log(\phi)</annotation></semantics></math>.</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">dge</span> <span class="op">&lt;-</span> <span class="fu">edgeR</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/edgeR/man/DGEList.html" class="external-link">DGEList</a></span><span class="op">(</span><span class="fu">SummarizedExperiment</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">assay</a></span><span class="op">(</span><span class="va">se</span>, <span class="st">"counts"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">dge</span> <span class="op">&lt;-</span> <span class="fu">edgeR</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/edgeR/man/calcNormFactors.html" class="external-link">calcNormFactors</a></span><span class="op">(</span><span class="va">dge</span><span class="op">)</span></span>
+<span><span class="va">dge</span> <span class="op">&lt;-</span> <span class="fu">edgeR</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/edgeR/man/estimateDisp.html" class="external-link">estimateDisp</a></span><span class="op">(</span><span class="va">dge</span>, <span class="va">design</span><span class="op">)</span></span>
+<span><span class="fu">edgeR</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/edgeR/man/plotBCV.html" class="external-link">plotBCV</a></span><span class="op">(</span><span class="va">dge</span><span class="op">)</span></span></code></pre></div>
+<p><img src="dispersion-priors_files/figure-html/plot-bcv-1.png" class="r-plt" alt="" width="576"></p>
+<p>Twenty-five genes spanning abundance: order the filtered genes by
+edgeR <code>AveLogCPM</code>, split that list into 25 equal slices, and
+take the middle gene of each slice, except the last slice, which uses
+the most abundant gene so the range is not truncated. Facets run from
+lowest to highest abundance. The strip shows CPM
+(<code>2^AveLogCPM</code>), not the log2 value. The black line is
+<code>y = prior.n * shared.loglik[g, ]</code>; the orange line is the
+Normal approximation from that gene’s local curvature.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">ave_log_cpm</span> <span class="op">&lt;-</span> <span class="fu">edgeR</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/edgeR/man/aveLogCPM.html" class="external-link">aveLogCPM</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">assay</a></span><span class="op">(</span><span class="va">se</span>, <span class="st">"counts"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">cpm</span> <span class="op">&lt;-</span> <span class="fl">2</span><span class="op">^</span><span class="va">ave_log_cpm</span></span>
+<span><span class="va">ord</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">ave_log_cpm</span><span class="op">)</span></span>
+<span><span class="va">n</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">ord</span><span class="op">)</span></span>
+<span><span class="va">breaks</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">floor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">1</span>, <span class="va">n</span> <span class="op">+</span> <span class="fl">1</span>, length.out <span class="op">=</span> <span class="fl">26</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">vapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fl">25</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">sl</span> <span class="op">&lt;-</span> <span class="va">ord</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq.int</a></span><span class="op">(</span><span class="va">breaks</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span>, <span class="va">breaks</span><span class="op">[[</span><span class="va">i</span> <span class="op">+</span> <span class="fl">1L</span><span class="op">]</span><span class="op">]</span> <span class="op">-</span> <span class="fl">1L</span><span class="op">)</span><span class="op">]</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="va">i</span> <span class="op">==</span> <span class="fl">25L</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">sl</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">sl</span><span class="op">)</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>    <span class="va">sl</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">ceiling</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">sl</span><span class="op">)</span> <span class="op">/</span> <span class="fl">2</span><span class="op">)</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="op">}</span></span>
+<span><span class="op">}</span>, <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">genes</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">se</span><span class="op">)</span><span class="op">[</span><span class="va">idx</span><span class="op">]</span></span>
+<span><span class="va">Y</span> <span class="op">&lt;-</span> <span class="va">shared</span><span class="op">$</span><span class="va">prior.n</span><span class="op">[</span><span class="va">idx</span><span class="op">]</span> <span class="op">*</span> <span class="va">shared</span><span class="op">$</span><span class="va">shared.loglik</span><span class="op">[</span><span class="va">idx</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
+<span><span class="va">x_mode</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="va">shared</span><span class="op">$</span><span class="va">trended.dispersion</span><span class="op">[</span><span class="va">idx</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="va">sigma</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">vapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">idx</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu">brmDE</span><span class="fu">:::</span><span class="fu">dispersion_quadratic_log_sd</span><span class="op">(</span><span class="va">x</span>, <span class="va">Y</span><span class="op">[</span><span class="va">i</span>, <span class="op">]</span>, <span class="va">x_mode</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="op">}</span>, <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">numeric</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">panel</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span></span>
+<span>  <span class="st">"%s\nCPM = %s\nσ = %.2f"</span>,</span>
+<span>  <span class="va">genes</span>,</span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/format.html" class="external-link">format</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">cpm</span><span class="op">[</span><span class="va">idx</span><span class="op">]</span>, <span class="fl">2</span><span class="op">)</span>, trim <span class="op">=</span> <span class="cn">TRUE</span>, scientific <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span>,</span>
+<span>  <span class="va">sigma</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">plot_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html" class="external-link">tibble</a></span><span class="op">(</span></span>
+<span>  gene <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="va">panel</span>, each <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>    levels <span class="op">=</span> <span class="va">panel</span></span>
+<span>  <span class="op">)</span>,</span>
+<span>  log_phi <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="va">x</span>, times <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">idx</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">Y</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">x_fine</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span>, length.out <span class="op">=</span> <span class="fl">201</span><span class="op">)</span></span>
+<span><span class="va">approx_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">idx</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">y</span> <span class="op">&lt;-</span> <span class="va">Y</span><span class="op">[</span><span class="va">i</span>, <span class="op">]</span></span>
+<span>  <span class="va">mu</span> <span class="op">&lt;-</span> <span class="va">x_mode</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="va">s</span> <span class="op">&lt;-</span> <span class="va">sigma</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="va">y0</span> <span class="op">&lt;-</span> <span class="va">y</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.min</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">x</span> <span class="op">-</span> <span class="va">mu</span><span class="op">)</span><span class="op">)</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="va">y_n</span> <span class="op">&lt;-</span> <span class="va">y0</span> <span class="op">-</span> <span class="op">(</span><span class="va">x_fine</span> <span class="op">-</span> <span class="va">mu</span><span class="op">)</span><span class="op">^</span><span class="fl">2</span> <span class="op">/</span> <span class="op">(</span><span class="fl">2</span> <span class="op">*</span> <span class="va">s</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span></span>
+<span>  <span class="va">keep</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/is.finite.html" class="external-link">is.finite</a></span><span class="op">(</span><span class="va">y_n</span><span class="op">)</span> <span class="op">&amp;</span> <span class="va">y_n</span> <span class="op">&gt;=</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">y</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html" class="external-link">tibble</a></span><span class="op">(</span></span>
+<span>    gene <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">panel</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span>, levels <span class="op">=</span> <span class="va">panel</span><span class="op">)</span>,</span>
+<span>    log_phi <span class="op">=</span> <span class="va">x_fine</span><span class="op">[</span><span class="va">keep</span><span class="op">]</span>,</span>
+<span>    y <span class="op">=</span> <span class="va">y_n</span><span class="op">[</span><span class="va">keep</span><span class="op">]</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/bind_rows.html" class="external-link">bind_rows</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">trend_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html" class="external-link">tibble</a></span><span class="op">(</span></span>
+<span>  gene <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">panel</span>, levels <span class="op">=</span> <span class="va">panel</span><span class="op">)</span>,</span>
+<span>  log_phi_trend <span class="op">=</span> <span class="va">x_mode</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span></span>
+<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">plot_df</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">log_phi</span>, <span class="va">y</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_path.html" class="external-link">geom_line</a></span><span class="op">(</span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>colour <span class="op">=</span> <span class="st">"edgeR weighted shared log-likelihood"</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_path.html" class="external-link">geom_line</a></span><span class="op">(</span></span>
+<span>    data <span class="op">=</span> <span class="va">approx_df</span>,</span>
+<span>    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>colour <span class="op">=</span> <span class="st">"Laplace Normal"</span><span class="op">)</span>,</span>
+<span>    linetype <span class="op">=</span> <span class="fl">22</span></span>
+<span>  <span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_abline.html" class="external-link">geom_vline</a></span><span class="op">(</span></span>
+<span>    data <span class="op">=</span> <span class="va">trend_df</span>,</span>
+<span>    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>xintercept <span class="op">=</span> <span class="va">log_phi_trend</span><span class="op">)</span>,</span>
+<span>    linetype <span class="op">=</span> <span class="fl">2</span>,</span>
+<span>    colour <span class="op">=</span> <span class="st">"grey40"</span></span>
+<span>  <span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_manual.html" class="external-link">scale_colour_manual</a></span><span class="op">(</span></span>
+<span>    values <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span>      <span class="st">"edgeR weighted shared log-likelihood"</span> <span class="op">=</span> <span class="st">"black"</span>,</span>
+<span>      <span class="st">"Laplace Normal"</span> <span class="op">=</span> <span class="st">"#d95f02"</span></span>
+<span>    <span class="op">)</span></span>
+<span>  <span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/facet_wrap.html" class="external-link">facet_wrap</a></span><span class="op">(</span><span class="op">~</span> <span class="va">gene</span>, scales <span class="op">=</span> <span class="st">"free_y"</span>, ncol <span class="op">=</span> <span class="fl">5</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span></span>
+<span>    x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/expression.html" class="external-link">expression</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="va">phi</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>    y <span class="op">=</span> <span class="st">"prior.n × shared.loglik"</span>,</span>
+<span>    colour <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  <span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_bw</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span></span>
+<span>    strip.text <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_text</a></span><span class="op">(</span>size <span class="op">=</span> <span class="fl">7</span><span class="op">)</span>,</span>
+<span>    axis.text <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_text</a></span><span class="op">(</span>size <span class="op">=</span> <span class="fl">6</span><span class="op">)</span>,</span>
+<span>    legend.position <span class="op">=</span> <span class="st">"bottom"</span></span>
+<span>  <span class="op">)</span></span></code></pre></div>
+<p><img src="dispersion-priors_files/figure-html/plot-25-facets-1.png" class="r-plt" alt="" width="768"></p>
 </div>
   </div>
 

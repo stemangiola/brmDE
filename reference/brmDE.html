@@ -182,14 +182,15 @@ in one table: they stay in the store. Read one with
 <span class="r-in"><span><span class="va">se</span> <span class="op">&lt;-</span> <span class="va">airway</span></span></span>
 <span class="r-in"><span><span class="va">se</span><span class="op">$</span><span class="va">offset</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/colSums.html" class="external-link">colSums</a></span><span class="op">(</span><span class="fu">SummarizedExperiment</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">assay</a></span><span class="op">(</span><span class="va">se</span>, <span class="st">"counts"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">se</span> <span class="op">&lt;-</span> <span class="fu">tidybulk</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">estimate_dispersion</a></span><span class="op">(</span><span class="va">se</span>, formula_abundance <span class="op">=</span> <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="va">cell</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">se</span> <span class="op">&lt;-</span> <span class="fu"><a href="estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd</a></span><span class="op">(</span><span class="va">se</span>, formula_abundance <span class="op">=</span> <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="va">cell</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="va">se</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu">brmDE</span><span class="op">(</span>features <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ENSG00000120129"</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="estimate.html">estimate</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>    <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">cell</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>    offset <span class="op">=</span> <span class="st">"offset"</span>,</span></span>
-<span class="r-in"><span>    dispersion <span class="op">=</span> <span class="st">"dispersion_trended"</span>,</span></span>
-<span class="r-in"><span>    dispersion_degrees_freedom <span class="op">=</span> <span class="st">"dispersion_degrees_freedom"</span>,</span></span>
+<span class="r-in"><span>    dispersion_prior_log_mean <span class="op">=</span> <span class="st">"dispersion_prior_log_mean"</span>,</span></span>
+<span class="r-in"><span>    dispersion_prior_log_sd <span class="op">=</span> <span class="st">"dispersion_prior_log_sd"</span>,</span></span>
 <span class="r-in"><span>    family <span class="op">=</span> <span class="fu">brms</span><span class="fu">::</span><span class="fu"><a href="https://paulbuerkner.com/brms/reference/brmsfamily.html" class="external-link">negbinomial</a></span><span class="op">(</span><span class="op">)</span></span></span>
 <span class="r-in"><span>  <span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="https://paulbuerkner.com/brms/reference/hypothesis.brmsfit.html" class="external-link">hypothesis</a></span><span class="op">(</span><span class="st">"dextrt = 0"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
@@ -207,8 +208,9 @@ in one table: they stay in the store. Read one with
 <span class="r-in"><span><span class="co">#       )</span></span></span>
 <span class="r-in"><span><span class="co">#     )</span></span></span>
 <span class="r-in"><span><span class="co">#   ) |&gt;</span></span></span>
-<span class="r-in"><span><span class="co">#   estimate(~ dex + (1 | cell), offset = "offset", dispersion = "dispersion_trended",</span></span></span>
-<span class="r-in"><span><span class="co">#            dispersion_degrees_freedom = "dispersion_degrees_freedom")</span></span></span>
+<span class="r-in"><span><span class="co">#   estimate(~ dex + (1 | cell), offset = "offset",</span></span></span>
+<span class="r-in"><span><span class="co">#            dispersion_prior_log_mean = "dispersion_prior_log_mean",</span></span></span>
+<span class="r-in"><span><span class="co">#            dispersion_prior_log_sd = "dispersion_prior_log_sd")</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>

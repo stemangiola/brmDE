@@ -64,8 +64,8 @@ per gene.</p>
 <span>  <span class="va">formula_abundance</span>,</span>
 <span>  formula_dispersion <span class="op">=</span> <span class="op">~</span><span class="fl">1</span>,</span>
 <span>  <span class="va">offset</span>,</span>
-<span>  dispersion <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  dispersion_degrees_freedom <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  dispersion_prior_log_mean <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  dispersion_prior_log_sd <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span>
 <span></span>
@@ -75,8 +75,8 @@ per gene.</p>
 <span>  <span class="va">formula_abundance</span>,</span>
 <span>  formula_dispersion <span class="op">=</span> <span class="op">~</span><span class="fl">1</span>,</span>
 <span>  <span class="va">offset</span>,</span>
-<span>  dispersion <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  dispersion_degrees_freedom <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  dispersion_prior_log_mean <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  dispersion_prior_log_sd <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span>
 <span></span>
@@ -86,8 +86,8 @@ per gene.</p>
 <span>  <span class="va">formula_abundance</span>,</span>
 <span>  formula_dispersion <span class="op">=</span> <span class="op">~</span><span class="fl">1</span>,</span>
 <span>  <span class="va">offset</span>,</span>
-<span>  dispersion <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  dispersion_degrees_freedom <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  dispersion_prior_log_mean <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  dispersion_prior_log_sd <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  bundle <span class="op">=</span> <span class="fl">10L</span>,</span>
 <span>  target_output <span class="op">=</span> <span class="st">"brms_fit"</span>,</span>
 <span>  <span class="va">...</span></span>
@@ -116,18 +116,20 @@ passed to <code><a href="estimate_gene.html">estimate_gene()</a></code>. <code>~
 (the same argument as <code><a href="estimate_gene.html">estimate_gene()</a></code>).</p></dd>
 
 
-<dt id="arg-dispersion">dispersion<a class="anchor" aria-label="anchor" href="#arg-dispersion"></a></dt>
-<dd><p>Optional name of the <code>rowData</code> dispersion column.
-Pass <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code>'s <code>dispersion_trended</code>
-(\(s_0^2\)), not <code>dispersion_shrinked</code>. Default <code>NULL</code> puts a zero
-offset on the shape submodel (see <code><a href="estimate_gene.html">estimate_gene()</a></code>).</p></dd>
+<dt id="arg-dispersion-prior-log-mean">dispersion_prior_log_mean<a class="anchor" aria-label="anchor" href="#arg-dispersion-prior-log-mean"></a></dt>
+<dd><p>Optional name of the <code>rowData</code> dispersion
+column. <code><a href="estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> writes <code>"dispersion_prior_log_mean"</code>
+(<code>trended.dispersion</code>). You can also pass
+<code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code>'s <code>dispersion_trended</code> (\(s_0^2\)),
+not <code>dispersion_shrinked</code>. Default <code>NULL</code> puts a zero offset on the
+shape submodel (see <code><a href="estimate_gene.html">estimate_gene()</a></code>).</p></dd>
 
 
-<dt id="arg-dispersion-degrees-freedom">dispersion_degrees_freedom<a class="anchor" aria-label="anchor" href="#arg-dispersion-degrees-freedom"></a></dt>
-<dd><p>Optional name of the effective degrees of
-freedom column written alongside it by <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code>.
-Default <code>NULL</code> uses a default Student-t SD of 1 on the log-shape intercept.
-<code>"gamma"</code> requires this column.</p></dd>
+<dt id="arg-dispersion-prior-log-sd">dispersion_prior_log_sd<a class="anchor" aria-label="anchor" href="#arg-dispersion-prior-log-sd"></a></dt>
+<dd><p>Optional name of a log-dispersion prior SD
+column written by <code><a href="estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> as
+<code>"dispersion_prior_log_sd"</code>. That function's <code>method</code> chooses the width.
+Default <code>NULL</code> uses a log-scale SD of 1.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
@@ -153,16 +155,15 @@ swamping an HPC scheduler with tiny jobs. See <em>Bundling</em> below.</p></dd>
     <div id="details">
     <h2>Details</h2>
     <p>Neither the offset nor the dispersion is computed here. Run
-<code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code> on the whole object before <code><a href="brmDE.html">brmDE()</a></code>,
-exactly as you compute the offset, so that both are ordinary columns of the
-input, then pass those column names here. Gene-wise fitting is the only
-thing this pipeline does. The dispersion columns are a prior on the
+<code><a href="estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> on the whole object before <code><a href="brmDE.html">brmDE()</a></code>,
+exactly as you compute the offset, so that both are ordinary columns of
+the input, then pass those column names here. Gene-wise fitting is the
+only thing this pipeline does. The dispersion columns are a prior on the
 negative binomial shape (see <code><a href="estimate_gene.html">estimate_gene()</a></code>): they inform each gene
 without fixing the posterior to the external estimate. Omitting
-<code>dispersion</code> and/or <code>dispersion_degrees_freedom</code> is valid under the
-default Student-t (zero shape offset, log-scale SD of 1). <code>"gamma"</code>
-requires <code>dispersion_degrees_freedom</code>. Computing and passing both columns
-is the preferred starting point.</p>
+<code>dispersion_prior_log_mean</code> and/or <code>dispersion_prior_log_sd</code> is valid
+(zero shape offset, log-scale SD of 1). Computing both, then passing
+both names, is the preferred starting point.</p>
 <p>Prior constants derived from each gene are passed to Stan as data, so every
 gene generates identical Stan code and cmdstanr compiles it at most once per
 worker process rather than once per gene.</p>
