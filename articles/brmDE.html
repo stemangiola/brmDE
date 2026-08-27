@@ -86,16 +86,17 @@ Mangiola</h4>
 <div class="section level2">
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
-<p><code>brmDE</code> does mixed-effect modelling for differential gene
-expression analyses, based on Bayesian regression through <a href="https://paul-buerkner.github.io/brms/" class="external-link">brms</a>. Each gene is fit
-on its own, then those fits compose into a <a href="https://github.com/stemangiola/tidytargets" class="external-link">tidytargets</a>
-<code>targets</code> pipeline. The typical flow is:</p>
+<p><code>brmDE</code> fits mixed-effect models for differential gene
+expression analyses, based on Bayesian regression through <a href="https://paul-buerkner.github.io/brms/" class="external-link">brms</a>. The typical flow
+is:</p>
 <ol style="list-style-type: decimal">
-<li>scale with TMM (<code><a href="https://rdrr.io/pkg/tidybulk/man/scale_abundance-methods.html" class="external-link">tidybulk::scale_abundance()</a></code>) and set
+<li>Calculate offset/scaling, e.g. from TMM
+(<code><a href="https://rdrr.io/pkg/tidybulk/man/scale_abundance-methods.html" class="external-link">tidybulk::scale_abundance()</a></code>) and set
 <code>offset = log(1 / multiplier)</code>
 </li>
 <li>estimate <strong>dispersion</strong> once on the full matrix
-(<code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code>)</li>
+(<code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">estimate_dispersion()</a></code>) to be used as prior for the
+negative binomial shadispersion</li>
 <li>fit each gene with <code><a href="../reference/estimate_gene.html">estimate_gene()</a></code>, using that
 dispersion as a <strong>prior</strong> on the negative binomial shape —
 the gene’s own counts can still pull the posterior away from it</li>
@@ -108,9 +109,6 @@ normalisation of its own: <code><a href="../reference/brmDE.html">brmDE()</a></c
 <code><a href="../reference/estimate_gene.html">estimate_gene()</a></code> both expect the offset column to be on the
 object already, so you stay in control of how library size is
 handled.</p>
-<p>Fitting chunks below are gated by
-<code><a href="https://wlandau.github.io/instantiate/reference/stan_cmdstan_exists.html" class="external-link">instantiate::stan_cmdstan_exists()</a></code>, so the vignette still
-builds when CmdStan is missing.</p>
 </div>
 <div class="section level2">
 <h2 id="install-cmdstan">Install CmdStan<a class="anchor" aria-label="anchor" href="#install-cmdstan"></a>
@@ -136,7 +134,13 @@ default Stan backend. Three steps:</p>
 <span></span>
 <span><span class="fu">cmdstanr</span><span class="fu">::</span><span class="fu"><a href="https://mc-stan.org/cmdstanr/reference/install_cmdstan.html" class="external-link">check_cmdstan_toolchain</a></span><span class="op">(</span>fix <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="fu">cmdstanr</span><span class="fu">::</span><span class="fu"><a href="https://mc-stan.org/cmdstanr/reference/install_cmdstan.html" class="external-link">install_cmdstan</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="install-brmde-and-dependencies">Install brmDE and dependencies<a class="anchor" aria-label="anchor" href="#install-brmde-and-dependencies"></a>
+</h2>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"stemangiola/brmDE"</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/MangiolaLaboratory" class="external-link">brmDE</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/stemangiola/tidybulk" class="external-link">tidybulk</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/stemangiola/tidySummarizedExperiment" class="external-link">tidySummarizedExperiment</a></span><span class="op">)</span></span>
@@ -152,19 +156,19 @@ default Stan backend. Three steps:</p>
 <div class="section level2">
 <h2 id="one-gene-with-dispersion">One gene, with dispersion<a class="anchor" aria-label="anchor" href="#one-gene-with-dispersion"></a>
 </h2>
-<p>For a single gene you still prepare the offset and dispersion on a
-multi-gene matrix. After those columns exist, <code><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter()</a></code> the
-feature set you want to fit. These steps do not need CmdStan.</p>
 <p>Get the TMM <code>multiplier</code> from
 <code><a href="https://rdrr.io/pkg/tidybulk/man/scale_abundance-methods.html" class="external-link">tidybulk::scale_abundance()</a></code>, then form the library-size
-offset as <code>log(1 / multiplier)</code> with <code>mutate()</code>
-from tidySummarizedExperiment.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+offset as <code>log(1 / multiplier)</code> with <code>mutate()</code>,
+here using tidySummarizedExperiment for convenience.</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span></span>
 <span><span class="va">se</span> <span class="op">&lt;-</span> <span class="va">airway</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/pkg/tidybulk/man/identify_abundant-methods.html" class="external-link">identify_abundant</a></span><span class="op">(</span>formula_design <span class="op">=</span> <span class="op">~</span> <span class="va">dex</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span></span>
+<span>  <span class="co"># This tidybulk utility enriches the SummarizedExperiment with TMM normalising factor and the multiplier scaling factor, which is that sample-wise multiplier you use to calculate scaled counts.  </span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/pkg/tidybulk/man/scale_abundance-methods.html" class="external-link">scale_abundance</a></span><span class="op">(</span>method <span class="op">=</span> <span class="st">"TMM"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="co"># library size factor is the reciprocal of the multiplier</span></span>
+<span></span>
+<span>  <span class="co"># The library-size offset that brmDE (abd brms) is the reciprocal of the multiplier</span></span>
 <span>  <span class="fu">mutate</span><span class="op">(</span>offset <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="fl">1</span> <span class="op">/</span> <span class="va">multiplier</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Because tidybulk::estimate_dispersion() uses edgeR, which has no mixed</span></span>
@@ -188,7 +192,7 @@ from tidySummarizedExperiment.</p>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">se</span><span class="op">$</span><span class="va">offset</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] -0.3214809 -0.4442212 -0.1827671 -0.7333862 -0.1757348  0.0000000</span></span></code></pre></div>
 <div class="section level3">
-<h3 id="two-formulas-and-the-offsets-brmde-adds">Two formulas, and the offsets brmDE adds<a class="anchor" aria-label="anchor" href="#two-formulas-and-the-offsets-brmde-adds"></a>
+<h3 id="differential-abundance-and-variability">Differential abundance and variability<a class="anchor" aria-label="anchor" href="#differential-abundance-and-variability"></a>
 </h3>
 <p><code>formula_abundance</code> is the mean model. For the gene-wise
 fit it can include random effects; the library size offset goes here.
@@ -197,36 +201,13 @@ fixed-effect analogue that edgeR can use.</p>
 <p><code>formula_dispersion</code> is the model for the negative
 binomial shape, <code>~1</code> by default. It is where the edgeR
 dispersion offset goes.</p>
-<p>You write neither offset. Both are appended in the backend, and the
-assembled formulas are printed so you can confirm what was fitted:</p>
+<p>Abundance and dispersion offset are added by brmDE in the
+background.</p>
 <pre><code>Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offset)
 Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion_trended))</code></pre>
-<p>The edgeR columns are a <strong>prior</strong>, not a plug-in. Pass
-<code>dispersion_trended</code>
-(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>s</mi><mn>0</mn><mn>2</mn></msubsup><annotation encoding="application/x-tex">s_0^2</annotation></semantics></math>),
-the across-gene trend, not <code>dispersion_shrinked</code>
-(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>q</mi><mi>g</mi><mrow><mi>p</mi><mi>o</mi><mi>s</mi><mi>t</mi></mrow></msubsup><annotation encoding="application/x-tex">q_g^{post}</annotation></semantics></math>),
-which already contains this gene. <code><a href="../reference/estimate_gene.html">estimate_gene()</a></code> centres
-the negative binomial shape on <code>1/dispersion_trended</code> and
-uses <code>dispersion_degrees_freedom</code> to set how tightly; the
-gene-wise likelihood is then free to move the posterior away from that
-location. How far a gene can diverge is the prior scale and the tail of
-<code>shape_prior</code> (Student-t is more permissive than gamma). The
-derivation is in <code><a href="../articles/dispersion-priors.html">vignette("dispersion-priors")</a></code>.</p>
-<p><code>dispersion</code> and <code>dispersion_degrees_freedom</code>
-both default to <code>NULL</code>. Leaving <code>dispersion</code> unset
-puts a zero offset on the shape submodel (the intercept is then
-<code>log(shape)</code> itself), which is useful when the sample size is
-large enough that an informative location from edgeR is unnecessary.
-Leaving <code>dispersion_degrees_freedom</code> unset gives the
-Student-t intercept a log-scale SD of 1, so the prior scale does not
-depend on previous tools. <code>"gamma"</code> requires
-<code>dispersion_degrees_freedom</code>. Computing both columns with
-<code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code> and passing their names, as
-below, is the preferred starting point.</p>
 </div>
 <div class="section level3">
-<h3 id="student-t-shape-prior-default">Student-t shape prior (default)<a class="anchor" aria-label="anchor" href="#student-t-shape-prior-default"></a>
+<h3 id="student-t-dispersion-prior-default">Student-t dispersion prior (default)<a class="anchor" aria-label="anchor" href="#student-t-dispersion-prior-default"></a>
 </h3>
 <p>The default <code>shape_prior = "student_t"</code> builds the shape
 submodel from <code>formula_dispersion</code> and places a Student-t
@@ -237,7 +218,7 @@ an offset on a log link, any terms you add to
 <code>formula_dispersion</code> describe departures from the trend, on
 top of the intercept’s ability to leave that location when the data
 warrant it.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_t</span> <span class="op">&lt;-</span> <span class="va">se</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">.feature</span> <span class="op">==</span> <span class="st">"ENSG00000120129"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/estimate_gene.html">estimate_gene</a></span><span class="op">(</span></span>
@@ -263,7 +244,7 @@ warrant it.</p>
 <p>Name the effect on its own and <code><a href="../reference/hypothesis_gene.html">hypothesis_gene()</a></code> asks
 the question a DE analysis actually wants: is this effect big enough to
 care about, and which way does it go?</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Is the dex effect bigger than one log2 fold change, and in which direction?</span></span>
 <span><span class="fu"><a href="../reference/hypothesis_gene.html">hypothesis_gene</a></span><span class="op">(</span><span class="va">fit_t</span>, <span class="st">"dextrt"</span><span class="op">)</span></span></code></pre></div>
 <p><code>test_above_log2FC</code> is the size an effect has to beat, in
@@ -323,7 +304,7 @@ Bayes factor carries assumptions the counted one does not. See
 lines; asking whether each cell’s intercept exceeds one log2 fold change
 from the population mean is four hypotheses. <code>class = "r"</code>
 tells brms to look among the group-level coefficients.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/hypothesis_gene.html">hypothesis_gene</a></span><span class="op">(</span></span>
 <span>  <span class="va">fit_t</span>,</span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
@@ -351,14 +332,14 @@ abundance.</p>
 <p><code>ENSG00000120129</code> is DUSP1, a dexamethasone-responsive
 gene. The hypothesis above asked whether its dex effect clears one log2
 fold change; the plot is that effect in the counts.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_boxplot.html">plot_boxplot</a></span><span class="op">(</span><span class="va">fit_t</span>, factor <span class="op">=</span> <span class="st">"dex"</span>, feature <span class="op">=</span> <span class="st">"ENSG00000120129"</span><span class="op">)</span></span></code></pre></div>
 <p>Those counts still carry the cell-line intercepts, so for a mixed
 model the dex contrast can be hard to see in one dimension.
 <code>remove_unwanted_effects = TRUE</code> takes the random intercepts
 out too, keeping <code>dex</code> alone, and redraws the posterior
 predictive from that same reduced model.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_boxplot.html">plot_boxplot</a></span><span class="op">(</span></span>
 <span>  <span class="va">fit_t</span>,</span>
 <span>  factor <span class="op">=</span> <span class="st">"dex"</span>,</span>
@@ -385,7 +366,7 @@ feature set and pass that object in. Five genes are enough to show the
 gene-wise branches that <code><a href="../reference/estimate.html">estimate()</a></code> maps over; pass a local
 <code>crew</code> controller to <code><a href="../reference/brmDE.html">brmDE()</a></code> so those branches
 run in parallel on your machine (the default is sequential).</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://wlandau.github.io/crew/" class="external-link">crew</a></span><span class="op">)</span></span>
 <span><span class="va">store</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span>pattern <span class="op">=</span> <span class="st">"brmde_"</span><span class="op">)</span></span>
 <span><span class="va">pipeline</span> <span class="op">&lt;-</span> <span class="va">se</span> <span class="op">|&gt;</span></span>
@@ -452,7 +433,7 @@ reads branch <code>i</code>. With <code>bundle = 1</code> that is the
 gene’s row in the result. The gene id is on the result, not on the fit:
 pass <code>feature = result$.feature[[i]]</code> to
 <code><a href="../reference/plot_boxplot.html">plot_boxplot()</a></code>.</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">result</span> <span class="op">&lt;-</span> <span class="va">pipeline</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://stemangiola.github.io/tidytargets/reference/tt_evaluate.html" class="external-link">tt_evaluate</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="va">result</span></span>
 <span></span>
@@ -492,7 +473,7 @@ the two entries it needs off the object:
 evaluates the pipeline, exactly as printing it does, so it can also be
 the first thing you call; targets skips what it already has, and here
 everything is already built.</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pipeline</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/plot_volcano.html">plot_volcano</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p>Five genes make a thin volcano. <code><a href="../reference/plot_volcano.html">plot_volcano()</a></code> returns a
 ggplot object, so a run holding several contrasts can be split with
@@ -510,7 +491,7 @@ is the one at the top of this vignette with a single change —
 of only flagging them, which leaves 15,926 of airway’s 63,677. The run
 itself uses the two scaling controls the sections below describe, a
 <code>crew.cluster</code> controller and <code>bundle</code>.</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/MangiolaLaboratory" class="external-link">brmDE</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/stemangiola/tidybulk" class="external-link">tidybulk</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/stemangiola/tidySummarizedExperiment" class="external-link">tidySummarizedExperiment</a></span><span class="op">)</span></span>
@@ -588,7 +569,7 @@ p-value has no way to make.</p>
 <code><a href="../reference/brmDE.html">brmDE()</a></code> as <code>computing_resources</code>. Gene-wise
 targets then launch as SLURM jobs (run this block from a login node, not
 in the vignette build).</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://wlandau.github.io/crew.cluster/" class="external-link">crew.cluster</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">pipeline</span> <span class="op">&lt;-</span> <span class="va">se</span> <span class="op">|&gt;</span></span>
@@ -636,7 +617,7 @@ one row per gene in the same order. On the other hand, if the sample
 size is large and each gene estimation is slow, you should not bundle as
 you risk less that the failure of one gene would compromise the whole
 bundle.</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pipeline</span> <span class="op">&lt;-</span> <span class="va">se</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/brmDE.html">brmDE</a></span><span class="op">(</span></span>
 <span>    store <span class="op">=</span> <span class="st">"/path/to/brmde_store"</span>,</span>
