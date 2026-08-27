@@ -229,6 +229,7 @@ pipeline <- se |>
     offset = "offset",
     dispersion = "dispersion_trended",
     dispersion_degrees_freedom = "dispersion_degrees_freedom",
+    bundle = 1,            # one branch per gene (matches tar_read below)
     family = brms::zero_inflated_negbinomial(),
     chains = 1,            # set for vignette build
     draws_warmup = 100,    # set for vignette build

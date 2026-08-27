@@ -3,7 +3,7 @@ title: "Integrating fast frequentist empirical-Bayes gene-expression dispersion 
 author: "Stefano Mangiola"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Integrating fast frequentist empirical-Bayes gene-expression dispersion estimation into the Bayesian framework}
+  %\VignetteIndexEntry{Integrating fast frequentist empirical-Bayes gene-expression dispersion estimation as a prior}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
