@@ -34,6 +34,16 @@ evaluated, rather than appearing to do nothing."><!-- mathjax --><script src="ht
 <li>
   <a href="../reference/index.html">Reference</a>
 </li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Articles
+
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu"><li>
+      <a href="../articles/dispersion-priors.html">Integrating fast frequentist empirical-Bayes gene-expression dispersion estimation as a prior</a>
+    </li>
+  </ul></li>
       </ul><ul class="nav navbar-nav navbar-right"></ul></div><!--/.nav-collapse -->
   </div><!--/.container -->
 </div><!--/.navbar -->
@@ -178,7 +188,7 @@ in one table: they stay in the store. Read one with
 <span class="r-in"><span>  <span class="fu"><a href="estimate.html">estimate</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>    <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">cell</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>    offset <span class="op">=</span> <span class="st">"offset"</span>,</span></span>
-<span class="r-in"><span>    dispersion <span class="op">=</span> <span class="st">"dispersion"</span>,</span></span>
+<span class="r-in"><span>    dispersion <span class="op">=</span> <span class="st">"dispersion_trended"</span>,</span></span>
 <span class="r-in"><span>    dispersion_degrees_freedom <span class="op">=</span> <span class="st">"dispersion_degrees_freedom"</span>,</span></span>
 <span class="r-in"><span>    family <span class="op">=</span> <span class="fu">brms</span><span class="fu">::</span><span class="fu"><a href="https://paulbuerkner.com/brms/reference/brmsfamily.html" class="external-link">negbinomial</a></span><span class="op">(</span><span class="op">)</span></span></span>
 <span class="r-in"><span>  <span class="op">)</span> <span class="op">|&gt;</span></span></span>
@@ -197,7 +207,7 @@ in one table: they stay in the store. Read one with
 <span class="r-in"><span><span class="co">#       )</span></span></span>
 <span class="r-in"><span><span class="co">#     )</span></span></span>
 <span class="r-in"><span><span class="co">#   ) |&gt;</span></span></span>
-<span class="r-in"><span><span class="co">#   estimate(~ dex + (1 | cell), offset = "offset", dispersion = "dispersion",</span></span></span>
+<span class="r-in"><span><span class="co">#   estimate(~ dex + (1 | cell), offset = "offset", dispersion = "dispersion_trended",</span></span></span>
 <span class="r-in"><span><span class="co">#            dispersion_degrees_freedom = "dispersion_degrees_freedom")</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>

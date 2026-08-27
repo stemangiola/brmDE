@@ -45,6 +45,18 @@
 <li>
   <a href="reference/index.html">Reference</a>
 </li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Articles
+
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+<li>
+      <a href="articles/dispersion-priors.html">Integrating fast frequentist empirical-Bayes gene-expression dispersion estimation as a prior</a>
+    </li>
+  </ul>
+</li>
       </ul>
 <ul class="nav navbar-nav navbar-right"></ul>
 </div>
@@ -192,9 +204,9 @@
 <span><span class="op">)</span></span></code></pre></div>
 <p>Naming an effect on its own tests whether it clears <code>test_above_log2FC</code> (default <code>1</code>, a doubling of expression), reporting the effect in <code>log2_fold_change</code> and the probability that the better supported side is wrong in <code>pH0</code>. Both ways of being wrong are in that one number: too small to matter, or pointing the other way. Because it is a probability rather than a test statistic, pipelines turn it into an FDR by averaging and add that as an <code>fdr</code> column.</p>
 <p>Neither <code><a href="reference/estimate_gene.html">estimate_gene()</a></code> nor <code><a href="reference/brmDE.html">brmDE()</a></code> normalises. Compute the offset yourself on all genes (TMM, or anything else), store it as a <code>colData</code> column, and pass that name to <code>offset</code>. Dispersion is the same kind of whole-matrix quantity: run <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code> before <code><a href="reference/brmDE.html">brmDE()</a></code> and pass the two column names to <code><a href="reference/estimate.html">estimate()</a></code>. Those columns become a <strong>prior</strong> on the negative binomial shape, not a plug-in: the gene-wise likelihood can still pull the posterior away from the external estimate.</p>
-<p>The two models are given separately. <code>formula_abundance</code> is the mean model. For <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code> write the fixed-effect analogue of that model (<code>~ dex + cell</code> for <code>~ dex + (1 | cell)</code>): edgeR has no random effects. <code>formula_dispersion</code> (default <code>~1</code>) is the model for the negative binomial shape. Neither should carry an offset: the library size offset and the <code>log(1/dispersion)</code> offset are appended for you, and the assembled formulas are printed as a message so you can check them:</p>
+<p>The two models are given separately. <code>formula_abundance</code> is the mean model. For <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code> write the fixed-effect analogue of that model (<code>~ dex + cell</code> for <code>~ dex + (1 | cell)</code>): edgeR has no random effects. <code>formula_dispersion</code> (default <code>~1</code>) is the model for the negative binomial shape. Neither should carry an offset: the library size offset and the <code>log(1/dispersion_trended)</code> offset are appended for you, and the assembled formulas are printed as a message so you can check them:</p>
 <pre><code>Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offset)
-Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))</code></pre>
+Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion_trended))</code></pre>
 </div>
 <div class="section level2">
 <h2 id="example-for-many-genes-as-parallel-pipeline-easily-deployable-on-your-hpc">Example for many genes as parallel pipeline, easily deployable on your HPC<a class="anchor" aria-label="anchor" href="#example-for-many-genes-as-parallel-pipeline-easily-deployable-on-your-hpc"></a>
@@ -212,7 +224,7 @@ Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))<
 <span>  <span class="fu"><a href="reference/estimate.html">estimate</a></span><span class="op">(</span></span>
 <span>    <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">cell</span><span class="op">)</span>,</span>
 <span>    offset <span class="op">=</span> <span class="st">"offset"</span>,</span>
-<span>    dispersion <span class="op">=</span> <span class="st">"dispersion"</span>,</span>
+<span>    dispersion <span class="op">=</span> <span class="st">"dispersion_trended"</span>,</span>
 <span>    dispersion_degrees_freedom <span class="op">=</span> <span class="st">"dispersion_degrees_freedom"</span>,</span>
 <span>    family <span class="op">=</span> <span class="fu">brms</span><span class="fu">::</span><span class="fu"><a href="https://paulbuerkner.com/brms/reference/brmsfamily.html" class="external-link">negbinomial</a></span><span class="op">(</span><span class="op">)</span></span>
 <span>  <span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -226,14 +238,15 @@ Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))<
 </h2>
 <p><code>plot_volcano(pipeline)</code> draws the run as a volcano, evaluating the pipeline first if printing it has not already. It takes the pipeline rather than the table because <code>pH0</code> is counted from draws and so cannot resolve below <code>1 / ndraws</code>, and only the pipeline knows that number: <code><a href="reference/estimate.html">estimate()</a></code> records the sampling settings on it with <code><a href="https://stemangiola.github.io/tidytargets/reference/tt_metadata.html" class="external-link">tt_metadata()</a></code>, while the fits themselves stay in the store. The genes that come back as exactly 0 are jittered across a shaded band one decade below the dashed resolution line, which reads as “smaller than these draws can measure” rather than as a probability.</p>
 <p>By default <code><a href="reference/estimate.html">estimate()</a></code> fits 10 genes per target. At transcriptome scale that can swamp an HPC scheduler with tiny jobs, so <code>estimate(bundle = 100)</code> fits 100 genes per target instead; the output is unchanged, one row per gene. Set <code>bundle = 1</code> for one target per gene.</p>
-<p>See the package vignette for the full walkthrough, including both shape-prior options:</p>
+<p>See the package vignette for the full walkthrough, including both shape-prior options, and <code><a href="articles/dispersion-priors.html">vignette("dispersion-priors")</a></code> for the derivation that connects edgeR’s (s_0^2) and (d_0) to those priors:</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette</a></span><span class="op">(</span><span class="st">"brmDE"</span>, package <span class="op">=</span> <span class="st">"brmDE"</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette</a></span><span class="op">(</span><span class="st">"brmDE"</span>, package <span class="op">=</span> <span class="st">"brmDE"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette</a></span><span class="op">(</span><span class="st">"dispersion-priors"</span>, package <span class="op">=</span> <span class="st">"brmDE"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="dispersion-priors">Dispersion priors<a class="anchor" aria-label="anchor" href="#dispersion-priors"></a>
 </h2>
-<p><code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code> writes one <code>rowData</code> column per estimate, named by <code>dispersion_column</code> and <code>dispersion_degrees_freedom_column</code> (defaults <code>"dispersion"</code> for gene-wise (<em>g) and <code>"dispersion_degrees_freedom"</code> for (d</em>{} =  + )). Pass those same names to <code><a href="reference/estimate.html">estimate()</a></code> / <code><a href="reference/estimate_gene.html">estimate_gene()</a></code> as <code>dispersion=</code> and <code>dispersion_degrees_freedom=</code>. Those two default to <code>NULL</code> (<code>offset(0)</code> on the shape submodel, Student-t log-scale SD of 1); computing the columns and passing both names is the preferred starting point. <code><a href="reference/estimate_gene.html">estimate_gene()</a></code> turns that pair into a prior on the negative binomial shape — a location from (<em>g) and a tightness from (d</em>{}) — so data-driven evidence for that gene can still diverge from the external estimate. Choose the form with <code>shape_prior</code>:</p>
+<p><code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code> writes <code>dispersion_trended</code> ((s_0^2), the across-gene trend) and <code>dispersion_shrinked</code> ((q_g^{post}), the tagwise posterior). Pass <code>dispersion_trended</code> to <code><a href="reference/estimate.html">estimate()</a></code> / <code><a href="reference/estimate_gene.html">estimate_gene()</a></code> as <code>dispersion=</code>: that is the prior location, information this gene has not yet contributed. Do not pass <code>dispersion_shrinked</code>, which already includes this gene’s counts. Pair it with <code>dispersion_degrees_freedom</code>. Those arguments default to <code>NULL</code> (<code>offset(0)</code> on the shape submodel; log-scale SD of 1 under <code>"student_t"</code>). <code>"gamma"</code> requires <code>dispersion_degrees_freedom</code>. <code><a href="reference/estimate_gene.html">estimate_gene()</a></code> turns the pair into a prior on the negative binomial shape. Choose the form with <code>shape_prior</code>:</p>
 <table class="table">
 <colgroup>
 <col width="33%">
@@ -250,18 +263,18 @@ Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))<
 <td>
 <code>"student_t"</code> (default)</td>
 <td>
-<code>student_t</code> on the intercept of a <code>shape ~ 1 + offset(log(1/dispersion))</code> submodel (<code>offset(0)</code> if <code>dispersion</code> is omitted)</td>
-<td>Heavier tails, tolerant of over-shrunk genes; leaves the submodel open to dispersion covariates</td>
+<code>student_t</code> on the intercept of a <code>shape ~ 1 + offset(log(1/dispersion_trended))</code> submodel (<code>offset(0)</code> if <code>dispersion</code> is omitted)</td>
+<td>Heavier tails, tolerant of a trend that does not fit</td>
 </tr>
 <tr>
 <td><code>"gamma"</code></td>
 <td>
-<code>gamma(d_eff/2, d_eff * dispersion/2)</code> on <code>shape</code> directly, no submodel</td>
-<td>Conjugate to edgeR’s scaled inverse chi-square hierarchy; lighter tails</td>
+<code>gamma(d_0/2, d_0/2)</code> on <code>exp(intercept)</code> of the same submodel</td>
+<td>Requires <code>dispersion_degrees_freedom</code>; conjugate to edgeR’s scaled inverse chi-square hierarchy; lighter tails</td>
 </tr>
 </tbody>
 </table>
-<p>Both encode the same log-scale spread, <code>trigamma(d_eff / 2)</code>, because a chi-square <em>is</em> a gamma, and both put all their mass on a positive shape — the Student-t by exponentiating an unbounded parameter through brms’ log link, the gamma by bounding it. They are not, however, reparameterisations of each other: the Student-t centres the <em>median</em> shape on edgeR’s estimate while the gamma centres the <em>mean</em>, leaving their log-scale centres about <code>1/d_eff</code> apart. See <code><a href="reference/estimate_gene.html">?estimate_gene</a></code> for the two parameterisations.</p>
+<p>Both use the same shape submodel, so both accept dispersion covariates. Both encode the same log-scale spread, <code>trigamma(d_0 / 2)</code>, because a chi-square <em>is</em> a gamma, and both put all their mass on a positive shape by exponentiating. They are not, however, reparameterisations of each other: the Student-t centres the <em>median</em> shape on the trend while the gamma centres the <em>mean</em>, leaving their log-scale centres about <code>1/d_0</code> apart. See <code><a href="reference/estimate_gene.html">?estimate_gene</a></code> for the two parameterisations, and <code><a href="articles/dispersion-priors.html">vignette("dispersion-priors")</a></code> for the references.</p>
 </div>
 </div>
   </div>

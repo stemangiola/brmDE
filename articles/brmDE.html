@@ -44,6 +44,18 @@
 <li>
   <a href="../reference/index.html">Reference</a>
 </li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Articles
+
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+<li>
+      <a href="../articles/dispersion-priors.html">Integrating fast frequentist empirical-Bayes gene-expression dispersion estimation as a prior</a>
+    </li>
+  </ul>
+</li>
       </ul>
 <ul class="nav navbar-nav navbar-right"></ul>
 </div>
@@ -160,18 +172,19 @@ from tidySummarizedExperiment.</p>
 <span><span class="co"># `dex + (1|cell)` becomes `dex + cell` and `dex + (dex|cell)` becomes `dex*cell`.</span></span>
 <span><span class="va">se</span> <span class="op">&lt;-</span> <span class="va">se</span> <span class="op">|&gt;</span> <span class="fu">tidybulk</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">estimate_dispersion</a></span><span class="op">(</span>formula_abundance <span class="op">=</span> <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="va">cell</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># One rowData column per estimate, named by dispersion_column and</span></span>
-<span><span class="co"># dispersion_degrees_freedom_column (defaults shown):</span></span>
-<span><span class="co">#   dispersion                 = tagwise phi_g</span></span>
-<span><span class="co">#   dispersion_degrees_freedom = d_eff = df.residual + prior.df</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">rowData</a></span><span class="op">(</span><span class="va">se</span><span class="op">)</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"dispersion"</span>, <span class="st">"dispersion_degrees_freedom"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt;                  dispersion dispersion_degrees_freedom</span></span>
-<span><span class="co">#&gt; ENSG00000000003 0.006734047                   10.60862</span></span>
-<span><span class="co">#&gt; ENSG00000000005 0.069843933                   10.60862</span></span>
-<span><span class="co">#&gt; ENSG00000000419 0.007230741                   10.60862</span></span>
-<span><span class="co">#&gt; ENSG00000000457 0.008128609                   10.60862</span></span>
-<span><span class="co">#&gt; ENSG00000000460 0.024220581                   10.60862</span></span>
-<span><span class="co">#&gt; ENSG00000000938 0.069843933                   10.60862</span></span>
+<span><span class="co"># One rowData column per estimate, named by the corresponding arguments</span></span>
+<span><span class="co"># (defaults shown):</span></span>
+<span><span class="co">#   dispersion_trended            = s0^2, the across-gene trend (pass this)</span></span>
+<span><span class="co">#   dispersion_shrinked           = q_post, tagwise posterior (do not pass)</span></span>
+<span><span class="co">#   dispersion_degrees_freedom    = df.residual + prior.df</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">rowData</a></span><span class="op">(</span><span class="va">se</span><span class="op">)</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"dispersion_trended"</span>, <span class="st">"dispersion_degrees_freedom"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt;                 dispersion_trended dispersion_degrees_freedom</span></span>
+<span><span class="co">#&gt; ENSG00000000003        0.009478172                   10.60862</span></span>
+<span><span class="co">#&gt; ENSG00000000005        0.069843933                   10.60862</span></span>
+<span><span class="co">#&gt; ENSG00000000419        0.009681243                   10.60862</span></span>
+<span><span class="co">#&gt; ENSG00000000457        0.011159620                   10.60862</span></span>
+<span><span class="co">#&gt; ENSG00000000460        0.017109040                   10.60862</span></span>
+<span><span class="co">#&gt; ENSG00000000938        0.069843933                   10.60862</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">se</span><span class="op">$</span><span class="va">offset</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] -0.3214809 -0.4442212 -0.1827671 -0.7333862 -0.1757348  0.0000000</span></span></code></pre></div>
 <div class="section level3">
@@ -187,17 +200,19 @@ dispersion offset goes.</p>
 <p>You write neither offset. Both are appended in the backend, and the
 assembled formulas are printed so you can confirm what was fitted:</p>
 <pre><code>Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offset)
-Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion))</code></pre>
-<p>The edgeR columns are a <strong>prior</strong>, not a plug-in.
-<code><a href="../reference/estimate_gene.html">estimate_gene()</a></code> centres the negative binomial shape on
-<code>1/dispersion</code> and uses
-<code>dispersion_degrees_freedom</code> to set how tightly; the
+Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion_trended))</code></pre>
+<p>The edgeR columns are a <strong>prior</strong>, not a plug-in. Pass
+<code>dispersion_trended</code>
+(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>s</mi><mn>0</mn><mn>2</mn></msubsup><annotation encoding="application/x-tex">s_0^2</annotation></semantics></math>),
+the across-gene trend, not <code>dispersion_shrinked</code>
+(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>q</mi><mi>g</mi><mrow><mi>p</mi><mi>o</mi><mi>s</mi><mi>t</mi></mrow></msubsup><annotation encoding="application/x-tex">q_g^{post}</annotation></semantics></math>),
+which already contains this gene. <code><a href="../reference/estimate_gene.html">estimate_gene()</a></code> centres
+the negative binomial shape on <code>1/dispersion_trended</code> and
+uses <code>dispersion_degrees_freedom</code> to set how tightly; the
 gene-wise likelihood is then free to move the posterior away from that
-location. That is the point of bringing a whole-matrix estimate in this
-way: it informs the fit when the gene is sparse, without locking the
-shape to edgeR if the counts disagree. How far a gene can diverge is the
-prior scale (<code>d_eff</code>) and the tail of
-<code>shape_prior</code> (Student-t is more permissive than gamma).</p>
+location. How far a gene can diverge is the prior scale and the tail of
+<code>shape_prior</code> (Student-t is more permissive than gamma). The
+derivation is in <code><a href="../articles/dispersion-priors.html">vignette("dispersion-priors")</a></code>.</p>
 <p><code>dispersion</code> and <code>dispersion_degrees_freedom</code>
 both default to <code>NULL</code>. Leaving <code>dispersion</code> unset
 puts a zero offset on the shape submodel (the intercept is then
@@ -205,7 +220,8 @@ puts a zero offset on the shape submodel (the intercept is then
 large enough that an informative location from edgeR is unnecessary.
 Leaving <code>dispersion_degrees_freedom</code> unset gives the
 Student-t intercept a log-scale SD of 1, so the prior scale does not
-depend on previous tools. Computing both columns with
+depend on previous tools. <code>"gamma"</code> requires
+<code>dispersion_degrees_freedom</code>. Computing both columns with
 <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code> and passing their names, as
 below, is the preferred starting point.</p>
 </div>
@@ -216,18 +232,18 @@ below, is the preferred starting point.</p>
 submodel from <code>formula_dispersion</code> and places a Student-t
 prior on its intercept. With <code>dispersion_degrees_freedom</code>
 passed in, the scale of that prior comes from
-<code>sqrt(trigamma(d_eff / 2))</code>. Because the dispersion enters as
+<code>sqrt(trigamma(d_0 / 2))</code>. Because the dispersion enters as
 an offset on a log link, any terms you add to
-<code>formula_dispersion</code> describe departures from edgeR’s
-per-gene estimate, on top of the intercept’s ability to leave that
-estimate when the data warrant it.</p>
+<code>formula_dispersion</code> describe departures from the trend, on
+top of the intercept’s ability to leave that location when the data
+warrant it.</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit_t</span> <span class="op">&lt;-</span> <span class="va">se</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">.feature</span> <span class="op">==</span> <span class="st">"ENSG00000120129"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/estimate_gene.html">estimate_gene</a></span><span class="op">(</span></span>
 <span>    formula_abundance <span class="op">=</span> <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">cell</span><span class="op">)</span>,</span>
 <span>    offset <span class="op">=</span> <span class="st">"offset"</span>,</span>
-<span>    dispersion <span class="op">=</span> <span class="st">"dispersion"</span>,</span>
+<span>    dispersion <span class="op">=</span> <span class="st">"dispersion_trended"</span>,</span>
 <span>    dispersion_degrees_freedom <span class="op">=</span> <span class="st">"dispersion_degrees_freedom"</span>,</span>
 <span>    family <span class="op">=</span> <span class="fu">brms</span><span class="fu">::</span><span class="fu"><a href="https://paulbuerkner.com/brms/reference/brmsfamily.html" class="external-link">zero_inflated_negbinomial</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>    chains <span class="op">=</span> <span class="fl">1</span>,            <span class="co"># set for vignette build</span></span>
@@ -387,8 +403,9 @@ run in parallel on your machine (the default is sequential).</p>
 <span>  <span class="fu"><a href="../reference/estimate.html">estimate</a></span><span class="op">(</span></span>
 <span>    <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">cell</span><span class="op">)</span>,</span>
 <span>    offset <span class="op">=</span> <span class="st">"offset"</span>,</span>
-<span>    dispersion <span class="op">=</span> <span class="st">"dispersion"</span>,</span>
+<span>    dispersion <span class="op">=</span> <span class="st">"dispersion_trended"</span>,</span>
 <span>    dispersion_degrees_freedom <span class="op">=</span> <span class="st">"dispersion_degrees_freedom"</span>,</span>
+<span>    bundle <span class="op">=</span> <span class="fl">1</span>,            <span class="co"># one branch per gene (matches tar_read below)</span></span>
 <span>    family <span class="op">=</span> <span class="fu">brms</span><span class="fu">::</span><span class="fu"><a href="https://paulbuerkner.com/brms/reference/brmsfamily.html" class="external-link">zero_inflated_negbinomial</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>    chains <span class="op">=</span> <span class="fl">1</span>,            <span class="co"># set for vignette build</span></span>
 <span>    draws_warmup <span class="op">=</span> <span class="fl">100</span>,    <span class="co"># set for vignette build</span></span>
@@ -525,7 +542,7 @@ itself uses the two scaling controls the sections below describe, a
 <span>  <span class="fu"><a href="../reference/estimate.html">estimate</a></span><span class="op">(</span></span>
 <span>    <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">cell</span><span class="op">)</span>,</span>
 <span>    offset <span class="op">=</span> <span class="st">"offset"</span>,</span>
-<span>    dispersion <span class="op">=</span> <span class="st">"dispersion"</span>,</span>
+<span>    dispersion <span class="op">=</span> <span class="st">"dispersion_trended"</span>,</span>
 <span>    dispersion_degrees_freedom <span class="op">=</span> <span class="st">"dispersion_degrees_freedom"</span>,</span>
 <span>    family <span class="op">=</span> <span class="fu">brms</span><span class="fu">::</span><span class="fu"><a href="https://paulbuerkner.com/brms/reference/brmsfamily.html" class="external-link">zero_inflated_negbinomial</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>    chains <span class="op">=</span> <span class="fl">2</span>,</span>
@@ -595,7 +612,7 @@ in the vignette build).</p>
 <span>  <span class="fu"><a href="../reference/estimate.html">estimate</a></span><span class="op">(</span></span>
 <span>    <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">cell</span><span class="op">)</span>,</span>
 <span>    offset <span class="op">=</span> <span class="st">"offset"</span>,</span>
-<span>    dispersion <span class="op">=</span> <span class="st">"dispersion"</span>,</span>
+<span>    dispersion <span class="op">=</span> <span class="st">"dispersion_trended"</span>,</span>
 <span>    dispersion_degrees_freedom <span class="op">=</span> <span class="st">"dispersion_degrees_freedom"</span>,</span>
 <span>    family <span class="op">=</span> <span class="fu">brms</span><span class="fu">::</span><span class="fu"><a href="https://paulbuerkner.com/brms/reference/brmsfamily.html" class="external-link">negbinomial</a></span><span class="op">(</span><span class="op">)</span></span>
 <span>  <span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -628,7 +645,7 @@ bundle.</p>
 <span>  <span class="fu"><a href="../reference/estimate.html">estimate</a></span><span class="op">(</span></span>
 <span>    <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="op">(</span><span class="fl">1</span> <span class="op">|</span> <span class="va">cell</span><span class="op">)</span>,</span>
 <span>    offset <span class="op">=</span> <span class="st">"offset"</span>,</span>
-<span>    dispersion <span class="op">=</span> <span class="st">"dispersion"</span>,</span>
+<span>    dispersion <span class="op">=</span> <span class="st">"dispersion_trended"</span>,</span>
 <span>    dispersion_degrees_freedom <span class="op">=</span> <span class="st">"dispersion_degrees_freedom"</span>,</span>
 <span>    bundle <span class="op">=</span> <span class="fl">100</span>    <span class="co"># 20,000 genes become 200 jobs of 100 fits each</span></span>
 <span>  <span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -676,14 +693,13 @@ set and relying on incremental reruns.</p>
 <code><a href="../reference/brmDE.html">brmDE()</a></code>
 </td>
 <td>
-<code>rowData</code> <code>"dispersion"</code>,
+<code>rowData</code> <code>"dispersion_trended"</code>,
 <code>"dispersion_degrees_freedom"</code>
 </td>
-<td>edgeR
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mi>g</mi></msub><annotation encoding="application/x-tex">\phi_g</annotation></semantics></math>
-and
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>d</mi><mrow><mi mathvariant="normal">e</mi><mi mathvariant="normal">f</mi><mi mathvariant="normal">f</mi></mrow></msub><annotation encoding="application/x-tex">d_{\mathrm{eff}}</annotation></semantics></math>
-</td>
+<td>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>s</mi><mn>0</mn><mn>2</mn></msubsup><annotation encoding="application/x-tex">s_0^2</annotation></semantics></math>
+and its degrees of freedom (see
+<code><a href="../articles/dispersion-priors.html">vignette("dispersion-priors")</a></code>)</td>
 </tr>
 <tr class="odd">
 <td>
@@ -743,29 +759,30 @@ everything below <code>1 / ndraws</code> jittered in a shaded band</td>
 <td>
 <code>"student_t"</code> (default)</td>
 <td>
-<code>shape ~ 1 + offset(log(1/dispersion))</code>, or
+<code>shape ~ 1 + offset(log(1/dispersion_trended))</code>, or
 <code>offset(0)</code> if <code>dispersion</code> is
 <code>NULL</code>
 </td>
-<td>Student-t on the intercept; scale from <code>d_eff</code>, or
+<td>Student-t on the intercept; scale from <code>d_0</code>, or
 log-scale SD 1 if <code>dispersion_degrees_freedom</code> is
 <code>NULL</code>
 </td>
 </tr>
 <tr class="even">
 <td><code>"gamma"</code></td>
-<td>scalar <code>shape</code> (no submodel)</td>
+<td>the same submodel</td>
 <td>
-<code>gamma(d_eff/2, d_eff * dispersion/2)</code> (needs both
-columns)</td>
+<code>gamma(d_0/2, d_0/2)</code> on <code>exp(intercept)</code>;
+requires <code>dispersion_degrees_freedom</code>
+</td>
 </tr>
 </tbody>
 </table>
 <p><code>prior.df</code> from <code>estimateDisp()</code> is shared
 across genes (unless <code>robust = TRUE</code> in edgeR). What varies
-per gene is the tagwise <code>dispersion</code> that sets the prior
-location. In either form the gene-wise counts update that prior: the
-posterior shape is not forced to equal <code>1/dispersion</code>.</p>
+per gene is <code>dispersion_trended</code>, the trend that sets the
+prior location. Do not pass <code>dispersion_shrinked</code>. See
+<code><a href="../articles/dispersion-priors.html">vignette("dispersion-priors")</a></code>.</p>
 </div>
 <div class="section level2">
 <h2 id="abundance-priors-at-a-glance">Abundance priors at a glance<a class="anchor" aria-label="anchor" href="#abundance-priors-at-a-glance"></a>
@@ -805,17 +822,14 @@ zero-inflated or not.</p>
 <td>
 <code>Intercept</code> of <code>shape</code>
 </td>
-<td><code>student_t(shape_prior_df, 0, scale)</code></td>
 <td>
-<code>dispersion_degrees_freedom</code>,
-<code>shape_prior_df</code>
+<code>student_t(shape_prior_df, 0, scale)</code>, or a gamma on
+<code>exp(intercept)</code>
 </td>
-</tr>
-<tr class="even">
 <td>
-<code>shape</code> (scalar)</td>
-<td><code>gamma(d_eff/2, d_eff * dispersion/2)</code></td>
-<td><code>shape_prior = "gamma"</code></td>
+<code>dispersion_degrees_freedom</code>, <code>shape_prior_df</code>
+/ <code>shape_prior</code>
+</td>
 </tr>
 </tbody>
 </table>

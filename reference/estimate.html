@@ -29,6 +29,16 @@ per gene."><!-- mathjax --><script src="https://cdnjs.cloudflare.com/ajax/libs/m
 <li>
   <a href="../reference/index.html">Reference</a>
 </li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Articles
+
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu"><li>
+      <a href="../articles/dispersion-priors.html">Integrating fast frequentist empirical-Bayes gene-expression dispersion estimation as a prior</a>
+    </li>
+  </ul></li>
       </ul><ul class="nav navbar-nav navbar-right"></ul></div><!--/.nav-collapse -->
   </div><!--/.container -->
 </div><!--/.navbar -->
@@ -107,15 +117,17 @@ passed to <code><a href="estimate_gene.html">estimate_gene()</a></code>. <code>~
 
 
 <dt id="arg-dispersion">dispersion<a class="anchor" aria-label="anchor" href="#arg-dispersion"></a></dt>
-<dd><p>Optional name of the <code>rowData</code> dispersion column, as
-written by <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code>. Default <code>NULL</code> puts a zero
+<dd><p>Optional name of the <code>rowData</code> dispersion column.
+Pass <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code>'s <code>dispersion_trended</code>
+(\(s_0^2\)), not <code>dispersion_shrinked</code>. Default <code>NULL</code> puts a zero
 offset on the shape submodel (see <code><a href="estimate_gene.html">estimate_gene()</a></code>).</p></dd>
 
 
 <dt id="arg-dispersion-degrees-freedom">dispersion_degrees_freedom<a class="anchor" aria-label="anchor" href="#arg-dispersion-degrees-freedom"></a></dt>
 <dd><p>Optional name of the effective degrees of
 freedom column written alongside it by <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code>.
-Default <code>NULL</code> uses a default Student-t SD of 1 on the log-shape intercept.</p></dd>
+Default <code>NULL</code> uses a default Student-t SD of 1 on the log-shape intercept.
+<code>"gamma"</code> requires this column.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
@@ -147,9 +159,10 @@ input, then pass those column names here. Gene-wise fitting is the only
 thing this pipeline does. The dispersion columns are a prior on the
 negative binomial shape (see <code><a href="estimate_gene.html">estimate_gene()</a></code>): they inform each gene
 without fixing the posterior to the external estimate. Omitting
-<code>dispersion</code> and/or <code>dispersion_degrees_freedom</code> is valid (zero shape
-offset, default prior SD) but computing and passing both is the preferred
-starting point.</p>
+<code>dispersion</code> and/or <code>dispersion_degrees_freedom</code> is valid under the
+default Student-t (zero shape offset, log-scale SD of 1). <code>"gamma"</code>
+requires <code>dispersion_degrees_freedom</code>. Computing and passing both columns
+is the preferred starting point.</p>
 <p>Prior constants derived from each gene are passed to Stan as data, so every
 gene generates identical Stan code and cmdstanr compiles it at most once per
 worker process rather than once per gene.</p>
