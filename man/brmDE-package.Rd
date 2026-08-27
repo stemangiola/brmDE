@@ -21,6 +21,7 @@ Useful links:
 Authors:
 \itemize{
   \item Stefano Mangiola \email{mangiolastefano@gmail.com}
+  \item Chen Zhan \email{chen.zhan@adelaide.edu.au}
 }
 
 }

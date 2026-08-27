@@ -47,9 +47,11 @@ Suggests:
     callr,
     knitr,
     rmarkdown,
+    BiocManager,
     tidybulk (>= 2.3.2),
     tidySummarizedExperiment,
     edgeR,
+    limma,
     testthat (>= 3.0.0),
     withr
 VignetteBuilder: knitr

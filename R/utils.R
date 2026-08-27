@@ -25,12 +25,26 @@ check_offset_name <- function(offset) {
   check_column_name(offset, "offset")
 }
 
-check_dispersion_name <- function(dispersion) {
-  check_column_name(dispersion, "dispersion")
+check_dispersion_name <- function(dispersion_prior_log_mean) {
+  check_column_name(dispersion_prior_log_mean, "dispersion_prior_log_mean")
 }
 
-check_degrees_freedom_name <- function(dispersion_degrees_freedom) {
-  check_column_name(dispersion_degrees_freedom, "dispersion_degrees_freedom")
+check_log_sd_name <- function(dispersion_prior_log_sd) {
+  check_column_name(dispersion_prior_log_sd, "dispersion_prior_log_sd")
+}
+
+# Suggested Bioconductor packages (edgeR, limma, ...). Same helper as tidybulk:
+# offer to install via BiocManager rather than failing on requireNamespace().
+check_and_install_packages <- function(packages) {
+  rlang::check_installed(
+    pkg = packages,
+    action = function(...) {
+      if (!requireNamespace("BiocManager", quietly = TRUE)) {
+        utils::install.packages("BiocManager", repos = "https://cloud.r-project.org")
+      }
+      BiocManager::install(..., ask = FALSE, update = FALSE)
+    }
+  )
 }
 
 check_bundle <- function(bundle) {
@@ -43,13 +57,6 @@ check_bundle <- function(bundle) {
     )
   }
   as.integer(bundle)
-}
-
-check_shape_prior <- function(shape_prior) {
-  if (!is.character(shape_prior) || length(shape_prior) < 1L) {
-    stop('`shape_prior` must be "student_t" or "gamma".', call. = FALSE)
-  }
-  match.arg(shape_prior[[1]], c("student_t", "gamma"))
 }
 
 format_prior_number <- function(x) {
@@ -157,8 +164,7 @@ prepare_formula <- function(formula_abundance,
                             formula_dispersion = ~1,
                             abundance,
                             offset,
-                            dispersion = NULL,
-                            shape_prior = "student_t") {
+                            dispersion = NULL) {
   if (has_shape_submodel(formula_abundance)) {
     stop(
       "`formula_abundance` carries a shape submodel. Model the dispersion ",
@@ -172,12 +178,9 @@ prepare_formula <- function(formula_abundance,
   formula_abundance <- add_offset_term(formula_abundance, offset)
   announce_formula("Abundance model", formula_abundance, added_offset)
 
-  check_shape_prior(shape_prior)
-
-  # Both shape priors use the same submodel, so the formula does not depend on
-  # `shape_prior` at all: the edgeR dispersion is an offset on brms' log link
-  # either way, or 0 when it is omitted. Only the prior on the intercept of
-  # that submodel differs, a Student-t on it or a gamma on its exponential.
+  # The edgeR dispersion is an offset on brms' log link, or 0 when it is
+  # omitted. The Student-t prior on that intercept is set later; its width
+  # comes from `dispersion_prior_log_sd`.
   out <- add_dispersion_shape(formula_abundance, formula_dispersion, dispersion)
   strip_formula_env(out)
 }
@@ -254,13 +257,6 @@ check_student_df <- function(nu, arg = "shape_prior_df") {
   as.numeric(nu)
 }
 
-# SD of log(dispersion) implied by d_eff effective degrees of freedom.
-# Var(log s^2) = trigamma(d/2) exactly for s^2 ~ sigma^2 chi^2_d / d;
-# sqrt(2 / d) is the large-d approximation and is too small at low d.
-dispersion_log_sd <- function(d_eff) {
-  sqrt(trigamma(d_eff / 2))
-}
-
 # Scale of a Student-t whose standard deviation equals `sd`. For df = nu > 2
 # the Student-t SD is scale * sqrt(nu / (nu - 2)), so the scale that brms and
 # Stan expect as the third argument is sd * sqrt((nu - 2) / nu).
@@ -268,111 +264,45 @@ student_t_scale_for_sd <- function(sd, nu) {
   sd * sqrt((nu - 2) / nu)
 }
 
-# Log-scale SD of the Student-t shape intercept when no edgeR degrees of
-# freedom are supplied. Independent of `dispersion`: that argument only
-# shifts the offset. Converted to a Student-t scale through
-# student_t_scale_for_sd() like the d_eff path, so nu still controls both
-# the df and the scale.
+# Log-scale SD of the Student-t shape intercept when no log-SD column is
+# supplied. Independent of `dispersion`: that argument only shifts the offset.
+# Converted to a Student-t scale through student_t_scale_for_sd(), so nu still
+# controls both the df and the scale.
 shape_prior_sd_default <- 1
 
-# Prior scale for the shape intercept. When `dispersion_degrees_freedom` is
-# supplied it is derived from the effective degrees of freedom that
-# tidybulk::estimate_dispersion() recorded; when it is omitted the scale comes from
-# `shape_prior_sd_default`, so the prior does not depend on previous tools.
-shape_intercept_scale <- function(data,
-                                  dispersion_degrees_freedom,
-                                  nu) {
-  if (is.null(dispersion_degrees_freedom)) {
-    return(student_t_scale_for_sd(shape_prior_sd_default, nu))
-  }
-  require_degrees_freedom_column(data, dispersion_degrees_freedom)
-  d_eff <- check_degrees_freedom_value(data, dispersion_degrees_freedom)
-  scale <- student_t_scale_for_sd(dispersion_log_sd(d_eff), nu)
-  if (!is.finite(scale) || scale <= 0) {
+check_log_sd_value <- function(data, dispersion_prior_log_sd) {
+  if (!dispersion_prior_log_sd %in% names(data)) {
     stop(
-      "The Student-t scale implied by ", dispersion_degrees_freedom, " = ",
-      d_eff, " is ", scale, ", which is not a usable prior scale.",
+      "Dispersion log-SD column '", dispersion_prior_log_sd,
+      "' was not found in `data`. Run estimate_dispersion_log_sd() to write it, ",
+      "or omit `dispersion_prior_log_sd` to use a log-scale SD of 1.",
       call. = FALSE
     )
   }
-  scale
-}
-
-require_degrees_freedom_column <- function(data, dispersion_degrees_freedom) {
-  if (dispersion_degrees_freedom %in% names(data)) {
-    return(invisible(NULL))
-  }
-  stop(
-    "Degrees of freedom column '", dispersion_degrees_freedom,
-    "' was not found in `data`. tidybulk::estimate_dispersion() writes it; ",
-    "pass `dispersion_degrees_freedom` if you named it something else, or omit ",
-    "the argument to use the default Student-t scale.",
-    call. = FALSE
-  )
-}
-
-# edgeR returns prior.df = Inf when robust = TRUE shrinks a gene completely,
-# and NA when it could not fit the design at all. Neither yields a prior, so
-# report it instead of quietly substituting a default.
-check_degrees_freedom_value <- function(data, dispersion_degrees_freedom) {
-  d_eff <- as.numeric(data[[dispersion_degrees_freedom]])[[1]]
-  if (!is.finite(d_eff) || d_eff <= 0) {
+  sd <- as.numeric(data[[dispersion_prior_log_sd]])[[1]]
+  if (!is.finite(sd) || sd <= 0) {
     stop(
-      "Column '", dispersion_degrees_freedom, "' is ", d_eff,
-      "; effective degrees of freedom must be finite and positive to build ",
-      "a shape prior.",
+      "Column '", dispersion_prior_log_sd, "' is ", sd,
+      "; the log-dispersion prior SD must be finite and positive.",
       call. = FALSE
     )
   }
-  d_eff
-}
-
-# Conjugate gamma prior on exp(Intercept_shape): the shape's multiplicative
-# deviation from the offset location.
-#
-# edgeR and limma model the gene-wise dispersion as a scaled inverse
-# chi-square with d_eff degrees of freedom centred on phi_g. Inverting a
-# scaled inverse chi-square gives a gamma, so the precision 1/phi -- exactly
-# what brms calls `shape` -- has prior Gamma(d_eff/2, rate = d_eff phi_g / 2).
-#
-# The shape submodel writes shape = exp(Intercept_shape) / phi_g through
-# offset(log(1/phi_g)), and a gamma is closed under scaling, so that prior is
-# exactly exp(Intercept_shape) ~ Gamma(d_eff/2, rate = d_eff/2). Both
-# parameters are d_eff/2: the gene enters only through the offset, as it does
-# in the Student-t branch, and the prior on the deviation has mean 1. Placing
-# it here rather than on a scalar `shape` is what lets a dispersion submodel
-# carry covariates under either prior.
-#
-# Because Var(log X) = trigamma(shape) for a gamma, the log-scale spread is
-# trigamma(d_eff/2), identical to the Student-t route in
-# shape_intercept_scale() -- unsurprising, since chi^2_d is itself
-# Gamma(d/2, scale = 2). The two forms still are not reparameterisations of
-# each other: they agree on that spread, but the Student-t centres the median
-# shape on 1/phi_g while the gamma centres the mean, and the Student-t is the
-# more robust to a badly shrunk edgeR estimate.
-#
-# The gamma reads d_0/2 as its parameters, so it cannot be used without
-# `dispersion_degrees_freedom`. The Student-t can: it falls back to a
-# log-scale SD of 1.
-shape_gamma_parameters <- function(data, dispersion_degrees_freedom) {
-  if (is.null(dispersion_degrees_freedom)) {
-    stop(
-      '`shape_prior = "gamma"` requires `dispersion_degrees_freedom`. ',
-      'Use the default `shape_prior = "student_t"` if you do not have it.',
-      call. = FALSE
-    )
-  }
-  require_degrees_freedom_column(data, dispersion_degrees_freedom)
-  a <- check_degrees_freedom_value(data, dispersion_degrees_freedom) / 2
-  list(shape = a, rate = a)
+  sd
 }
 
 shape_student_t_prior <- function(data,
                                   formula,
-                                  dispersion_degrees_freedom,
+                                  sd,
                                   shape_prior_df) {
   nu <- check_student_df(shape_prior_df)
-  scale <- shape_intercept_scale(data, dispersion_degrees_freedom, nu)
+  scale <- student_t_scale_for_sd(sd, nu)
+  if (!is.finite(scale) || scale <= 0) {
+    stop(
+      "The Student-t scale implied by log-scale SD ", sd, " is ", scale,
+      ", which is not a usable prior scale.",
+      call. = FALSE
+    )
+  }
   p <- brms::prior_string(
     sprintf("student_t(%s, 0, brmde_shape_scale)", format_prior_number(nu)),
     class = "Intercept",
@@ -429,45 +359,6 @@ location_priors <- function(data,
   )
 }
 
-# The gamma sits on exp(Intercept_shape) rather than on the intercept itself,
-# and Stan has no log-gamma density for set_prior() to name, so the density is
-# added to the target directly. The trailing Intercept_shape is the
-# log-Jacobian of exp(). brms places a "model" stanvar ahead of its own
-# `if (!prior_only)` guard, so this contributes under sample_prior = "only"
-# as a prior must.
-shape_gamma_stancode <- function() {
-  brms::stanvar(
-    scode = paste(
-      "  // brmDE: gamma prior on exp(Intercept_shape), the shape's",
-      "  // multiplicative deviation from the log(1/dispersion) offset.",
-      "  target += gamma_lpdf(exp(Intercept_shape) | brmde_shape_gamma_shape,",
-      "                       brmde_shape_gamma_rate)",
-      "            + Intercept_shape;",
-      sep = "\n"
-    ),
-    name = "shape_gamma_lprior",
-    block = "model"
-  )
-}
-
-shape_gamma_prior <- function(data, formula, dispersion_degrees_freedom) {
-  pars <- shape_gamma_parameters(data, dispersion_degrees_freedom)
-  # An empty prior string leaves brms' own intercept prior off, so the
-  # log-gamma added by shape_gamma_stancode() is the only one in play.
-  p <- brms::prior_string("", class = "Intercept", dpar = "shape")
-  if (shape_submodel_has_terms(formula)) {
-    p <- c(p, brms::prior(student_t(3, 0, 2), class = b, dpar = shape))
-  }
-  gene_prior(
-    prior = p,
-    stanvars = combine_stanvars(
-      gene_prior_stanvar("brmde_shape_gamma_shape", pars$shape),
-      gene_prior_stanvar("brmde_shape_gamma_rate", pars$rate),
-      shape_gamma_stancode()
-    )
-  )
-}
-
 # Prior constants derived from a gene's own data are passed to Stan as data
 # rather than pasted into the model code as literals. The generated code is
 # then byte-identical for every gene, so cmdstanr compiles the model once per
@@ -509,26 +400,18 @@ default_gene_priors <- function(data,
                                 formula,
                                 abundance,
                                 offset,
-                                dispersion_degrees_freedom,
+                                dispersion_prior_log_sd,
                                 shape_prior_df,
-                                shape_prior,
                                 coefficient_prior_scale =
                                   coefficient_prior_scale_default,
                                 coefficient_prior_df = 3) {
-  shape <- if (!has_shape_submodel(formula)) {
-    gene_prior(brms::prior(student_t(3, 0, 2), class = shape))
-  } else if (identical(check_shape_prior(shape_prior), "gamma")) {
-    shape_gamma_prior(data, formula, dispersion_degrees_freedom)
+  sd <- if (is.null(dispersion_prior_log_sd)) {
+    shape_prior_sd_default
   } else {
-    shape_student_t_prior(
-      data,
-      formula,
-      dispersion_degrees_freedom,
-      shape_prior_df
-    )
+    check_log_sd_value(data, dispersion_prior_log_sd)
   }
   combine_gene_priors(
-    shape,
+    shape_student_t_prior(data, formula, sd, shape_prior_df),
     location_priors(
       data,
       abundance,
@@ -641,46 +524,45 @@ as_gene_tibble <- function(data,
   tibble::as_tibble(data)
 }
 
-check_dispersion_values <- function(data, dispersion) {
-  if (is.null(dispersion)) {
+check_dispersion_values <- function(data, dispersion_prior_log_mean) {
+  if (is.null(dispersion_prior_log_mean)) {
     return(data)
   }
-  if (!dispersion %in% names(data)) {
-    stop("Dispersion column '", dispersion, "' was not found in `data`.", call. = FALSE)
+  if (!dispersion_prior_log_mean %in% names(data)) {
+    stop("Dispersion column '", dispersion_prior_log_mean, "' was not found in `data`.", call. = FALSE)
   }
-  val <- as.numeric(data[[dispersion]])
+  val <- as.numeric(data[[dispersion_prior_log_mean]])
   bad <- !is.finite(val) | val <= 0
   if (any(bad)) {
     stop(
-      "Dispersion column '", dispersion, "' has ", sum(bad),
-      " non-finite or non-positive value(s). tidybulk::estimate_dispersion() ",
-      "returns NA when the design cannot be fit; fix that rather than passing ",
-      "the result on.",
+      "Dispersion column '", dispersion_prior_log_mean, "' has ", sum(bad),
+      " non-finite or non-positive value(s). estimate_dispersion_log_sd() ",
+      "and tidybulk::estimate_dispersion() return NA when the design cannot ",
+      "be fit; fix that rather than passing the result on.",
       call. = FALSE
     )
   }
-  data[[dispersion]] <- val
+  data[[dispersion_prior_log_mean]] <- val
   data
 }
 
 prepare_gene_data <- function(data,
                               abundance = "counts",
                               offset,
-                              dispersion = NULL,
-                              dispersion_degrees_freedom = NULL,
+                              dispersion_prior_log_mean = NULL,
+                              dispersion_prior_log_sd = NULL,
                               sanitize_names = FALSE) {
   offset <- check_offset_name(offset)
-  if (!is.null(dispersion)) {
-    dispersion <- check_dispersion_name(dispersion)
+  if (!is.null(dispersion_prior_log_mean)) {
+    dispersion_prior_log_mean <- check_dispersion_name(dispersion_prior_log_mean)
   }
-  if (!is.null(dispersion_degrees_freedom)) {
-    dispersion_degrees_freedom <-
-      check_degrees_freedom_name(dispersion_degrees_freedom)
+  if (!is.null(dispersion_prior_log_sd)) {
+    dispersion_prior_log_sd <- check_log_sd_name(dispersion_prior_log_sd)
   }
   data <- as_gene_tibble(
     data,
     abundance = abundance,
-    rowdata_cols = c(dispersion, dispersion_degrees_freedom)
+    rowdata_cols = c(dispersion_prior_log_mean, dispersion_prior_log_sd)
   )
 
   if (!abundance %in% names(data)) {
@@ -704,7 +586,7 @@ prepare_gene_data <- function(data,
   if (!is.null(offset) && !offset %in% names(data)) {
     stop("Offset column '", offset, "' was not found in `data`.", call. = FALSE)
   }
-  data <- check_dispersion_values(data, dispersion)
+  data <- check_dispersion_values(data, dispersion_prior_log_mean)
 
   if (isTRUE(sanitize_names)) {
     names(data) <- collapse_repeated_underscores(names(data))
@@ -712,12 +594,13 @@ prepare_gene_data <- function(data,
     if (!is.null(offset)) {
       offset <- collapse_repeated_underscores(offset)
     }
-    if (!is.null(dispersion)) {
-      dispersion <- collapse_repeated_underscores(dispersion)
+    if (!is.null(dispersion_prior_log_mean)) {
+      dispersion_prior_log_mean <-
+        collapse_repeated_underscores(dispersion_prior_log_mean)
     }
-    if (!is.null(dispersion_degrees_freedom)) {
-      dispersion_degrees_freedom <-
-        collapse_repeated_underscores(dispersion_degrees_freedom)
+    if (!is.null(dispersion_prior_log_sd)) {
+      dispersion_prior_log_sd <-
+        collapse_repeated_underscores(dispersion_prior_log_sd)
     }
   }
 
@@ -725,8 +608,8 @@ prepare_gene_data <- function(data,
     data = droplevels(data),
     abundance = abundance,
     offset = offset,
-    dispersion = dispersion,
-    dispersion_degrees_freedom = dispersion_degrees_freedom
+    dispersion_prior_log_mean = dispersion_prior_log_mean,
+    dispersion_prior_log_sd = dispersion_prior_log_sd
   )
 }
 

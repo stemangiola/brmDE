@@ -16,8 +16,8 @@ test_that("estimate, hypothesis, and adjust append to one tidytargets script", {
 
   pipeline <- se |>
     brmDE(store = store, features = c("ENSG00000120129")) |>
-    estimate(~ dex, offset = "offset", dispersion = "dispersion_trended",
-             dispersion_degrees_freedom = "dispersion_degrees_freedom") |>
+    estimate(~ dex, offset = "offset",
+             dispersion_prior_log_mean = "dispersion_trended") |>
     hypothesis("dextrt = 0") |>
     adjust(nullify = "dex")
 
@@ -33,7 +33,7 @@ test_that("estimate, hypothesis, and adjust append to one tidytargets script", {
   settings <- tidytargets::tt_metadata(pipeline)
   expect_equal(settings$formula_abundance, "~dex")
   expect_equal(settings$offset, "offset")
-  expect_equal(settings$dispersion, "dispersion_trended")
+  expect_equal(settings$dispersion_prior_log_mean, "dispersion_trended")
   expect_equal(settings$chains, 2)
   expect_equal(settings$draws_warmup, 300)
   expect_equal(settings$draws_sampling, 500)
@@ -94,8 +94,7 @@ test_that("changed arguments change the targets script, unchanged ones do not", 
           formula_abundance,
           formula_dispersion = formula_dispersion,
           offset = "offset",
-          dispersion = "dispersion_trended",
-          dispersion_degrees_freedom = "dispersion_degrees_freedom",
+          dispersion_prior_log_mean = "dispersion_trended",
           family = .(family)
         )
     ))
@@ -254,8 +253,7 @@ test_that("bundled genes give one row per gene, as unbundled ones do", {
     estimate(
       ~dex,
       offset = "offset",
-      dispersion = "dispersion_trended",
-      dispersion_degrees_freedom = "dispersion_degrees_freedom",
+      dispersion_prior_log_mean = "dispersion_trended",
       bundle = 2,
       family = brms::negbinomial(),
       chains = 1,
@@ -334,8 +332,7 @@ test_that("estimate |> hypothesis |> adjust evaluate as one pipeline", {
       estimate(
         ~ dex + (1 | cell),
         offset = "offset",
-        dispersion = "dispersion_trended",
-        dispersion_degrees_freedom = "dispersion_degrees_freedom",
+        dispersion_prior_log_mean = "dispersion_trended",
         family = brms::negbinomial(),
         chains = 1,
         draws_warmup = 100,

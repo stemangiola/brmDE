@@ -43,9 +43,8 @@ test_that("default priors cover negbinomial as well as its zero-inflated form", 
     formula = formula,
     abundance = "counts",
     offset = "offset",
-    dispersion_degrees_freedom = NULL,
-    shape_prior_df = 3,
-    shape_prior = "student_t"
+    dispersion_prior_log_sd = NULL,
+    shape_prior_df = 3
   )$prior
   expect_true("b" %in% priors$class)
   expect_true(all(nzchar(coefficient_prior_string(priors))))

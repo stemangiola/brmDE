@@ -65,10 +65,15 @@ test_that("estimate_gene, hypothesis_gene, and adjust_gene run on one airway gen
 test_that("ZINB with a dispersion-derived shape prior fits one airway gene", {
   skip_on_cran()
   skip_if_no_cmdstan()
-  skip_if_not_installed("tidybulk")
+  skip_if_not_installed("edgeR")
+  skip_if_not_installed("limma")
 
   se <- airway_se(n_genes = 150)
-  se <- tidybulk::estimate_dispersion(se, formula_abundance = ~ dex)
+  se <- estimate_dispersion_log_sd(
+    se,
+    formula_abundance = ~ dex,
+    method = "degrees_freedom"
+  )
   se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
   se_gene <- se["ENSG00000120129", , drop = FALSE]
 
@@ -76,8 +81,8 @@ test_that("ZINB with a dispersion-derived shape prior fits one airway gene", {
     se_gene,
     formula_abundance = ~ dex,
     offset = "offset",
-    dispersion = "dispersion_trended",
-    dispersion_degrees_freedom = "dispersion_degrees_freedom",
+    dispersion_prior_log_mean = "dispersion_prior_log_mean",
+    dispersion_prior_log_sd = "dispersion_prior_log_sd",
     chains = 1,
     draws_warmup = 100,
     draws_sampling = 150,
@@ -88,7 +93,7 @@ test_that("ZINB with a dispersion-derived shape prior fits one airway gene", {
   )
 
   expect_s3_class(fit, "brmsfit")
-  expect_true("dispersion_trended" %in% names(fit$data))
+  expect_true("dispersion_prior_log_mean" %in% names(fit$data))
   expect_true("b_shape_Intercept" %in% brms::variables(fit))
 
   shape_prior <- brms::prior_summary(fit)
@@ -97,60 +102,6 @@ test_that("ZINB with a dispersion-derived shape prior fits one airway gene", {
   ]
   expect_identical(shape_int, "student_t(3, 0, brmde_shape_scale)")
   expect_true(is.finite(brms::standata(fit)$brmde_shape_scale))
-})
-
-test_that("ZINB with a conjugate gamma shape prior fits one airway gene", {
-  skip_on_cran()
-  skip_if_no_cmdstan()
-  skip_if_not_installed("tidybulk")
-
-  se <- airway_se(n_genes = 150)
-  se <- tidybulk::estimate_dispersion(se, formula_abundance = ~ dex)
-  se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
-  se_gene <- se["ENSG00000120129", , drop = FALSE]
-
-  fit <- estimate_gene(
-    se_gene,
-    formula_abundance = ~ dex,
-    offset = "offset",
-    dispersion = "dispersion_trended",
-    dispersion_degrees_freedom = "dispersion_degrees_freedom",
-    shape_prior = "gamma",
-    chains = 1,
-    draws_warmup = 100,
-    draws_sampling = 150,
-    cores = 1,
-    backend = "cmdstanr",
-    refresh = 0,
-    silent = 2
-  )
-
-  expect_s3_class(fit, "brmsfit")
-  # The gamma sits on exp(Intercept_shape) of the same submodel the Student-t
-  # uses, so the sampled parameter is that intercept, not a scalar `shape`.
-  expect_true("b_shape_Intercept" %in% brms::variables(fit))
-  expect_false("shape" %in% brms::variables(fit))
-
-  # Stan has no log-gamma, so the intercept is flat and the density arrives as
-  # a target increment instead.
-  prior_tbl <- brms::prior_summary(fit)
-  shape_int <- prior_tbl$prior[
-    prior_tbl$class == "Intercept" & prior_tbl$dpar == "shape"
-  ]
-  expect_identical(shape_int, "")
-  expect_match(
-    fit$stanvars[["shape_gamma_lprior"]]$scode,
-    "gamma_lpdf\\(exp\\(Intercept_shape\\)"
-  )
-
-  # Both gamma parameters are d_0/2; the gene enters through the offset. The
-  # induced prior on the shape is therefore edgeR's conjugate form, whose mean
-  # is 1 / s0^2.
-  s0 <- SummarizedExperiment::rowData(se_gene)$dispersion_trended
-  d_eff <- SummarizedExperiment::rowData(se_gene)$dispersion_degrees_freedom
-  expect_equal(fit$stanvars[["brmde_shape_gamma_shape"]]$sdata, d_eff / 2)
-  expect_equal(fit$stanvars[["brmde_shape_gamma_rate"]]$sdata, d_eff / 2)
-  expect_equal((d_eff / 2) / ((d_eff / 2) * s0), 1 / s0)
 })
 
 test_that("estimate_gene default ZINB priors work on one airway gene", {

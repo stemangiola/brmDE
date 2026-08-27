@@ -66,14 +66,15 @@ data("airway", package = "airway")
 se <- airway
 se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
 se <- tidybulk::estimate_dispersion(se, formula_abundance = ~ dex + cell)
+se <- estimate_dispersion_log_sd(se, formula_abundance = ~ dex + cell)
 
 pipeline <- se |>
   brmDE() |>
   estimate(
     ~ dex + (1 | cell),
     offset = "offset",
-    dispersion = "dispersion_trended",
-    dispersion_degrees_freedom = "dispersion_degrees_freedom",
+    dispersion_prior_log_mean = "dispersion_prior_log_mean",
+    dispersion_prior_log_sd = "dispersion_prior_log_sd",
     family = brms::negbinomial()
   ) |>
   hypothesis("dextrt")
