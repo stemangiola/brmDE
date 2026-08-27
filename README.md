@@ -95,14 +95,15 @@ data("airway", package = "airway")
 se <- airway
 se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
 se <- tidybulk::estimate_dispersion(se, formula_abundance = ~ dex + cell)
+se <- estimate_dispersion_log_sd(se, formula_abundance = ~ dex + cell)
 
 se |>
   brmDE(features = c("ENSG00000120129")) |>
   estimate(
     ~ dex + (1 | cell),
     offset = "offset",
-    dispersion = "dispersion_trended",
-    dispersion_degrees_freedom = "dispersion_degrees_freedom",
+    dispersion_prior_log_mean = "dispersion_prior_log_mean",
+    dispersion_prior_log_sd = "dispersion_prior_log_sd",
     family = brms::negbinomial()
   ) |>
   hypothesis("dextrt") |>
@@ -119,7 +120,7 @@ The result is one row per gene and contrast. `estimate()` contributes the gene c
 
 By default `estimate()` fits 10 genes per target. At transcriptome scale that can swamp an HPC scheduler with tiny jobs, so `estimate(bundle = 100)` fits 100 genes per target instead; the output is unchanged, one row per gene. Set `bundle = 1` for one target per gene.
 
-See the package vignette for the full walkthrough, including both shape-prior options, and `vignette("dispersion-priors")` for the derivation that connects edgeR's \(s_0^2\) and \(d_0\) to those priors:
+See the package vignette for the full walkthrough, including both dispersion-prior width methods, and `vignette("dispersion-priors")` for the derivation that connects edgeR's \(s_0^2\) and \(d_0\) to those priors:
 
 ```r
 vignette("brmDE", package = "brmDE")
@@ -128,11 +129,12 @@ vignette("dispersion-priors", package = "brmDE")
 
 ## Dispersion priors
 
-`tidybulk::estimate_dispersion()` writes `dispersion_trended` (\(s_0^2\), the across-gene trend) and `dispersion_shrinked` (\(q_g^{post}\), the tagwise posterior). Pass `dispersion_trended` to `estimate()` / `estimate_gene()` as `dispersion=`: that is the prior location, information this gene has not yet contributed. Do not pass `dispersion_shrinked`, which already includes this gene's counts. Pair it with `dispersion_degrees_freedom`. Those arguments default to `NULL` (`offset(0)` on the shape submodel; log-scale SD of 1 under `"student_t"`). `"gamma"` requires `dispersion_degrees_freedom`. `estimate_gene()` turns the pair into a prior on the negative binomial shape. Choose the form with `shape_prior`:
+`estimate_dispersion_log_sd()` writes `dispersion_prior_log_mean` (\(\phi_{\mathrm{trend}}\), the across-gene trend) and `dispersion_prior_log_sd` (a width on \(\log\phi\)). Pass those names to `estimate()` / `estimate_gene()`. `method = "curvature"` (default) fills the SD from the Laplace approximation of edgeR's weighted smoothed shared log-likelihood; `method = "degrees_freedom"` fills it from the trigamma SD of the moderated df \(d_{\mathrm{residual}}+d_0\). You can also pass tidybulk's `dispersion_trended` as the mean column: that is the same \(s_0^2\), information this gene has not yet contributed. Do not pass `dispersion_shrinked`, which already includes this gene's counts. The shape intercept prior is always Student-t. Default `NULL` for the SD is a log-scale SD of 1.
 
-| `shape_prior` | Prior | Notes |
+| `method` | Prior | Notes |
 | --- | --- | --- |
-| `"student_t"` (default) | `student_t` on the intercept of a `shape ~ 1 + offset(log(1/dispersion_trended))` submodel (`offset(0)` if `dispersion` is omitted) | Heavier tails, tolerant of a trend that does not fit |
-| `"gamma"` | `gamma(d_0/2, d_0/2)` on `exp(intercept)` of the same submodel | Requires `dispersion_degrees_freedom`; conjugate to edgeR's scaled inverse chi-square hierarchy; lighter tails |
+| `"curvature"` | `student_t` on the intercept of `shape ~ 1 + offset(log(1/dispersion_prior_log_mean))` | Laplace \(\sigma\) from the shared log-likelihood |
+| `"degrees_freedom"` | `student_t` on the same intercept | trigamma \(\sigma\) from \(d_{\mathrm{eff}}\) |
+| skip the writer, pass `NULL` | `student_t` on the same intercept | log-scale SD 1 |
 
-Both use the same shape submodel, so both accept dispersion covariates. Both encode the same log-scale spread, `trigamma(d_0 / 2)`, because a chi-square *is* a gamma, and both put all their mass on a positive shape by exponentiating. They are not, however, reparameterisations of each other: the Student-t centres the *median* shape on the trend while the gamma centres the *mean*, leaving their log-scale centres about `1/d_0` apart. See `?estimate_gene` for the two parameterisations, and `vignette("dispersion-priors")` for the references.
+See `?estimate_gene` and `vignette("dispersion-priors")`.

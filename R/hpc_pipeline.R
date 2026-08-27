@@ -287,14 +287,15 @@ collect_brmde_hpc <- function(input_hpc) {
 #' se <- airway
 #' se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
 #' se <- tidybulk::estimate_dispersion(se, formula_abundance = ~ dex + cell)
+#' se <- estimate_dispersion_log_sd(se, formula_abundance = ~ dex + cell)
 #'
 #' se |>
 #'   brmDE(features = c("ENSG00000120129")) |>
 #'   estimate(
 #'     ~ dex + (1 | cell),
 #'     offset = "offset",
-#'     dispersion = "dispersion_trended",
-#'     dispersion_degrees_freedom = "dispersion_degrees_freedom",
+#'     dispersion_prior_log_mean = "dispersion_prior_log_mean",
+#'     dispersion_prior_log_sd = "dispersion_prior_log_sd",
 #'     family = brms::negbinomial()
 #'   ) |>
 #'   hypothesis("dextrt = 0") |>
@@ -312,8 +313,9 @@ collect_brmde_hpc <- function(input_hpc) {
 #' #       )
 #' #     )
 #' #   ) |>
-#' #   estimate(~ dex + (1 | cell), offset = "offset", dispersion = "dispersion_trended",
-#' #            dispersion_degrees_freedom = "dispersion_degrees_freedom")
+#' #   estimate(~ dex + (1 | cell), offset = "offset",
+#' #            dispersion_prior_log_mean = "dispersion_prior_log_mean",
+#' #            dispersion_prior_log_sd = "dispersion_prior_log_sd")
 #' }
 #'
 #' @export
@@ -421,27 +423,28 @@ brmDE <- function(.data,
 #'   passed to [estimate_gene()]. `~1` by default.
 #' @param offset Required name of the precomputed offset column in `colData`
 #'   (the same argument as [estimate_gene()]).
-#' @param dispersion Optional name of the `rowData` dispersion column.
-#'   Pass [tidybulk::estimate_dispersion()]'s `dispersion_trended`
-#'   (\eqn{s_0^2}), not `dispersion_shrinked`. Default `NULL` puts a zero
-#'   offset on the shape submodel (see [estimate_gene()]).
-#' @param dispersion_degrees_freedom Optional name of the effective degrees of
-#'   freedom column written alongside it by [tidybulk::estimate_dispersion()].
-#'   Default `NULL` uses a default Student-t SD of 1 on the log-shape intercept.
-#'   `"gamma"` requires this column.
+#' @param dispersion_prior_log_mean Optional name of the `rowData` dispersion
+#'   column. [estimate_dispersion_log_sd()] writes `"dispersion_prior_log_mean"`
+#'   (`trended.dispersion`). You can also pass
+#'   [tidybulk::estimate_dispersion()]'s `dispersion_trended` (\eqn{s_0^2}),
+#'   not `dispersion_shrinked`. Default `NULL` puts a zero offset on the
+#'   shape submodel (see [estimate_gene()]).
+#' @param dispersion_prior_log_sd Optional name of a log-dispersion prior SD
+#'   column written by [estimate_dispersion_log_sd()] as
+#'   `"dispersion_prior_log_sd"`. That function's `method` chooses the width.
+#'   Default `NULL` uses a log-scale SD of 1.
 #'
 #' @details
 #' Neither the offset nor the dispersion is computed here. Run
-#' [tidybulk::estimate_dispersion()] on the whole object before [brmDE()],
-#' exactly as you compute the offset, so that both are ordinary columns of the
-#' input, then pass those column names here. Gene-wise fitting is the only
-#' thing this pipeline does. The dispersion columns are a prior on the
+#' [estimate_dispersion_log_sd()] on the whole object before [brmDE()],
+#' exactly as you compute the offset, so that both are ordinary columns of
+#' the input, then pass those column names here. Gene-wise fitting is the
+#' only thing this pipeline does. The dispersion columns are a prior on the
 #' negative binomial shape (see [estimate_gene()]): they inform each gene
 #' without fixing the posterior to the external estimate. Omitting
-#' `dispersion` and/or `dispersion_degrees_freedom` is valid under the
-#' default Student-t (zero shape offset, log-scale SD of 1). `"gamma"`
-#' requires `dispersion_degrees_freedom`. Computing and passing both columns
-#' is the preferred starting point.
+#' `dispersion_prior_log_mean` and/or `dispersion_prior_log_sd` is valid
+#' (zero shape offset, log-scale SD of 1). Computing both, then passing
+#' both names, is the preferred starting point.
 #'
 #' Prior constants derived from each gene are passed to Stan as data, so every
 #' gene generates identical Stan code and cmdstanr compiles it at most once per
@@ -500,8 +503,8 @@ estimate <- function(input_hpc,
                      formula_abundance,
                      formula_dispersion = ~1,
                      offset,
-                     dispersion = NULL,
-                     dispersion_degrees_freedom = NULL,
+                     dispersion_prior_log_mean = NULL,
+                     dispersion_prior_log_sd = NULL,
                      ...) {
   UseMethod("estimate")
 }
@@ -512,8 +515,8 @@ estimate.default <- function(input_hpc,
                              formula_abundance,
                              formula_dispersion = ~1,
                              offset,
-                             dispersion = NULL,
-                             dispersion_degrees_freedom = NULL,
+                             dispersion_prior_log_mean = NULL,
+                             dispersion_prior_log_sd = NULL,
                              ...) {
   stop(
     "estimate() expects a pipeline from brmDE(). ",
@@ -528,20 +531,13 @@ estimate.tidytargets <- function(input_hpc,
                             formula_abundance,
                             formula_dispersion = ~1,
                             offset,
-                            dispersion = NULL,
-                            dispersion_degrees_freedom = NULL,
+                            dispersion_prior_log_mean = NULL,
+                            dispersion_prior_log_sd = NULL,
                             bundle = 10L,
                             target_output = "brms_fit",
                             ...) {
   offset <- check_offset_name(offset)
   bundle <- check_bundle(bundle)
-  if (!is.null(dispersion)) {
-    dispersion <- check_dispersion_name(dispersion)
-  }
-  if (!is.null(dispersion_degrees_freedom)) {
-    dispersion_degrees_freedom <-
-      check_degrees_freedom_name(dispersion_degrees_freedom)
-  }
   abundance <- input_hpc$initialisation$abundance
   args_target <- paste0(target_output, "_args")
 
@@ -555,8 +551,8 @@ estimate.tidytargets <- function(input_hpc,
     list(
       abundance = abundance,
       offset = offset,
-      dispersion = dispersion,
-      dispersion_degrees_freedom = dispersion_degrees_freedom
+      dispersion_prior_log_mean = dispersion_prior_log_mean,
+      dispersion_prior_log_sd = dispersion_prior_log_sd
     ),
     as.list(substitute(list(...)))[-1L]
   ))
@@ -573,8 +569,8 @@ estimate.tidytargets <- function(input_hpc,
     formula_abundance = formula_text(formula_abundance),
     formula_dispersion = formula_text(formula_dispersion),
     offset = offset,
-    dispersion = dispersion,
-    dispersion_degrees_freedom = dispersion_degrees_freedom,
+    dispersion_prior_log_mean = dispersion_prior_log_mean,
+    dispersion_prior_log_sd = dispersion_prior_log_sd,
     chains = settings$chains,
     draws_warmup = settings$draws_warmup,
     draws_sampling = settings$draws_sampling

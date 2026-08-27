@@ -9,7 +9,7 @@ test_that("estimate_gene requires a single offset column name", {
     "not found"
   )
   expect_error(
-    estimate_gene(dat, ~ dex, offset = "offset", dispersion = "dispersion"),
+    estimate_gene(dat, ~ dex, offset = "offset", dispersion_prior_log_mean = "dispersion"),
     "not found"
   )
 })
@@ -118,26 +118,6 @@ test_that("as_gene_tibble accepts a one-gene SummarizedExperiment", {
     tbl$counts,
     as.integer(SummarizedExperiment::assay(se, "counts")[1, ])
   )
-})
-
-test_that("default ZINB priors omit shape submodel terms without shape ~", {
-  dat <- airway_one_gene_tbl()
-  location <- brmDE:::location_priors(dat, "counts", "offset")
-  priors <- c(
-    location$prior,
-    brms::prior(student_t(3, 0, 2), class = shape)
-  )
-  expect_s3_class(priors, "brmsprior")
-
-  # The intercept is still centred on the gene's own mean; that number now
-  # reaches Stan as data instead of being written into the model code.
-  expect_equal(
-    location$stanvars[["brmde_intercept_location"]]$sdata,
-    brmDE:::intercept_location(dat, "counts", "offset")
-  )
-  expect_true("Intercept" %in% priors$class)
-  expect_true("shape" %in% priors$class)
-  expect_false(any(priors$dpar == "shape"))
 })
 
 test_that("as_gene_tibble rejects multi-gene SummarizedExperiment", {

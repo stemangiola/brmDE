@@ -28,85 +28,46 @@
 #'   `abundance`. The library size `offset(<offset>)` term is added here rather
 #'   than by you, and the assembled formula is reported with a message.
 #' @param formula_dispersion One-sided model for the negative binomial shape,
-#'   `~1` by default. It becomes a `shape ~ <terms> + offset(...)` submodel
-#'   under either `shape_prior`. The offset is `log(1/<dispersion>)` when
-#'   `dispersion` is supplied, and `0` when it is `NULL`, so the terms you
+#'   `~1` by default. It becomes a `shape ~ <terms> + offset(...)` submodel.
+#'   The offset is `log(1/<dispersion_prior_log_mean>)` when
+#'   `dispersion_prior_log_mean` is supplied, and `0` when it is `NULL`, so the terms you
 #'   give describe departures from that external estimate or, with a zero
 #'   offset, the log-shape itself. Do not write the offset yourself.
 #' @param offset Required name of the precomputed offset column in `data`
 #'   (or in `colData` if `data` is a `SummarizedExperiment`). The offset is
 #'   never calculated inside this function.
-#' @param dispersion Optional name of a precomputed dispersion column
-#'   in `rowData` (or in `data`). Default `NULL` puts a zero offset on the
-#'   shape submodel: the intercept is then `log(shape)`, with prior median
+#' @param dispersion_prior_log_mean Optional name of a precomputed dispersion
+#'   column in `rowData` (or in `data`). Default `NULL` puts a zero offset on
+#'   the shape submodel: the intercept is then `log(shape)`, with prior median
 #'   shape `1`. Use this when the sample size is large enough that an
 #'   informative location from previous tools is unnecessary. When supplied,
-#'   the column becomes `offset(log(1/<dispersion>))` as described under
-#'   `shape_prior`: that is the prior *location* of the shape, which the
-#'   gene's counts are then free to update. Pass
-#'   [tidybulk::estimate_dispersion()]'s `dispersion_trended` column: that is
-#'   the across-gene trend \eqn{s_0^2}, information this gene has not yet
-#'   contributed. Do not pass `dispersion_shrinked`, the tagwise posterior
-#'   \eqn{q_g^{post}}, which already includes this gene's counts. See
+#'   the column becomes `offset(log(1/<dispersion_prior_log_mean>))`: that is
+#'   the prior *location* of the shape, which the gene's counts are then free
+#'   to update. [estimate_dispersion_log_sd()] writes this as
+#'   `"dispersion_prior_log_mean"` (`trended.dispersion`, \eqn{\phi_{\mathrm{trend}}}).
+#'   You can also pass [tidybulk::estimate_dispersion()]'s `dispersion_trended`
+#'   column: that is the same across-gene trend \eqn{s_0^2}, information this
+#'   gene has not yet contributed. Do not pass `dispersion_shrinked`, the
+#'   tagwise posterior \eqn{q_g^{post}}, which already includes this gene's
+#'   counts. See `vignette("dispersion-priors")`.
+#' @param dispersion_prior_log_sd Optional name of a log-dispersion prior SD
+#'   column written by [estimate_dispersion_log_sd()] as
+#'   `"dispersion_prior_log_sd"`. That function's `method` chooses the width:
+#'   Laplace curvature of the shared log-likelihood, or the trigamma SD from
+#'   the moderated df. The intercept prior is always Student-t
+#'   (`student_t(shape_prior_df, 0, scale)`), with `scale` set so that its
+#'   standard deviation equals this log-scale SD. Default `NULL` targets a
+#'   log-scale SD of 1. The gene-wise posterior is not constrained to equal
+#'   the external dispersion: this only scales the prior, and the likelihood
+#'   can move the shape away from the offset location. See
 #'   `vignette("dispersion-priors")`.
-#' @param dispersion_degrees_freedom Optional name of the degrees of freedom
-#'   column that accompanies `dispersion`, as written by
-#'   [tidybulk::estimate_dispersion()] (`dispersion_degrees_freedom`).
-#'   Default `NULL` targets a log-scale SD of 1 under `"student_t"`.
-#'   `"gamma"` requires this column: it reads \(d_0/2\) as its parameters and
-#'   has no fallback. Independent of `dispersion`: under `"student_t"` you
-#'   can pass one, both, or neither.
-#' @param shape_prior How the external dispersion is turned into a prior on
-#'   the shape parameter. The gene-wise posterior is not constrained to equal
-#'   that estimate: both forms only locate and scale the prior, and the
-#'   likelihood can move the shape away from it.
-#'
-#'   Both use the same `shape ~ <formula_dispersion> + offset(...)` submodel,
-#'   so `dispersion` enters as an offset on brms' log link either way and the
-#'   assembled formula does not depend on this argument. Both therefore put
-#'   all prior mass on a positive shape by exponentiating, and both accept
-#'   dispersion covariates. Both also imply the same log-scale spread,
-#'   `trigamma(d_0 / 2)`. What differs is the prior on the submodel
-#'   intercept, and hence tail weight and which summary of the shape is
-#'   centred on the external estimate. They are not reparameterisations of
-#'   one another.
-#'
-#'   * `"student_t"` (default) puts a Student-t prior on the intercept,
-#'     scaled by `shape_prior_df`. That is symmetric in `log(shape)`, so it
-#'     centres the *median* shape on `1/dispersion` (or on `1` when the
-#'     offset is 0). Heavier-tailed, so more forgiving when edgeR has
-#'     over-shrunk a gene.
-#'   * `"gamma"` requires `dispersion_degrees_freedom`. It puts
-#'     `gamma(d_0/2, d_0/2)` on `exp(intercept)`, the
-#'     shape's multiplicative deviation from the offset. Because a gamma is
-#'     closed under scaling, the induced prior on the shape itself is exactly
-#'     `gamma(d_0/2, d_0 * dispersion/2)`: the conjugate form implied by
-#'     the edgeR hierarchy, in which the dispersion is scaled inverse
-#'     chi-square and hence the precision `1/dispersion` is gamma. It centres
-#'     the *mean* shape on `1/dispersion`, which sits
-#'     `digamma(d_0/2) - log(d_0/2)`, roughly `-1/d_0`, from the
-#'     Student-t centre on the log scale. Lighter-tailed.
-#'
-#'   Stan has no log-gamma density, so the gamma form cannot be written as a
-#'   `brms` prior on the intercept. It is added to the target directly through
-#'   a `stanvar`, which means [brms::prior_summary()] reports the intercept as
-#'   flat; the gamma is nonetheless the only prior acting on it, and its two
-#'   parameters are recoverable from `fit$stanvars`.
-#'
-#'   See `vignette("dispersion-priors")` for the scaled-chi-square
-#'   hierarchy, why the prior location is the trend \eqn{s_0^2}
-#'   (`dispersion_trended`) rather than the tagwise posterior, the trigamma
-#'   identity that sets the shared log-scale spread, and why the two forms
-#'   are not reparameterisations of each other.
 #' @param shape_prior_df Degrees of freedom \eqn{\nu} of the Student-t prior
-#'   on the shape intercept, used only when `shape_prior = "student_t"`. This
-#'   single value sets both the `df` argument of `student_t(df, 0, scale)` and
-#'   the `scale`, because a Student-t has standard deviation
-#'   `scale * sqrt(nu / (nu - 2))`; the scale is therefore
+#'   on the shape intercept. This single value sets both the `df` argument of
+#'   `student_t(df, 0, scale)` and the `scale`, because a Student-t has
+#'   standard deviation `scale * sqrt(nu / (nu - 2))`; the scale is therefore
 #'   `sd * sqrt((nu - 2) / nu)` for a target `sd`. Must exceed 2, since the
 #'   Student-t standard deviation does not exist at or below 2 degrees of
-#'   freedom. The target `sd` is `sqrt(trigamma(d_0 / 2))` when
-#'   `dispersion_degrees_freedom` is supplied, and 1 when it is omitted.
+#'   freedom. The target `sd` comes from `dispersion_prior_log_sd`.
 #' @param coefficient_prior_scale Scale of the Student-t prior on the
 #'   population-level coefficients of the abundance model (`class = "b"`).
 #'   Those coefficients sit behind a log link, so each one is a natural-log
@@ -189,9 +150,8 @@ estimate_gene <- function(data,
                           formula_abundance,
                           formula_dispersion = ~1,
                           offset,
-                          dispersion = NULL,
-                          dispersion_degrees_freedom = NULL,
-                          shape_prior = c("student_t", "gamma"),
+                          dispersion_prior_log_mean = NULL,
+                          dispersion_prior_log_sd = NULL,
                           shape_prior_df = 3,
                           coefficient_prior_scale = 0.7, # ~1 log2 fold change
                           coefficient_prior_df = 3,
@@ -211,37 +171,22 @@ estimate_gene <- function(data,
                           ...) {
   backend <- match.arg(backend)
   offset <- check_offset_name(offset)
-  shape_prior <- match.arg(shape_prior)
   shape_prior_df <- check_student_df(shape_prior_df)
   sample_prior <- match.arg(sample_prior)
-  
-  if (identical(shape_prior, "gamma") && is.null(dispersion_degrees_freedom)) {
-    stop(
-      'brmDE says: `shape_prior = "gamma"` requires `dispersion_degrees_freedom`. ',
-      'Use the default `shape_prior = "student_t"` if you do not have it.',
-      call. = FALSE
-    )
-  }
-  if (!is.null(dispersion)) {
-    dispersion <- check_dispersion_name(dispersion)
-  }
-  if (!is.null(dispersion_degrees_freedom)) {
-    dispersion_degrees_freedom <-
-      check_degrees_freedom_name(dispersion_degrees_freedom)
-  }
+
   prepared <- prepare_gene_data(
     data,
     abundance = abundance,
     offset = offset,
-    dispersion = dispersion,
-    dispersion_degrees_freedom = dispersion_degrees_freedom,
+    dispersion_prior_log_mean = dispersion_prior_log_mean,
+    dispersion_prior_log_sd = dispersion_prior_log_sd,
     sanitize_names = sanitize_names
   )
   data <- prepared$data
   abundance <- prepared$abundance
   offset <- prepared$offset
-  dispersion <- prepared$dispersion
-  dispersion_degrees_freedom <- prepared$dispersion_degrees_freedom
+  dispersion_prior_log_mean <- prepared$dispersion_prior_log_mean
+  dispersion_prior_log_sd <- prepared$dispersion_prior_log_sd
 
   if (is.null(family)) {
     family <- brms::zero_inflated_negbinomial()
@@ -261,8 +206,7 @@ estimate_gene <- function(data,
     formula_dispersion = formula_dispersion,
     abundance = abundance,
     offset = offset,
-    dispersion = dispersion,
-    shape_prior = shape_prior
+    dispersion = dispersion_prior_log_mean
   )
 
   if (is.null(prior) && is_negbinomial_family(family)) {
@@ -271,9 +215,8 @@ estimate_gene <- function(data,
       formula = formula,
       abundance = abundance,
       offset = offset,
-      dispersion_degrees_freedom = dispersion_degrees_freedom,
+      dispersion_prior_log_sd = dispersion_prior_log_sd,
       shape_prior_df = shape_prior_df,
-      shape_prior = shape_prior,
       coefficient_prior_scale = coefficient_prior_scale,
       coefficient_prior_df = coefficient_prior_df
     )

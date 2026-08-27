@@ -16,543 +16,642 @@ knitr::opts_chunk$set(
   fig.height = 3.8,
   eval = FALSE
 )
+run_vignette <-
+  requireNamespace("airway", quietly = TRUE) &&
+  requireNamespace("edgeR", quietly = TRUE) &&
+  requireNamespace("limma", quietly = TRUE) &&
+  requireNamespace("tidybulk", quietly = TRUE)
 ```
 
-`brmDE`, although very flexible, capable of mixed-effect models, native non-parametric smooth/spline models, and alternative distributions (NB and ZINB), fits one gene at a time to prioritise parallelisation. A single-gene likelihood cannot borrow strength across features, which is exactly what makes a feature-wise negative-binomial dispersion useful when there are small numbers of replicates.
+`brmDE`, although very flexible and capable of mixed-effect models, non-parametric smooth/spline models, and alternative distributions such as NB and ZINB, fits one gene at a time to prioritise parallelisation. A single-gene likelihood cannot borrow strength across features, which is exactly what makes empirical-Bayes estimation of feature-wise negative-binomial dispersion useful when the number of replicates is small.
 
-Frequentist methods estimate gene-wise dispersion through empirical Bayes very efficiently, although only for relatively simple fixed-effect models.
+Frequentist methods such as `edgeR` estimate gene-wise dispersion through empirical Bayes very efficiently, although generally within more constrained fixed-effect model structures.
 
-The key idea is to cheaply estimate gene dispersion with empirical Bayes, for example through `edgeR` or `DESeq2`, and use it as an approximate prior for `brmDE`. With enough evidence from the data, the gene's own counts can still pull the posterior away from the upstream empirical-Bayes estimate.
+The key idea is to estimate gene dispersion cheaply with empirical Bayes, for example through `edgeR` or `DESeq2`, and use the resulting across-gene dispersion information as an approximate prior for `brmDE`. With enough information in the gene's own counts, the posterior can still move away from the upstream empirical-Bayes estimate.
 
-# Using empirical-Bayes dispersion estimation as prior
-
-`brmDE` offers two priors for the (zero-inflated) negative-binomial dispersion.
-
-Empirical-Bayes methods such as `edgeR` estimate a negative-binomial dispersion trend across genes, a moderated gene-wise dispersion, and a prior degrees of freedom that controls the strength of the gene-wise shrinkage.
-
-For a gene $g$, we denote:
-
-- $\phi_{\mathrm{trend},g}$ as edgeR's `trended.dispersion`, the negative-binomial dispersion expected for a gene with that abundance;
-- $\phi_{\mathrm{tagwise},g}$ as edgeR's `tagwise.dispersion`, the gene-specific negative-binomial dispersion after empirical-Bayes shrinkage;
-- $d_0$ as edgeR's `prior.df`, which measures the strength of the across-gene information used for shrinkage.
-
-`brmDE` uses $\phi_{\mathrm{trend},g}$ and $d_0$ to construct a Bayesian prior. The tagwise dispersion is not used as the prior location because it already contains gene-specific information from the same data that will subsequently be fitted by `brmDE`.
-
-Importantly, edgeR does not place a conjugate scaled-inverse-chi-square prior directly on the negative-binomial dispersion $\phi_g$. Its tagwise negative-binomial dispersions are obtained using weighted likelihood. The Gamma construction below is therefore a `brmDE` approximation that translates edgeR's dispersion trend and empirically estimated shrinkage strength into a conventional Bayesian prior.
-
-## Gamma prior
-
-edgeR provides two quantities that are useful for constructing a prior on the negative-binomial dispersion:
+The conceptual transition is from a likelihood over candidate dispersion values to a prior kernel for dispersion. For fixed observed data, the likelihood
 
 $$
-\phi_{\mathrm{trend},g}
-$$
-
-the expected negative-binomial dispersion for a gene with the abundance of gene $g$, and
-
-$$
-d_0
-$$
-
-the prior degrees of freedom, which quantifies the strength of the across-gene shrinkage information.
-
-edgeR does not define a conjugate scaled-inverse-chi-square prior directly on $\phi_g$. To translate these two quantities into a Bayesian prior, `brmDE` uses the following approximation:
-
-$$
-\phi_g^{true}
-\overset{\mathrm{brmDE}}{\sim}
-\phi_{\mathrm{trend},g}
-\frac{d_0}{\chi^2_{d_0}}.
-$$
-
-This construction has the desired properties: the prior is centred according to the abundance-dependent edgeR dispersion trend, while $d_0$ controls its concentration. A large $d_0$ produces a narrow distribution around the trend, whereas a small $d_0$ produces a wider prior.
-
-`brms` parameterises the negative binomial by the precision-like parameter `shape`, which is the reciprocal of the edgeR dispersion:
-
-$$
-\mathrm{shape}
+L_g(\phi)
 =
-\frac{1}{\phi_g^{true}}.
+p(y_g\mid\phi)
 $$
 
-Under the `brmDE` approximation,
+is a function of the candidate parameter value $\phi$. It is not itself a probability density for $\phi$. However, the empirical-Bayes machinery in `edgeR` constructs a weighted, abundance-smoothed log-likelihood contribution that represents information borrowed across genes. In `brmDE`, we use this weighted shared log-likelihood as an empirical prior kernel for the parameter that is actually modelled, $\log(\phi)$.
+
+This is an explicit modelling approximation: the edgeR weighted shared likelihood is not itself a Bayesian prior, but it can be used to define one.
+
+The maximum of this weighted smoothed likelihood defines the **mode** of the prior. Under the local Normal approximation developed below, the mode is also used as the prior mean. The prior width is obtained from the local curvature of the same weighted smoothed likelihood.
+
+Because the smoothed dispersion trend is returned directly by `edgeR` as `trended.dispersion`, the less intuitive part is the transition from the weighted shared likelihood to the prior SD. That calculation is described below.
+
+# From smoothed shrunk likelihood to log-scale SD
+
+`edgeR` estimates an abundance-smoothed shared log-likelihood and weights it through empirical Bayes. For gene $g$, we denote this as
 
 $$
-\mathrm{shape}
-=
-\frac{\chi^2_{d_0}}
-{d_0\,\phi_{\mathrm{trend},g}}.
-$$
-
-A chi-square distribution is a special case of the Gamma distribution,
-
-$$
-\chi^2_d
-\equiv
-\mathrm{Gamma}\left(
-\frac{d}{2},
-\mathrm{scale}=2
-\right),
-$$
-
-and multiplying a Gamma-distributed variable by a positive constant produces another Gamma distribution. Therefore,
-
-$$
-\mathrm{shape}
-\sim
-\mathrm{Gamma}\left(
-\frac{d_0}{2},
-\mathrm{scale}
-=
-\frac{2}
-{d_0\,\phi_{\mathrm{trend},g}}
-\right),
-$$
-
-or equivalently,
-
-$$
-\boxed{
-\mathrm{shape}
-\sim
-\mathrm{Gamma}\left(
-\frac{d_0}{2},
-\mathrm{rate}
-=
-\frac{d_0\,\phi_{\mathrm{trend},g}}{2}
-\right).
-}
-$$
-
-| Quantity | Interpretation | As a Gamma |
-|----|----|----|
-| $\chi^2_{d_0}$ | chi-square random variable | $\mathrm{Gamma}(d_0/2,\ \mathrm{scale}=2)$ |
-| $\phi_g^{true}$ | `brmDE` scaled-inverse-chi-square approximation to the true NB dispersion | inverse-Gamma$(d_0/2,\ \mathrm{scale}=d_0\phi_{\mathrm{trend},g}/2)$ |
-| $1/\phi_g^{true}=\mathrm{shape}$ | reciprocal NB dispersion | $\mathrm{Gamma}(d_0/2,\ \mathrm{rate}=d_0\phi_{\mathrm{trend},g}/2)$ |
-| $\exp(b_0)=\mathrm{shape}\times\phi_{\mathrm{trend},g}$ | multiplicative deviation from the trend | $\mathrm{Gamma}(d_0/2,\ \mathrm{rate}=d_0/2)$ |
-
-### Simplifying the prior further: using $\phi_{\mathrm{trend},g}$ as offset
-
-`brms` puts `shape` behind a log link, so
-
-```r
-shape ~ 1 + offset(log(1/dispersion_trended))
-```
-
-corresponds to
-
-$$
-\log(\mathrm{shape})
-=
-b_0
-+
-\log(1/\phi_{\mathrm{trend},g}).
-$$
-
-The intercept is therefore the log multiplicative deviation from the edgeR trend:
-
-$$
-b_0
-=
-\log(\mathrm{shape})
--
-\log(1/\phi_{\mathrm{trend},g})
-=
-\log(
-\mathrm{shape}\times\phi_{\mathrm{trend},g}
-).
-$$
-
-Exponentiating gives
-
-$$
-\exp(b_0)
-=
-\mathrm{shape}\times\phi_{\mathrm{trend},g}.
-$$
-
-Under the Gamma approximation derived above,
-
-$$
-\boxed{
-\exp(b_0)
-\sim
-\mathrm{Gamma}\left(
-\frac{d_0}{2},
-\mathrm{rate}
-=
-\frac{d_0}{2}
-\right).
-}
-$$
-
-The resulting prior is the same for every gene on the multiplicative-deviation scale. Gene-specific abundance information enters through the offset $\phi_{\mathrm{trend},g}$, while $d_0$ determines the concentration of the prior.
-
-The trailing `+ Intercept_shape` is the log-Jacobian of the exponential transformation. Without it, the density would be misnormalised on the log scale and would no longer correspond to the Gamma distribution derived above. Both parameters arrive as data rather than literals, allowing the generated Stan code to remain identical across genes and the compiled model to be reused.
-
-## The Student-t prior (default)
-
-The Gamma prior provides a direct Bayesian approximation based on edgeR's negative-binomial dispersion trend and empirical-Bayes shrinkage strength. Its relatively thin tails, however, can make the upstream edgeR information influential when the `brmDE` model differs substantially from the fixed-effect negative-binomial model used to estimate that information.
-
-There are two important situations in which the edgeR dispersion trend can be systematically displaced from the dispersion estimated by `brmDE` (see [Appendix 1](#appendix-1)).
-
-- Because edgeR dispersion estimation cannot fit mixed-effects models, a mixed-effects `brmDE` model must be approximated by a fixed-effects model. For example, `~ treatment + (1 | hospital)` may be approximated by `~ treatment + hospital`. The fixed effects are estimated without partial pooling and can absorb more variation, potentially reducing the residual negative-binomial dispersion.
-
-- A zero-inflated negative-binomial model in `brmDE` must be approximated upstream by an ordinary negative-binomial model. Zero inflation can then be absorbed by the edgeR negative-binomial dispersion, potentially increasing the estimated dispersion.
-
-For these cases, `brmDE` provides a heavy-tailed Student-t alternative that uses the same edgeR trend as its prior location while allowing the gene's likelihood to move substantially further from it.
-
-### Simplifying the prior like for gamma: using $\phi_{\mathrm{trend},g}$ as offset
-
-The submodel is the one already assembled above. On
-
-```r
-shape ~ 1 + offset(log(1/dispersion_trended))
-```
-
-the intercept has a Student-t prior, `student_t(ν, 0, σ)`. The Gamma alternative puts $\mathrm{Gamma}(d_0/2,\; d_0/2)$ on $\exp(b_0)$ instead. The offset is the same; only the intercept prior changes.
-
-### From $d_0$ to a log-scale SD
-
-The Student-t prior uses the same edgeR-derived shrinkage strength as the Gamma approximation, but replaces the thin-tailed Gamma-derived distribution with a heavy-tailed distribution on the log scale.
-
-Under the reference Gamma approximation,
-
-$$
-\exp(b_0)
-\sim
-\mathrm{Gamma}\left(
-\frac{d_0}{2},
-\mathrm{rate}
-=
-\frac{d_0}{2}
-\right).
-$$
-
-The variance of the logarithm of a Gamma random variable depends only on its shape parameter. For
-
-$$
-X\sim\mathrm{Gamma}(a,\cdot),
-$$
-
-$$
-\mathrm{Var}(\log X)
-=
-\psi'(a),
-$$
-
-where $\psi'$ is the trigamma function.
-
-Using $a=d_0/2$, the log-scale standard deviation of the reference Gamma prior is therefore
-
-$$
-\boxed{
-\mathrm{SD}(b_0)
-=
-\sqrt{\psi'(d_0/2)}.
-}
-$$
-
-`brmDE` uses this standard deviation to calibrate the width of the Student-t prior. This is a deliberate variance-matching approximation: $d_0$ comes from edgeR's empirical-Bayes shrinkage estimation, while the Student-t distribution supplies heavier tails than the reference Gamma prior.
-
-### From SD to the Student-t scale
-
-`brms` writes `student_t(ν, μ, σ)` with a *scale*, not a standard deviation. For $\nu > 2$,
-
-$$
-\mathrm{SD}
-=
-\sigma\sqrt{\frac{\nu}{\nu-2}},
-\qquad
-\text{so}
-\qquad
-\sigma
-=
-\mathrm{SD}\sqrt{\frac{\nu-2}{\nu}}.
-$$
-
-At the default $\nu=3$,
-
-$$
-\sigma
-=
-\mathrm{SD}/\sqrt{3}.
-$$
-
-Putting both steps together, at the default $\nu=3$,
-
-$$
-\mathrm{SD}(b_0)
-=
-\sqrt{\psi'(d_0/2)},
-\qquad
-\sigma
-=
-\mathrm{SD}(b_0)\sqrt{\frac{\nu-2}{\nu}}
-=
-\frac{\sqrt{\psi'(d_0/2)}}{\sqrt{3}}.
-$$
-
-# Appendix 1: Background on empirical-Bayes estimation of dispersion in edgeR {#appendix-1}
-
-The negative-binomial dispersion used as the `brmDE` prior location and the quasi-likelihood dispersion used internally to estimate shrinkage strength are distinct quantities.
-
-For the negative-binomial model, edgeR estimates an abundance-dependent trend
-
-$$
-\phi_{\mathrm{trend},g},
-$$
-
-and gene-specific tagwise negative-binomial dispersions
-
-$$
-\phi_{\mathrm{tagwise},g}.
-$$
-
-The tagwise estimates are obtained by weighted-likelihood empirical Bayes rather than through a conjugate inverse-chi-square prior.
-
-However, `estimateDisp()` also needs to determine how strongly gene-specific dispersions should be shrunk towards the trend. The returned `prior.df`, denoted $d_0$, is estimated using residual quasi-likelihood variance machinery closely related to the empirical-Bayes framework used by `limma`.
-
-This appendix describes that calculation.
-
-## Sampling uncertainty of a variance estimate
-
-The connection between variance uncertainty and degrees of freedom comes from the classical sampling distribution of a sample variance. For normally distributed observations,
-
-$$
-\frac{d\,s^2}{\sigma^2}
-\sim
-\chi^2_d,
-$$
-
-where:
-
-- $s^2$ is the variance estimated from the observed sample;
-- $\sigma^2$ is the unknown true population variance;
-- $d$ is the residual degrees of freedom. For $n$ observations described only by their mean, $d=n-1$.
-
-The sample variance itself is not chi-square distributed. Its ratio to the true variance, after multiplication by its degrees of freedom, follows a chi-square distribution.
-
-edgeR applies the same variance-moderation principle to a residual quasi-likelihood dispersion. Using simplified notation,
-
-$$
-\frac{d\,q_g^{residual}}
-{q_g^{true}}
-\sim
-\chi^2_d.
-$$
-
-The correspondence with the classical result is
-
-$$
-s^2
-\longleftrightarrow
-q_g^{residual}
-$$
-
-and
-
-$$
-\sigma^2
-\longleftrightarrow
-q_g^{true}.
-$$
-
-Here, $q_g^{residual}$ is the observed noisy residual QL-dispersion estimate for gene $g$, while $q_g^{true}$ is its unknown true value.
-
-The observed residual QL dispersion is obtained approximately from the residual negative-binomial deviance:
-
-$$
-q_g^{residual}
-\approx
-\frac{D_{g,\mathrm{likelihood}}}{d},
+w\,\ell_{\mathrm{smooth},g}(\phi),
 $$
 
 where
 
 $$
-D_{g,\mathrm{likelihood}}
+w=\texttt{prior.n}.
+$$
+
+In `brmDE`, the dispersion parameter is handled on the log scale. We therefore define the prior kernel directly as a function of $\log(\phi)$:
+
+$$
+\log p_g\!\left(\log(\phi)\right)
+\propto
+w\,\ell_{\mathrm{smooth},g}\left(e^{\log(\phi)}\right).
+$$
+
+This avoids introducing an unnecessary change-of-variable step from a density defined with respect to $d\phi$ to one defined with respect to $d\log(\phi)$. We are explicitly defining the prior on the scale used by `brmDE`.
+
+The maximum of this prior kernel occurs at
+
+$$
+\log\left(\phi_{\mathrm{trend},g}\right),
+$$
+
+where $\phi_{\mathrm{trend},g}$ is returned by `edgeR` as `trended.dispersion`.
+
+The weighted edgeR curve is not itself a Bayesian prior density. For constructing the `brmDE` prior, we use its local shape around the maximum.
+
+**Intuitive route from weighted smoothed likelihood to prior SD:**
+
+1. Treat the weighted smoothed curve as an unnormalised log-density on the $\log(\phi)$ scale.
+2. Exponentiate it to obtain an unnormalised probability density.
+3. Normalise it so that its total area is 1.
+4. Calculate the mean and SD of that probability distribution.
+5. Equivalently, one could sample from the normalised density and calculate the empirical SD.
+6. A faster local approximation is to estimate the SD from the curvature around the mode.
+
+## Why curvature can be calculated directly from the weighted log-likelihood
+
+We are calculating the curvature of the **log of the normalised probability density**, as a proxy for the curvature of the probability density itself.
+
+Define the weighted smoothed log-likelihood on the log-dispersion scale as
+
+$$
+q_g\!\left(\log(\phi)\right)
 =
-2\left[
-\ell_g(\mathrm{saturated})
--
-\ell_g(\mathrm{fitted})
-\right].
+w\,\ell_{\mathrm{smooth},g}\left(e^{\log(\phi)}\right).
 $$
 
-Thus $D_{g,\mathrm{likelihood}}$ measures residual lack-of-fit of the negative-binomial model, and dividing by the residual degrees of freedom produces the variance-like quantity $q_g^{residual}$.
-
-## The unknown true QL dispersion
-
-From
+The corresponding normalised prior density can be written as
 
 $$
-\frac{d\,q_g^{residual}}
-{q_g^{true}}
-\sim
-\chi^2_d,
-$$
-
-we cannot solve directly for $q_g^{true}$.
-
-Algebraically,
-
-$$
-q_g^{true}
+p_g\!\left(\log(\phi)\right)
 =
-\frac{d\,q_g^{residual}}
-{\chi^2_d},
+\frac{
+\exp\left[
+q_g\!\left(\log(\phi)\right)
+\right]
+}{
+Z
+},
 $$
 
-but the realised value of the $\chi^2_d$ random variable is unknown. The equation therefore describes the sampling distribution of $q_g^{residual}$ conditional on the unknown $q_g^{true}$.
+where $Z$ is the normalising constant.
 
-The empirical-Bayes model supplies the second level:
-
-$$
-q_g^{true}
-\sim
-s_{0g}^2
-\frac{d_0}{\chi^2_{d_0}},
-$$
-
-where $s_{0g}^2$ is the expected residual QL dispersion for a gene with the abundance of gene $g$, and $d_0$ is the prior degrees of freedom.
-
-The trend $s_{0g}^2$ is estimated from the collection of observed residual QL dispersions:
+Taking the logarithm gives
 
 $$
-\{
-q_1^{residual},
-q_2^{residual},
-\ldots,
-q_G^{residual}
-\}
-\longrightarrow
-s_{0g}^2.
-$$
-
-The three quantities therefore have distinct meanings:
-
-- $q_g^{residual}$ is the noisy residual QL-dispersion estimate obtained from gene $g$;
-- $s_{0g}^2$ is the expected residual QL dispersion from the across-gene abundance trend;
-- $q_g^{true}$ is the latent true residual QL dispersion of gene $g$.
-
-The hierarchy is
-
-$$
-s_{0g}^2
-\longrightarrow
-q_g^{true}
-\longrightarrow
-q_g^{residual}.
-$$
-
-## Joining the equations to estimate $d_0$
-
-At this stage:
-
-- $q_g^{residual}$ is observed/calculated for every gene;
-- $s_{0g}^2$ is estimated from the abundance trend;
-- $d$ is known from the experimental design;
-- $d_0$ is unknown;
-- $q_g^{true}$ is also unknown.
-
-The sampling model can be written as
-
-$$
-q_g^{residual}
+\log p_g\!\left(\log(\phi)\right)
 =
-q_g^{true}
-\frac{\chi^2_d}{d}.
+q_g\!\left(\log(\phi)\right)-\log Z.
 $$
 
-The prior model gives
+Since $\log Z$ is constant with respect to $\log(\phi)$,
 
 $$
-q_g^{true}
+\frac{d^2}{d[\log(\phi)]^2}
+\log p_g\!\left(\log(\phi)\right)
 =
-s_{0g}^2
-\frac{d_0}{\chi^2_{d_0}}.
-$$
-
-Substitution eliminates the latent $q_g^{true}$:
-
-$$
-q_g^{residual}
-=
-s_{0g}^2
-\frac{d_0}{\chi^2_{d_0}}
-\frac{\chi^2_d}{d}.
+\frac{d^2}{d[\log(\phi)]^2}
+q_g\!\left(\log(\phi)\right).
 $$
 
 Therefore,
 
 $$
-\boxed{
-\frac{q_g^{residual}}
-{s_{0g}^2}
+\text{curvature of the log normalised prior}
 =
-\frac{\chi^2_d/d}
-{\chi^2_{d_0}/d_0}
-\sim
-F_{d,d_0}.
+\text{curvature of the weighted smoothed log-likelihood}.
+$$
+
+This means that the conceptual exponentiation and normalisation steps do not need to be carried out explicitly when estimating curvature.
+
+## Numerical curvature from the edgeR likelihood grid
+
+The abundance-smoothed shared log-likelihood is available numerically over a finite dispersion grid, so we estimate its local curvature from those grid values.
+
+Suppose there are $G$ genes and $K$ dispersion-grid points.
+
+- `shared.loglik` is a $G \times K$ matrix. Rows correspond to genes and columns correspond to dispersion-grid points.
+- `shared.loglik[g, ]` is therefore a numeric vector of length $K$. It gives the y-values of the abundance-smoothed shared log-likelihood for gene $g$ across candidate dispersions.
+- `spline.pts` is a numeric vector of length $K$. It gives the grid coordinates corresponding to the $K$ columns of `shared.loglik`.
+- `prior.n` is the weight applied to the shared likelihood. In the standard non-robust case it is a scalar; with robust estimation it may be gene-specific.
+
+The x-axis used for the local fit is
+
+$$
+x_k
+=
+\log(\phi_k).
+$$
+
+The corresponding y-axis is
+
+$$
+y_k
+=
+w_g
+\times
+\texttt{shared.loglik}[g,k],
+$$
+
+where $w_g$ is `prior.n` for gene $g` when gene-specific weights are used, or the common scalar `prior.n` otherwise.
+
+Thus, for gene $g$, the local fit uses the paired points
+
+$$
+\left(
+x_k,
+y_k
+\right)
+=
+\left(
+\log(\phi_k),
+\;
+w_g
+\times
+\texttt{shared.loglik}[g,k]
+\right).
+$$
+
+## Local quadratic fit
+
+Rather than trying to derive probability distribution from smooth shrinked likelihood and sample from it to get the standard deviation, we use an approximate method. 
+
+We estimate the curvature around the expected mode
+
+$$
+x_{\mathrm{trend},g}
+=
+\log\left(\phi_{\mathrm{trend},g}\right).
+$$
+
+We select a small number of grid points around the grid location closest to $x_{\mathrm{trend},g}$ and define
+
+$$
+z_k
+=
+x_k
+-
+x_{\mathrm{trend},g}.
+$$
+
+Since, smooth likelihood around their maximum tend to be quadratic in shape, we then fit the local quadratic model
+
+$$
+y_k
+=
+a
++
+b z_k
++
+c z_k^2.
+$$
+
+This can be fitted directly with base R `stats::lm()` because the model is linear in the coefficients $a$, $b$, and $c$.
+
+In R, the design formula is
+
+```r
+y[idx] ~ z + I(z^2)
+```
+
+where
+
+```r
+z <- x[idx] - log(phi_trend_g)
+```
+
+and `idx` identifies a small neighbourhood of grid points around the trended dispersion.
+
+The fitted design matrix has three columns:
+
+$$
+\begin{array}{c|ccc}
+ & \text{intercept} & z & z^2\\
+\hline
+1 & 1 & z_1 & z_1^2\\
+2 & 1 & z_2 & z_2^2\\
+\vdots & \vdots & \vdots & \vdots\\
+n & 1 & z_n & z_n^2
+\end{array}
+$$
+
+and `lm()` estimates
+
+$$
+a,\;b,\;c.
+$$
+
+The fitted function is therefore a parabola, not a straight line.
+
+The second derivative of the fitted quadratic is
+
+$$
+\frac{d^2}{dz^2}
+\left(
+a+bz+cz^2
+\right)
+=
+2c.
+$$
+
+At a valid local maximum,
+
+$$
+c<0.
+$$
+
+We therefore define the positive local curvature as
+
+$$
+I_g
+=
+-2c.
+$$
+
+This estimates
+
+$$
+I_g
+=
+-
+\left.
+\frac{d^2}{d[\log(\phi)]^2}
+\left[
+w\,\ell_{\mathrm{smooth},g}(\phi)
+\right]
+\right|_{\phi=\phi_{\mathrm{trend},g}}.
+$$
+
+A sharper peak gives larger positive curvature,
+
+$$
+\text{sharp peak}
+\quad\Longrightarrow\quad
+I_g\text{ large},
+$$
+
+whereas a flatter peak gives smaller curvature,
+
+$$
+\text{flat peak}
+\quad\Longrightarrow\quad
+I_g\text{ small}.
+$$
+
+## Convert curvature into a `brms` prior standard deviation
+
+The final step is a local Normal, or Laplace, approximation.
+
+Near its mode, a sufficiently smooth log-density can be approximated by a quadratic. For a Normal distribution,
+
+$$
+\log p(x)
+=
+C
+-
+\frac{
+(x-\mu)^2
+}{
+2\sigma^2
+},
+$$
+
+so its curvature at the mode is
+
+$$
+\frac{1}{\sigma^2}.
+$$
+
+Matching the Normal curvature to the local quadratic fit gives
+
+$$
+I_g
+=
+\frac{1}{\sigma_g^2}.
+$$
+
+Since
+
+$$
+I_g=-2c,
+$$
+
+the prior variance is
+
+$$
+\sigma_g^2
+=
+-\frac{1}{2c}.
+$$
+
+Therefore the local Normal approximation for the `brmDE` log-dispersion prior is
+
+$$
+\boxed{
+\log(\phi_g)
+\approx
+N\left(
+\log(\phi_{\mathrm{trend},g}),
+-\frac{1}{2c_g}
+\right)
 }
 $$
 
-The $F$ distribution arises because the expression is a ratio of two independent chi-square random variables, each divided by its degrees of freedom.
-
-Across thousands of genes, edgeR has the observed ratios
+with
 
 $$
-\frac{q_1^{residual}}{s_{01}^2},
-\frac{q_2^{residual}}{s_{02}^2},
-\ldots
+c_g<0.
 $$
 
-and uses their distribution to estimate $d_0$.
+The centre of the prior therefore comes from `trended.dispersion`, while its width is derived from the local curvature of the weighted shared edgeR likelihood.
 
-Equivalently, on the log scale, the variance of the residual QL dispersions can be decomposed into sampling variability and genuine across-gene variability. For equal residual degrees of freedom $d$,
+In `brmDE` the default width is the Laplace SD. `estimate_dispersion_log_sd()` writes two columns: `dispersion_prior_log_mean` (`trended.dispersion`) and `dispersion_prior_log_sd` (a width on \(\log\phi\)). `method = "curvature"` (default) fills that SD from the local quadratic of the weighted shared log-likelihood; `method = "degrees_freedom"` fills it from the trigamma SD of the moderated df. Pass both names to `estimate_gene()` / `estimate()`. The location is the offset on `shape ~ 1 + offset(log(1/dispersion_prior_log_mean))`. The intercept prior is Student-t, with scale chosen so that its standard deviation equals that log-scale \(\sigma_g\).
+
+# Appendix 1: edgeR calculation of the smoothed weighted likelihood
+
+**
+disclamer: the following section should not be taken as substitute of the official `edgeR` literature (see references). It is just a convenient complement. For any divergence, the official literature should be considered instead.**
+
+## 1. Each gene has a likelihood curve over candidate dispersions
+
+For gene $g$, with observed counts $y_g$, edgeR evaluates the negative-binomial likelihood
 
 $$
-\mathrm{Var}
-\left[
-\log
-\left(
-\frac{q_g^{residual}}{s_{0g}^2}
-\right)
-\right]
+L_g(\phi)
 =
-\psi'(d/2)
-+
-\psi'(d_0/2).
+p(y_g\mid\phi).
 $$
 
-The first term is determined by the known residual degrees of freedom $d$. The remaining variation identifies $d_0$.
+Usually we work with the log-likelihood
 
-A large $d_0$ means the true residual QL dispersions are tightly concentrated around their trend and supports stronger empirical-Bayes shrinkage. A small $d_0$ means greater genuine between-gene heterogeneity and supports weaker shrinkage.
+$$
+\ell_g(\phi)
+=
+\log p(y_g\mid\phi).
+$$
 
-## How $d_0$ is used for the negative-binomial dispersion
+The data $y_g$ are fixed, while $\phi$ varies over a grid of candidate dispersion values,
 
-The important distinction is that the QL hierarchy above is used to estimate the **strength of shrinkage**, $d_0$. It does not imply that edgeR places the same scaled-inverse-chi-square prior directly on its negative-binomial dispersion $\phi_g$.
+$$
+\phi_1,\phi_2,\ldots,\phi_K.
+$$
 
-For the negative-binomial dispersion, edgeR instead combines the gene-specific and shared adjusted profile likelihoods using weighted likelihood. Conceptually,
+Across genes, this produces a matrix such as
+
+$$
+\begin{array}{c|cccc}
+ & \phi_1 & \phi_2 & \phi_3 & \phi_4\\
+\hline
+g_1 & \ell_1(\phi_1) & \ell_1(\phi_2) & \ell_1(\phi_3) & \ell_1(\phi_4)\\
+g_2 & \ell_2(\phi_1) & \ell_2(\phi_2) & \ell_2(\phi_3) & \ell_2(\phi_4)\\
+g_3 & \ell_3(\phi_1) & \ell_3(\phi_2) & \ell_3(\phi_3) & \ell_3(\phi_4)
+\end{array}
+$$
+
+Each row is one gene-specific log-likelihood curve over $\phi$.
+
+## 2. edgeR smooths each dispersion column over abundance
+
+Each gene also has an abundance value
+
+$$
+A_g.
+$$
+
+For one fixed candidate dispersion $\phi_k$, edgeR has the values
+
+$$
+\ell_1(\phi_k),
+\ell_2(\phi_k),
+\ldots,
+\ell_G(\phi_k).
+$$
+
+It smooths these values against abundance:
+
+$$
+A_g
+\longrightarrow
+\ell_g(\phi_k).
+$$
+
+With the default edgeR implementation, this smoothing uses local regression through `locfit`.
+
+For every fixed candidate dispersion $\phi_k$, edgeR therefore obtains a smooth function of abundance,
+
+$$
+f_k(A).
+$$
+
+For example,
+
+$$
+f_1(A)
+$$
+
+describes the expected log-likelihood at dispersion $\phi_1$ for a gene of abundance $A$, while
+
+$$
+f_2(A)
+$$
+
+does the same for $\phi_2$, and so on.
+
+## 3. For one abundance, reconstruct the smoothed log-likelihood curve over dispersion
+
+Consider a particular gene $g$ with abundance
+
+$$
+A_g.
+$$
+
+For every candidate dispersion,
+
+$$
+\phi_1,\phi_2,\ldots,\phi_K,
+$$
+
+edgeR evaluates the corresponding abundance-smoothed function at $A_g$:
+
+$$
+f_1(A_g),
+f_2(A_g),
+\ldots,
+f_K(A_g).
+$$
+
+These values are placed side by side across dispersion:
+
+$$
+\begin{array}{c|cccc}
+\phi &
+\phi_1 &
+\phi_2 &
+\cdots &
+\phi_K\\
+\hline
+\text{smoothed log-likelihood} &
+\ell_{\mathrm{smooth},g}(\phi_1) &
+\ell_{\mathrm{smooth},g}(\phi_2) &
+\cdots &
+\ell_{\mathrm{smooth},g}(\phi_K)
+\end{array}
+$$
+
+Together, these values define the function
+
+$$
+\ell_{\mathrm{smooth},g}(\phi).
+$$
+
+This corresponds to edgeR's internal notation $m_{0g}(\phi)$; for clarity, we use $\ell_{\mathrm{smooth},g}(\phi)$ throughout.
+
+In the edgeR implementation:
+
+- `trended.dispersion` is returned by `estimateDisp()` and gives the abundance-dependent dispersion trend;
+- `m0` is the internal matrix of local shared log-likelihoods;
+- `prior.n` is the weight applied to the shared likelihood contribution;
+- `tagwise.dispersion` is the final gene-specific moderated dispersion estimate.
+
+Thus,
+
+$$
+\ell_{\mathrm{smooth},g}(\phi)
+\longleftrightarrow
+\texttt{m0},
+$$
+
+and
+
+$$
+w
+\longleftrightarrow
+\texttt{prior.n}.
+$$
+
+The abundance-dependent maximum of the shared likelihood corresponds to
 
 $$
 \phi_{\mathrm{trend},g}
-+
-\text{gene-specific NB likelihood}
-+
-d_0
-\longrightarrow
-\phi_{\mathrm{tagwise},g}.
+\longleftrightarrow
+\texttt{trended.dispersion}.
 $$
 
-Thus:
+`m0` is an internal intermediate quantity and is not normally retained as a component of the `DGEList` returned by `estimateDisp()`. If `brmDE` needs the full shared likelihood curve, the relevant edgeR internal calculation must therefore be called, reproduced, or wrapped so that this matrix is retained.
 
-- $\phi_{\mathrm{trend},g}$ is the negative-binomial dispersion trend that `brmDE` uses as its prior location;
-- $d_0$ describes the empirical-Bayes shrinkage strength;
-- $\phi_{\mathrm{tagwise},g}$ is edgeR's already-moderated gene-specific NB dispersion and is not passed to `brmDE` as a prior location.
+The whole curve
 
-`brmDE` takes $\phi_{\mathrm{trend},g}$ and $d_0$ and translates them into the Gamma or Student-t prior constructions described above. The scaled-inverse-chi-square model applied directly to $\phi_g$ is therefore a `brmDE` approximation used to construct that Bayesian prior.
+$$
+\ell_{\mathrm{smooth},g}(\phi)
+$$
+
+can be interpreted as:
+
+> According to the likelihood behaviour of genes with similar abundance, how compatible is each candidate dispersion $\phi$?
+
+## 4. The maximum of this curve gives the trended dispersion
+
+edgeR finds the dispersion value at which the smoothed log-likelihood is maximal:
+
+$$
+\phi_{\mathrm{trend},g}
+=
+\arg\max_{\phi}
+\ell_{\mathrm{smooth},g}(\phi).
+$$
+
+Thus $\ell_{\mathrm{smooth},g}(\phi)$ is the whole curve, whereas $\phi_{\mathrm{trend},g}$ is one value of $\phi$: the dispersion preferred by the across-gene information for a gene with abundance $A_g$.
+
+Repeating this operation over abundance produces the dispersion-abundance trend,
+
+$$
+A
+\longrightarrow
+\phi_{\mathrm{trend}}(A).
+$$
+
+## 5. edgeR weights the across-gene log-likelihood curve
+
+edgeR estimates prior degrees of freedom through its empirical-Bayes procedure and converts these into the likelihood weight used by the weighted-likelihood machinery.
+
+In the standard non-robust implementation,
+
+$$
+\texttt{prior.n}
+=
+\frac{
+\texttt{prior.df}
+}{
+\texttt{nlibs}-\texttt{ncoefs}
+}.
+$$
+
+With robust estimation, `prior.df` and therefore `prior.n` may be gene-specific.
+
+The weight controls how strongly the across-gene information contributes relative to the likelihood of the individual gene.
+
+A larger weight means stronger shrinkage towards the across-gene dispersion trend.
+
+The weighted curve is
+
+$$
+w\,\ell_{\mathrm{smooth},g}(\phi).
+$$
+
+Multiplying the log-likelihood by a positive weight does not change the location of its maximum:
+
+$$
+\arg\max_{\phi}
+w\,\ell_{\mathrm{smooth},g}(\phi)
+=
+\phi_{\mathrm{trend},g}.
+$$
+
+It does change the sharpness of the curve.
+
+A larger $w$ amplifies differences between candidate dispersion values and produces a sharper curve. A smaller $w$ produces a flatter curve.
+
+On the ordinary likelihood scale, multiplying the log-likelihood by $w$ is equivalent to raising the likelihood to the power $w$:
+
+$$
+\exp\left[
+w\,\ell_{\mathrm{smooth},g}(\phi)
+\right]
+=
+\left[
+\exp\left(
+\ell_{\mathrm{smooth},g}(\phi)
+\right)
+\right]^w.
+$$
+
+For the edgeR tagwise dispersion, this weighted across-gene component is combined with the gene's own log-likelihood.
+
+For `brmDE`, the gene's own likelihood should not be included in the prior because the same gene will subsequently be fitted by `brms`. The relevant prior information is therefore the weighted across-gene curve
+
+$$
+w\,\ell_{\mathrm{smooth},g}(\phi).
+$$
 
 # Appendix 2: Where edgeR's dispersion and the brms shape differ
 
@@ -584,13 +683,18 @@ $$
 
 which pins both the direction and the size of that mismatch. edgeR's estimate exceeds the ZINB component's $\phi$ whenever $\pi>0$, by roughly $\pi$ in absolute terms and $\pi/\phi$ in relative terms, so genes with small dispersion are the most distorted. The same expression is why `zi` and `shape` are only weakly separated: the mean-variance relationship constrains the combination, not the pair, leaving the shape of the zero mass as the main information that distinguishes them.
 
-## Which prior to use: rule of thumb
+## The Student-t prior
 
-- If you are fitting a mixed-effect model, a zero-inflated negative-binomial model, or any model that the frequentist dispersion estimator cannot fit directly, use the Student-t prior. Its heavier tails allow the data to deviate more easily from the upstream approximation when there is enough information.
+There are two important situations in which the edgeR dispersion trend can be systematically displaced from the dispersion estimated by `brmDE` (see [Appendix 1](#appendix-1)).
 
-- If you are fitting a fixed-effect model that edgeR or DESeq2 can represent directly, using a negative-binomial distribution, and you place substantial trust in the upstream dispersion inference, use the Gamma prior.
+- Because edgeR dispersion estimation cannot fit mixed-effects models, a mixed-effects `brmDE` model must be approximated by a fixed-effects model. For example, `~ treatment + (1 | hospital)` may be approximated by `~ treatment + hospital`. The fixed effects are estimated without partial pooling and can absorb more variation, potentially reducing the residual negative-binomial dispersion.
 
-# Appendix 3: Examples of how to approximate a mixed-effect model with a fixed-effect one
+- A zero-inflated negative-binomial model in `brmDE` must be approximated upstream by an ordinary negative-binomial model. Zero inflation can then be absorbed by the edgeR negative-binomial dispersion, potentially increasing the estimated dispersion.
+
+For these cases, call `estimate_dispersion_log_sd(..., method = "degrees_freedom")`: the same Student-t intercept prior, but with `dispersion_prior_log_sd` filled from the log-scale SD \(\sqrt{\psi'(d_{\mathrm{eff}}/2)}\) implied by the **moderated** effective df \(d_{\mathrm{eff}} = d_{\mathrm{residual}} + d_0\) (`prior.df` from `squeezeVar()` / `estimateDisp()`). tidybulk writes the df as `dispersion_degrees_freedom`; convert it with the same trigamma formula, or let `estimate_dispersion_log_sd()` do it. The default `method = "curvature"` is the local Laplace approximation of the weighted smoothed shared log-likelihood derived above.
+
+
+# Appendix 3: Examples of how to use R formulas approximate a mixed-effect model with a fixed-effect one
 
 `edgeR` and `DESeq2` have no random effects. To obtain the most relevant dispersion estimate, we can approximate the model fitted in `brmDE` using its fixed-effect analogue: drop the `|` and promote the grouping factor to a fixed term. If the random term also has a slope, include the interaction.
 
@@ -617,3 +721,162 @@ Lund SP, Nettleton D, McCarthy DJ, Smyth GK (2012). Detecting differential expre
 Phipson B, Lee S, Majewski IJ, Alexander WS, Smyth GK (2016). Robust hyperparameter estimation protects against hypervariable genes and improves power to detect differential expression. *Annals of Applied Statistics* **10**, 946--963. https://doi.org/10.1214/16-AOAS920. `robust = TRUE`, gene-wise `prior.df`, and `prior.df = Inf` under complete shrinkage.
 
 Chen Y, Lun ATL, McCarthy DJ, Ritchie ME, Phipson B, Zhou X, Robinson MD, Smyth GK. `estimateDisp`. In *edgeR User's Guide*, Bioconductor. https://rdrr.io/bioc/edgeR/man/estimateDisp.html. Return value of `tagwise.dispersion`, `prior.df`, and `prior.n`; residual df is not returned.
+
+# Illustration: the local quadratic approximation on airway
+
+The default prior width (`estimate_dispersion_log_sd(..., method = "curvature")`) treats edgeR's weighted, abundance-smoothed shared log-likelihood as an unnormalised log-density on $\log(\phi)$, and replaces it with a Normal whose SD matches the local curvature at the mode. That is a *local* quadratic, not a claim that the whole curve is Gaussian.
+
+The following uses the airway dexamethasone experiment to look at that approximation. After dropping low-count genes, the shared log-likelihood is rebuilt on the same Cox--Reid grid and `WLEB()` smooth that `estimateDisp()` uses. `plotBCV()` shows the abundance–dispersion trend those curves sit on. Then 25 genes spanning the abundance range are drawn as
+
+$$
+x_k = \log(\phi_k),
+\qquad
+y_k = \texttt{prior.n}_g \times \texttt{shared.loglik}[g, k],
+$$
+
+the same `plot(x, y)` `estimate_dispersion_log_sd()` builds internally. The dashed vertical line is $\log(\texttt{trended.dispersion})$, the mode at which the quadratic is fitted. The orange curve is the Laplace Normal on that same log-density scale: $N(\log\phi_{\mathrm{trend}}, \sigma^2)$ with $\sigma$ from the local curvature, shifted to agree with $y$ at the mode.
+
+```{r packages, message = FALSE, eval = run_vignette}
+library(brmDE)
+library(tidybulk)
+library(tidySummarizedExperiment)
+library(SummarizedExperiment)
+library(ggplot2)
+library(dplyr)
+
+data("airway", package = "airway")
+
+airway <- airway |>
+  mutate(
+    dex = relevel(factor(dex), ref = "untrt"),
+    cell = droplevels(cell)
+  )
+
+se <- airway |>
+  keep_abundant(formula_design = ~ dex)
+
+nrow(se)
+```
+
+`keep_abundant()` drops the low-count genes (`identify_abundant()` would only flag them). The design is the fixed-effect analogue of `~ dex + (1 | cell)`.
+
+```{r shared-loglik, message = FALSE, eval = run_vignette}
+design <- model.matrix(
+  ~ dex + cell,
+  data = as.data.frame(colData(se))
+)
+shared <- brmDE:::edger_shared_loglik(
+  assay(se, "counts"),
+  design
+)
+
+# x <- log(0.1 * 2^spline.pts). estimateDisp() uses 21 points on
+# spline.pts in [-10, 10]; we use 61 on [-20, 10] so the curve is not
+# stuck on two coarse ticks.
+x <- log(shared$phi)
+```
+
+edgeR's `plotBCV()` is the abundance–dispersion trend on the same filtered matrix and design. BCV is \(\sqrt{\phi}\). Each point is a gene's tagwise estimate; the line is `trended.dispersion`, the mode of the shared curve in the facets below. On airway that trend is real but narrow, which is why those peaks sit near the same \(\log(\phi)\).
+
+```{r plot-bcv, message = FALSE, eval = run_vignette, fig.width = 6, fig.height = 5}
+dge <- edgeR::DGEList(SummarizedExperiment::assay(se, "counts"))
+dge <- edgeR::calcNormFactors(dge)
+dge <- edgeR::estimateDisp(dge, design)
+edgeR::plotBCV(dge)
+```
+
+Twenty-five genes spanning abundance: order the filtered genes by edgeR `AveLogCPM`, split that list into 25 equal slices, and take the middle gene of each slice, except the last slice, which uses the most abundant gene so the range is not truncated. Facets run from lowest to highest abundance. The strip shows CPM (`2^AveLogCPM`), not the log2 value. The black line is `y = prior.n * shared.loglik[g, ]`; the orange line is the Normal approximation from that gene's local curvature.
+
+```{r plot-25, message = FALSE, eval = run_vignette}
+ave_log_cpm <- edgeR::aveLogCPM(assay(se, "counts"))
+cpm <- 2^ave_log_cpm
+ord <- order(ave_log_cpm)
+n <- length(ord)
+breaks <- floor(seq(1, n + 1, length.out = 26))
+idx <- vapply(seq_len(25), function(i) {
+  sl <- ord[seq.int(breaks[[i]], breaks[[i + 1L]] - 1L)]
+  if (i == 25L) {
+    sl[[length(sl)]]
+  } else {
+    sl[[ceiling(length(sl) / 2)]]
+  }
+}, integer(1))
+
+genes <- rownames(se)[idx]
+Y <- shared$prior.n[idx] * shared$shared.loglik[idx, , drop = FALSE]
+x_mode <- log(shared$trended.dispersion[idx])
+sigma <- vapply(seq_along(idx), function(i) {
+  brmDE:::dispersion_quadratic_log_sd(x, Y[i, ], x_mode[[i]])
+}, numeric(1))
+panel <- sprintf(
+  "%s\nCPM = %s\nσ = %.2f",
+  genes,
+  format(round(cpm[idx], 2), trim = TRUE, scientific = FALSE),
+  sigma
+)
+
+plot_df <- tibble(
+  gene = factor(
+    rep(panel, each = length(x)),
+    levels = panel
+  ),
+  log_phi = rep(x, times = length(idx)),
+  y = as.vector(t(Y))
+)
+
+x_fine <- seq(min(x), max(x), length.out = 201)
+approx_df <- lapply(seq_along(idx), function(i) {
+  y <- Y[i, ]
+  mu <- x_mode[[i]]
+  s <- sigma[[i]]
+  y0 <- y[[which.min(abs(x - mu))]]
+  y_n <- y0 - (x_fine - mu)^2 / (2 * s^2)
+  keep <- is.finite(y_n) & y_n >= min(y, na.rm = TRUE)
+  tibble(
+    gene = factor(panel[[i]], levels = panel),
+    log_phi = x_fine[keep],
+    y = y_n[keep]
+  )
+}) |>
+  bind_rows()
+
+trend_df <- tibble(
+  gene = factor(panel, levels = panel),
+  log_phi_trend = x_mode
+)
+```
+
+```{r plot-25-facets, message = FALSE, eval = run_vignette, fig.width = 8, fig.height = 16}
+
+ggplot(plot_df, aes(log_phi, y)) +
+  geom_line(aes(colour = "edgeR weighted shared log-likelihood")) +
+  geom_line(
+    data = approx_df,
+    aes(colour = "Laplace Normal"),
+    linetype = 22
+  ) +
+  geom_vline(
+    data = trend_df,
+    aes(xintercept = log_phi_trend),
+    linetype = 2,
+    colour = "grey40"
+  ) +
+  scale_colour_manual(
+    values = c(
+      "edgeR weighted shared log-likelihood" = "black",
+      "Laplace Normal" = "#d95f02"
+    )
+  ) +
+  facet_wrap(~ gene, scales = "free_y", ncol = 5) +
+  labs(
+    x = expression(log(phi)),
+    y = "prior.n × shared.loglik",
+    colour = NULL
+  ) +
+  theme_bw() +
+  theme(
+    strip.text = element_text(size = 7),
+    axis.text = element_text(size = 6),
+    legend.position = "bottom"
+  )
+```
