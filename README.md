@@ -95,7 +95,7 @@ data("airway", package = "airway")
 se <- airway
 se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
 se <- tidybulk::estimate_dispersion(se, formula_abundance = ~ dex + cell)
-se <- estimate_dispersion_log_sd(se, formula_abundance = ~ dex + cell)
+se <- estimate_dispersion_prior(se, formula_abundance = ~ dex + cell)
 
 se |>
   brmDE(features = c("ENSG00000120129")) |>
@@ -129,7 +129,7 @@ vignette("dispersion-priors", package = "brmDE")
 
 ## Dispersion priors
 
-`estimate_dispersion_log_sd()` writes `dispersion_prior_log_mean` (\(\phi_{\mathrm{trend}}\), the across-gene trend) and `dispersion_prior_log_sd` (a width on \(\log\phi\)). Pass those names to `estimate()` / `estimate_gene()`. `method = "curvature"` (default) fills the SD from the Laplace approximation of edgeR's weighted smoothed shared log-likelihood; `method = "degrees_freedom"` fills it from the trigamma SD of the moderated df \(d_{\mathrm{residual}}+d_0\). You can also pass tidybulk's `dispersion_trended` as the mean column: that is the same \(s_0^2\), information this gene has not yet contributed. Do not pass `dispersion_shrinked`, which already includes this gene's counts. The shape intercept prior is always Student-t. Default `NULL` for the SD is a log-scale SD of 1.
+`estimate_dispersion_prior()` writes `dispersion_prior_log_mean` (\(\phi_{\mathrm{trend}}\), the across-gene trend) and `dispersion_prior_log_sd` (a width on \(\log\phi\)). Pass those names to `estimate()` / `estimate_gene()`. `method = "curvature"` (default) fills the SD from the Laplace approximation of edgeR's weighted smoothed shared log-likelihood; `method = "degrees_freedom"` fills it from the trigamma SD of the moderated df \(d_{\mathrm{residual}}+d_0\). You can also pass tidybulk's `dispersion_trended` as the mean column: that is the same \(s_0^2\), information this gene has not yet contributed. Do not pass `dispersion_shrinked`, which already includes this gene's counts. The shape intercept prior is always Student-t. Default `NULL` for the SD is a log-scale SD of 1.
 
 | `method` | Prior | Notes |
 | --- | --- | --- |

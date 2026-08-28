@@ -50,14 +50,14 @@ passed to \code{\link[=estimate_gene]{estimate_gene()}}. \code{~1} by default.}
 (the same argument as \code{\link[=estimate_gene]{estimate_gene()}}).}
 
 \item{dispersion_prior_log_mean}{Optional name of the \code{rowData} dispersion
-column. \code{\link[=estimate_dispersion_log_sd]{estimate_dispersion_log_sd()}} writes \code{"dispersion_prior_log_mean"}
+column. \code{\link[=estimate_dispersion_prior]{estimate_dispersion_prior()}} writes \code{"dispersion_prior_log_mean"}
 (\code{trended.dispersion}). You can also pass
 \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}'s \code{dispersion_trended} (\eqn{s_0^2}),
 not \code{dispersion_shrinked}. Default \code{NULL} puts a zero offset on the
 shape submodel (see \code{\link[=estimate_gene]{estimate_gene()}}).}
 
 \item{dispersion_prior_log_sd}{Optional name of a log-dispersion prior SD
-column written by \code{\link[=estimate_dispersion_log_sd]{estimate_dispersion_log_sd()}} as
+column written by \code{\link[=estimate_dispersion_prior]{estimate_dispersion_prior()}} as
 \code{"dispersion_prior_log_sd"}. That function's \code{method} chooses the width.
 Default \code{NULL} uses a log-scale SD of 1.}
 
@@ -80,7 +80,7 @@ per gene.
 }
 \details{
 Neither the offset nor the dispersion is computed here. Run
-\code{\link[=estimate_dispersion_log_sd]{estimate_dispersion_log_sd()}} on the whole object before \code{\link[=brmDE]{brmDE()}},
+\code{\link[=estimate_dispersion_prior]{estimate_dispersion_prior()}} on the whole object before \code{\link[=brmDE]{brmDE()}},
 exactly as you compute the offset, so that both are ordinary columns of
 the input, then pass those column names here. Gene-wise fitting is the
 only thing this pipeline does. The dispersion columns are a prior on the

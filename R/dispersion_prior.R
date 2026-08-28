@@ -303,10 +303,10 @@ edger_shared_loglik <- function(y,
 #'   `method = "degrees_freedom"`.
 #'
 #' @docType methods
-#' @rdname estimate_dispersion_log_sd-methods
+#' @rdname estimate_dispersion_prior-methods
 #' @export
 setGeneric(
-  "estimate_dispersion_log_sd",
+  "estimate_dispersion_prior",
   function(.data,
            formula_abundance,
            abundance = "counts",
@@ -316,11 +316,11 @@ setGeneric(
            n_local = 10L,
            grid.range = c(-20, 10),
            grid.length = 61L) {
-    standardGeneric("estimate_dispersion_log_sd")
+    standardGeneric("estimate_dispersion_prior")
   }
 )
 
-.estimate_dispersion_log_sd_se <- function(.data,
+.estimate_dispersion_prior_se <- function(.data,
                                            formula_abundance,
                                            abundance = "counts",
                                            method = c("curvature", "degrees_freedom"),
@@ -363,18 +363,18 @@ setGeneric(
   .data
 }
 
-#' @rdname estimate_dispersion_log_sd-methods
+#' @rdname estimate_dispersion_prior-methods
 #' @export
 setMethod(
-  "estimate_dispersion_log_sd",
+  "estimate_dispersion_prior",
   "SummarizedExperiment",
-  .estimate_dispersion_log_sd_se
+  .estimate_dispersion_prior_se
 )
 
-#' @rdname estimate_dispersion_log_sd-methods
+#' @rdname estimate_dispersion_prior-methods
 #' @export
 setMethod(
-  "estimate_dispersion_log_sd",
+  "estimate_dispersion_prior",
   "RangedSummarizedExperiment",
-  .estimate_dispersion_log_sd_se
+  .estimate_dispersion_prior_se
 )

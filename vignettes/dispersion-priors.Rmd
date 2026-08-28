@@ -385,7 +385,7 @@ $$
 
 The centre of the prior therefore comes from `trended.dispersion`, while its width is derived from the local curvature of the weighted shared edgeR likelihood.
 
-In `brmDE` the default width is the Laplace SD. `estimate_dispersion_log_sd()` writes two columns: `dispersion_prior_log_mean` (`trended.dispersion`) and `dispersion_prior_log_sd` (a width on \(\log\phi\)). `method = "curvature"` (default) fills that SD from the local quadratic of the weighted shared log-likelihood; `method = "degrees_freedom"` fills it from the trigamma SD of the moderated df. Pass both names to `estimate_gene()` / `estimate()`. The location is the offset on `shape ~ 1 + offset(log(1/dispersion_prior_log_mean))`. The intercept prior is Student-t, with scale chosen so that its standard deviation equals that log-scale \(\sigma_g\).
+In `brmDE` the default width is the Laplace SD. `estimate_dispersion_prior()` writes two columns: `dispersion_prior_log_mean` (`trended.dispersion`) and `dispersion_prior_log_sd` (a width on \(\log\phi\)). `method = "curvature"` (default) fills that SD from the local quadratic of the weighted shared log-likelihood; `method = "degrees_freedom"` fills it from the trigamma SD of the moderated df. Pass both names to `estimate_gene()` / `estimate()`. The location is the offset on `shape ~ 1 + offset(log(1/dispersion_prior_log_mean))`. The intercept prior is Student-t, with scale chosen so that its standard deviation equals that log-scale \(\sigma_g\).
 
 # Appendix 1: edgeR calculation of the smoothed weighted likelihood
 
@@ -691,7 +691,7 @@ There are two important situations in which the edgeR dispersion trend can be sy
 
 - A zero-inflated negative-binomial model in `brmDE` must be approximated upstream by an ordinary negative-binomial model. Zero inflation can then be absorbed by the edgeR negative-binomial dispersion, potentially increasing the estimated dispersion.
 
-For these cases, call `estimate_dispersion_log_sd(..., method = "degrees_freedom")`: the same Student-t intercept prior, but with `dispersion_prior_log_sd` filled from the log-scale SD \(\sqrt{\psi'(d_{\mathrm{eff}}/2)}\) implied by the **moderated** effective df \(d_{\mathrm{eff}} = d_{\mathrm{residual}} + d_0\) (`prior.df` from `squeezeVar()` / `estimateDisp()`). tidybulk writes the df as `dispersion_degrees_freedom`; convert it with the same trigamma formula, or let `estimate_dispersion_log_sd()` do it. The default `method = "curvature"` is the local Laplace approximation of the weighted smoothed shared log-likelihood derived above.
+For these cases, call `estimate_dispersion_prior(..., method = "degrees_freedom")`: the same Student-t intercept prior, but with `dispersion_prior_log_sd` filled from the log-scale SD \(\sqrt{\psi'(d_{\mathrm{eff}}/2)}\) implied by the **moderated** effective df \(d_{\mathrm{eff}} = d_{\mathrm{residual}} + d_0\) (`prior.df` from `squeezeVar()` / `estimateDisp()`). tidybulk writes the df as `dispersion_degrees_freedom`; convert it with the same trigamma formula, or let `estimate_dispersion_prior()` do it. The default `method = "curvature"` is the local Laplace approximation of the weighted smoothed shared log-likelihood derived above.
 
 
 # Appendix 3: Examples of how to use R formulas approximate a mixed-effect model with a fixed-effect one
@@ -724,7 +724,7 @@ Chen Y, Lun ATL, McCarthy DJ, Ritchie ME, Phipson B, Zhou X, Robinson MD, Smyth 
 
 # Illustration: the local quadratic approximation on airway
 
-The default prior width (`estimate_dispersion_log_sd(..., method = "curvature")`) treats edgeR's weighted, abundance-smoothed shared log-likelihood as an unnormalised log-density on $\log(\phi)$, and replaces it with a Normal whose SD matches the local curvature at the mode. That is a *local* quadratic, not a claim that the whole curve is Gaussian.
+The default prior width (`estimate_dispersion_prior(..., method = "curvature")`) treats edgeR's weighted, abundance-smoothed shared log-likelihood as an unnormalised log-density on $\log(\phi)$, and replaces it with a Normal whose SD matches the local curvature at the mode. That is a *local* quadratic, not a claim that the whole curve is Gaussian.
 
 The following uses the airway dexamethasone experiment to look at that approximation. After dropping low-count genes, the shared log-likelihood is rebuilt on the same Cox--Reid grid and `WLEB()` smooth that `estimateDisp()` uses. `plotBCV()` shows the abundance–dispersion trend those curves sit on. Then 25 genes spanning the abundance range are drawn as
 
@@ -734,7 +734,7 @@ x_k = \log(\phi_k),
 y_k = \texttt{prior.n}_g \times \texttt{shared.loglik}[g, k],
 $$
 
-the same `plot(x, y)` `estimate_dispersion_log_sd()` builds internally. The dashed vertical line is $\log(\texttt{trended.dispersion})$, the mode at which the quadratic is fitted. The orange curve is the Laplace Normal on that same log-density scale: $N(\log\phi_{\mathrm{trend}}, \sigma^2)$ with $\sigma$ from the local curvature, shifted to agree with $y$ at the mode.
+the same `plot(x, y)` `estimate_dispersion_prior()` builds internally. The dashed vertical line is $\log(\texttt{trended.dispersion})$, the mode at which the quadratic is fitted. The orange curve is the Laplace Normal on that same log-density scale: $N(\log\phi_{\mathrm{trend}}, \sigma^2)$ with $\sigma$ from the local curvature, shifted to agree with $y$ at the mode.
 
 ```{r packages, message = FALSE, eval = run_vignette}
 library(brmDE)

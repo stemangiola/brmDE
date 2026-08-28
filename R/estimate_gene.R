@@ -43,7 +43,7 @@
 #'   informative location from previous tools is unnecessary. When supplied,
 #'   the column becomes `offset(log(1/<dispersion_prior_log_mean>))`: that is
 #'   the prior *location* of the shape, which the gene's counts are then free
-#'   to update. [estimate_dispersion_log_sd()] writes this as
+#'   to update. [estimate_dispersion_prior()] writes this as
 #'   `"dispersion_prior_log_mean"` (`trended.dispersion`, \eqn{\phi_{\mathrm{trend}}}).
 #'   You can also pass [tidybulk::estimate_dispersion()]'s `dispersion_trended`
 #'   column: that is the same across-gene trend \eqn{s_0^2}, information this
@@ -51,7 +51,7 @@
 #'   tagwise posterior \eqn{q_g^{post}}, which already includes this gene's
 #'   counts. See `vignette("dispersion-priors")`.
 #' @param dispersion_prior_log_sd Optional name of a log-dispersion prior SD
-#'   column written by [estimate_dispersion_log_sd()] as
+#'   column written by [estimate_dispersion_prior()] as
 #'   `"dispersion_prior_log_sd"`. That function's `method` chooses the width:
 #'   Laplace curvature of the shared log-likelihood, or the trigamma SD from
 #'   the moderated df. The intercept prior is always Student-t

@@ -274,7 +274,7 @@ check_log_sd_value <- function(data, dispersion_prior_log_sd) {
   if (!dispersion_prior_log_sd %in% names(data)) {
     stop(
       "Dispersion log-SD column '", dispersion_prior_log_sd,
-      "' was not found in `data`. Run estimate_dispersion_log_sd() to write it, ",
+      "' was not found in `data`. Run estimate_dispersion_prior() to write it, ",
       "or omit `dispersion_prior_log_sd` to use a log-scale SD of 1.",
       call. = FALSE
     )
@@ -536,7 +536,7 @@ check_dispersion_values <- function(data, dispersion_prior_log_mean) {
   if (any(bad)) {
     stop(
       "Dispersion column '", dispersion_prior_log_mean, "' has ", sum(bad),
-      " non-finite or non-positive value(s). estimate_dispersion_log_sd() ",
+      " non-finite or non-positive value(s). estimate_dispersion_prior() ",
       "and tidybulk::estimate_dispersion() return NA when the design cannot ",
       "be fit; fix that rather than passing the result on.",
       call. = FALSE

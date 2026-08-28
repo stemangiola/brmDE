@@ -2,20 +2,20 @@ test_that("check_and_install_packages is a no-op when the package is present", {
   expect_silent(brmDE:::check_and_install_packages("stats"))
 })
 
-test_that("estimate_dispersion_log_sd is an S4 method for SummarizedExperiment", {
+test_that("estimate_dispersion_prior is an S4 method for SummarizedExperiment", {
   expect_error(
-    estimate_dispersion_log_sd(data.frame(x = 1), ~ x),
+    estimate_dispersion_prior(data.frame(x = 1), ~ x),
     "unable to find an inherited method"
   )
 })
 
-test_that("estimate_dispersion_log_sd writes prior mean and SD columns", {
+test_that("estimate_dispersion_prior writes prior mean and SD columns", {
   skip_if_not_installed("edgeR")
   skip_if_not_installed("limma")
   skip_if_not_installed("airway")
 
   se <- airway_se(n_genes = 40)
-  se <- estimate_dispersion_log_sd(se, formula_abundance = ~ dex + cell)
+  se <- estimate_dispersion_prior(se, formula_abundance = ~ dex + cell)
   rd <- SummarizedExperiment::rowData(se)
   sd <- rd$dispersion_prior_log_sd
   loc <- rd$dispersion_prior_log_mean
@@ -46,13 +46,13 @@ test_that("estimate_dispersion_log_sd writes prior mean and SD columns", {
   expect_true(all(shared$effective_degrees_freedom[ok] > 3))
 })
 
-test_that("estimate_dispersion_log_sd method degrees_freedom writes the trigamma SD", {
+test_that("estimate_dispersion_prior method degrees_freedom writes the trigamma SD", {
   skip_if_not_installed("edgeR")
   skip_if_not_installed("limma")
   skip_if_not_installed("airway")
 
   se <- airway_se(n_genes = 40)
-  se <- estimate_dispersion_log_sd(
+  se <- estimate_dispersion_prior(
     se,
     formula_abundance = ~ dex + cell,
     method = "degrees_freedom"
@@ -73,14 +73,14 @@ test_that("estimate_dispersion_log_sd method degrees_freedom writes the trigamma
   expect_equal(rd$dispersion_prior_log_mean, shared$trended.dispersion)
 })
 
-test_that("estimate_dispersion_log_sd rejects duplicate column names", {
+test_that("estimate_dispersion_prior rejects duplicate column names", {
   skip_if_not_installed("edgeR")
   skip_if_not_installed("limma")
   skip_if_not_installed("airway")
 
   se <- airway_se(n_genes = 8)
   expect_error(
-    estimate_dispersion_log_sd(
+    estimate_dispersion_prior(
       se,
       formula_abundance = ~ dex + cell,
       log_sd_column = "x",
@@ -178,14 +178,14 @@ simulate_log_phi_se <- function(sigma, seed, n_gene = 60) {
   )
 }
 
-test_that("estimate_dispersion_log_sd tracks a known log-dispersion SD in simulated counts", {
+test_that("estimate_dispersion_prior tracks a known log-dispersion SD in simulated counts", {
   skip_if_not_installed("edgeR")
   skip_if_not_installed("limma")
 
   se_tight <- simulate_log_phi_se(sigma = 0.2, seed = 1)
   se_wide <- simulate_log_phi_se(sigma = 0.8, seed = 2)
-  se_tight <- estimate_dispersion_log_sd(se_tight, formula_abundance = ~ group)
-  se_wide <- estimate_dispersion_log_sd(se_wide, formula_abundance = ~ group)
+  se_tight <- estimate_dispersion_prior(se_tight, formula_abundance = ~ group)
+  se_wide <- estimate_dispersion_prior(se_wide, formula_abundance = ~ group)
 
   est_tight <- SummarizedExperiment::rowData(se_tight)$dispersion_prior_log_sd
   est_wide <- SummarizedExperiment::rowData(se_wide)$dispersion_prior_log_sd

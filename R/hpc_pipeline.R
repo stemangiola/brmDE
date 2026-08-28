@@ -287,7 +287,7 @@ collect_brmde_hpc <- function(input_hpc) {
 #' se <- airway
 #' se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
 #' se <- tidybulk::estimate_dispersion(se, formula_abundance = ~ dex + cell)
-#' se <- estimate_dispersion_log_sd(se, formula_abundance = ~ dex + cell)
+#' se <- estimate_dispersion_prior(se, formula_abundance = ~ dex + cell)
 #'
 #' se |>
 #'   brmDE(features = c("ENSG00000120129")) |>
@@ -424,19 +424,19 @@ brmDE <- function(.data,
 #' @param offset Required name of the precomputed offset column in `colData`
 #'   (the same argument as [estimate_gene()]).
 #' @param dispersion_prior_log_mean Optional name of the `rowData` dispersion
-#'   column. [estimate_dispersion_log_sd()] writes `"dispersion_prior_log_mean"`
+#'   column. [estimate_dispersion_prior()] writes `"dispersion_prior_log_mean"`
 #'   (`trended.dispersion`). You can also pass
 #'   [tidybulk::estimate_dispersion()]'s `dispersion_trended` (\eqn{s_0^2}),
 #'   not `dispersion_shrinked`. Default `NULL` puts a zero offset on the
 #'   shape submodel (see [estimate_gene()]).
 #' @param dispersion_prior_log_sd Optional name of a log-dispersion prior SD
-#'   column written by [estimate_dispersion_log_sd()] as
+#'   column written by [estimate_dispersion_prior()] as
 #'   `"dispersion_prior_log_sd"`. That function's `method` chooses the width.
 #'   Default `NULL` uses a log-scale SD of 1.
 #'
 #' @details
 #' Neither the offset nor the dispersion is computed here. Run
-#' [estimate_dispersion_log_sd()] on the whole object before [brmDE()],
+#' [estimate_dispersion_prior()] on the whole object before [brmDE()],
 #' exactly as you compute the offset, so that both are ordinary columns of
 #' the input, then pass those column names here. Gene-wise fitting is the
 #' only thing this pipeline does. The dispersion columns are a prior on the

@@ -57,7 +57,7 @@ shape \code{1}. Use this when the sample size is large enough that an
 informative location from previous tools is unnecessary. When supplied,
 the column becomes \verb{offset(log(1/<dispersion_prior_log_mean>))}: that is
 the prior \emph{location} of the shape, which the gene's counts are then free
-to update. \code{\link[=estimate_dispersion_log_sd]{estimate_dispersion_log_sd()}} writes this as
+to update. \code{\link[=estimate_dispersion_prior]{estimate_dispersion_prior()}} writes this as
 \code{"dispersion_prior_log_mean"} (\code{trended.dispersion}, \eqn{\phi_{\mathrm{trend}}}).
 You can also pass \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}'s \code{dispersion_trended}
 column: that is the same across-gene trend \eqn{s_0^2}, information this
@@ -66,7 +66,7 @@ tagwise posterior \eqn{q_g^{post}}, which already includes this gene's
 counts. See \code{vignette("dispersion-priors")}.}
 
 \item{dispersion_prior_log_sd}{Optional name of a log-dispersion prior SD
-column written by \code{\link[=estimate_dispersion_log_sd]{estimate_dispersion_log_sd()}} as
+column written by \code{\link[=estimate_dispersion_prior]{estimate_dispersion_prior()}} as
 \code{"dispersion_prior_log_sd"}. That function's \code{method} chooses the width:
 Laplace curvature of the shared log-likelihood, or the trigamma SD from
 the moderated df. The intercept prior is always Student-t

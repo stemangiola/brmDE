@@ -69,7 +69,7 @@ test_that("ZINB with a dispersion-derived shape prior fits one airway gene", {
   skip_if_not_installed("limma")
 
   se <- airway_se(n_genes = 150)
-  se <- estimate_dispersion_log_sd(
+  se <- estimate_dispersion_prior(
     se,
     formula_abundance = ~ dex,
     method = "degrees_freedom"
