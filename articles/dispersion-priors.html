@@ -478,7 +478,7 @@ c_g&lt;0.
 <code>trended.dispersion</code>, while its width is derived from the
 local curvature of the weighted shared edgeR likelihood.</p>
 <p>In <code>brmDE</code> the default width is the Laplace SD.
-<code><a href="../reference/estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> writes two columns:
+<code><a href="../reference/estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code> writes two columns:
 <code>dispersion_prior_log_mean</code> (<code>trended.dispersion</code>)
 and <code>dispersion_prior_log_sd</code> (a width on
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mi>ϕ</mi></mrow><annotation encoding="application/x-tex">\log\phi</annotation></semantics></math>).
@@ -872,7 +872,7 @@ Zero inflation can then be absorbed by the edgeR negative-binomial
 dispersion, potentially increasing the estimated dispersion.</p></li>
 </ul>
 <p>For these cases, call
-<code>estimate_dispersion_log_sd(..., method = "degrees_freedom")</code>:
+<code>estimate_dispersion_prior(..., method = "degrees_freedom")</code>:
 the same Student-t intercept prior, but with
 <code>dispersion_prior_log_sd</code> filled from the log-scale SD
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msqrt><mrow><msup><mi>ψ</mi><mo>′</mo></msup><mo stretchy="false" form="prefix">(</mo><msub><mi>d</mi><mrow><mi mathvariant="normal">e</mi><mi mathvariant="normal">f</mi><mi mathvariant="normal">f</mi></mrow></msub><mi>/</mi><mn>2</mn><mo stretchy="false" form="postfix">)</mo></mrow></msqrt><annotation encoding="application/x-tex">\sqrt{\psi'(d_{\mathrm{eff}}/2)}</annotation></semantics></math>
@@ -881,8 +881,8 @@ implied by the <strong>moderated</strong> effective df
 (<code>prior.df</code> from <code>squeezeVar()</code> /
 <code>estimateDisp()</code>). tidybulk writes the df as
 <code>dispersion_degrees_freedom</code>; convert it with the same
-trigamma formula, or let <code><a href="../reference/estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> do
-it. The default <code>method = "curvature"</code> is the local Laplace
+trigamma formula, or let <code><a href="../reference/estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code> do it.
+The default <code>method = "curvature"</code> is the local Laplace
 approximation of the weighted smoothed shared log-likelihood derived
 above.</p>
 </div>
@@ -982,7 +982,7 @@ value of <code>tagwise.dispersion</code>, <code>prior.df</code>, and
 <h2 id="illustration-the-local-quadratic-approximation-on-airway">Illustration: the local quadratic approximation on airway<a class="anchor" aria-label="anchor" href="#illustration-the-local-quadratic-approximation-on-airway"></a>
 </h2>
 <p>The default prior width
-(<code>estimate_dispersion_log_sd(..., method = "curvature")</code>)
+(<code>estimate_dispersion_prior(..., method = "curvature")</code>)
 treats edgeR’s weighted, abundance-smoothed shared log-likelihood as an
 unnormalised log-density on
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\log(\phi)</annotation></semantics></math>,
@@ -1001,7 +1001,7 @@ x_k = \log(\phi_k),
 y_k = \texttt{prior.n}_g \times \texttt{shared.loglik}[g, k],
 </annotation></semantics></math></p>
 <p>the same <code>plot(x, y)</code>
-<code><a href="../reference/estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> builds internally. The dashed
+<code><a href="../reference/estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code> builds internally. The dashed
 vertical line is
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mtext mathvariant="monospace">𝚝𝚛𝚎𝚗𝚍𝚎𝚍.𝚍𝚒𝚜𝚙𝚎𝚛𝚜𝚒𝚘𝚗</mtext><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\log(\texttt{trended.dispersion})</annotation></semantics></math>,
 the mode at which the quadratic is fitted. The orange curve is the

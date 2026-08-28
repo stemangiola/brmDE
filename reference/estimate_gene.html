@@ -141,7 +141,7 @@ shape <code>1</code>. Use this when the sample size is large enough that an
 informative location from previous tools is unnecessary. When supplied,
 the column becomes <code>offset(log(1/&lt;dispersion_prior_log_mean&gt;))</code>: that is
 the prior <em>location</em> of the shape, which the gene's counts are then free
-to update. <code><a href="estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> writes this as
+to update. <code><a href="estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code> writes this as
 <code>"dispersion_prior_log_mean"</code> (<code>trended.dispersion</code>, \(\phi_{\mathrm{trend}}\)).
 You can also pass <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code>'s <code>dispersion_trended</code>
 column: that is the same across-gene trend \(s_0^2\), information this
@@ -152,7 +152,7 @@ counts. See <code><a href="../articles/dispersion-priors.html">vignette("dispers
 
 <dt id="arg-dispersion-prior-log-sd">dispersion_prior_log_sd<a class="anchor" aria-label="anchor" href="#arg-dispersion-prior-log-sd"></a></dt>
 <dd><p>Optional name of a log-dispersion prior SD
-column written by <code><a href="estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> as
+column written by <code><a href="estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code> as
 <code>"dispersion_prior_log_sd"</code>. That function's <code>method</code> chooses the width:
 Laplace curvature of the shared log-likelihood, or the trigamma SD from
 the moderated df. The intercept prior is always Student-t

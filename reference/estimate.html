@@ -118,7 +118,7 @@ passed to <code><a href="estimate_gene.html">estimate_gene()</a></code>. <code>~
 
 <dt id="arg-dispersion-prior-log-mean">dispersion_prior_log_mean<a class="anchor" aria-label="anchor" href="#arg-dispersion-prior-log-mean"></a></dt>
 <dd><p>Optional name of the <code>rowData</code> dispersion
-column. <code><a href="estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> writes <code>"dispersion_prior_log_mean"</code>
+column. <code><a href="estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code> writes <code>"dispersion_prior_log_mean"</code>
 (<code>trended.dispersion</code>). You can also pass
 <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code>'s <code>dispersion_trended</code> (\(s_0^2\)),
 not <code>dispersion_shrinked</code>. Default <code>NULL</code> puts a zero offset on the
@@ -127,7 +127,7 @@ shape submodel (see <code><a href="estimate_gene.html">estimate_gene()</a></code
 
 <dt id="arg-dispersion-prior-log-sd">dispersion_prior_log_sd<a class="anchor" aria-label="anchor" href="#arg-dispersion-prior-log-sd"></a></dt>
 <dd><p>Optional name of a log-dispersion prior SD
-column written by <code><a href="estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> as
+column written by <code><a href="estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code> as
 <code>"dispersion_prior_log_sd"</code>. That function's <code>method</code> chooses the width.
 Default <code>NULL</code> uses a log-scale SD of 1.</p></dd>
 
@@ -155,7 +155,7 @@ swamping an HPC scheduler with tiny jobs. See <em>Bundling</em> below.</p></dd>
     <div id="details">
     <h2>Details</h2>
     <p>Neither the offset nor the dispersion is computed here. Run
-<code><a href="estimate_dispersion_log_sd-methods.html">estimate_dispersion_log_sd()</a></code> on the whole object before <code><a href="brmDE.html">brmDE()</a></code>,
+<code><a href="estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code> on the whole object before <code><a href="brmDE.html">brmDE()</a></code>,
 exactly as you compute the offset, so that both are ordinary columns of
 the input, then pass those column names here. Gene-wise fitting is the
 only thing this pipeline does. The dispersion columns are a prior on the
