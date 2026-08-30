@@ -40,8 +40,9 @@ jobs:
     steps:
     - uses: neurogenomics/rworkflows@master
       # R CMD build does not always source ~/.Rprofile, so pin the library path
-      # explicitly. Without this, Bioconductor Docker's system tidybulk can shadow
-      # the GitHub build from Remotes during vignette re-build.
+      # explicitly. Without this, Bioconductor Docker's system tidybulk /
+      # tidySummarizedExperiment can shadow the GitHub builds from Remotes
+      # during vignette re-build.
       env:
         R_LIBS: ${{ runner.temp }}/Library
         R_LIBS_USER: ${{ runner.temp }}/Library
@@ -62,5 +63,5 @@ jobs:
         run_docker: ${{ false }}
         DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
         runner_os: ${{ runner.os }}
-        cache_version: cache-v3
+        cache_version: cache-v4
         docker_registry: ghcr.io
