@@ -1,6 +1,6 @@
 Package: brmDE
 Title: Mixed-Effect Modelling for Differential Gene Expression
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: c(
     person("Stefano", "Mangiola", email = "mangiolastefano@gmail.com",
            role = c("aut", "cre")),
@@ -20,7 +20,7 @@ biocViews: AssayDomain, Infrastructure, RNASeq, DifferentialExpression,
 Roxygen: list(markdown = TRUE)
 Depends:
     R (>= 4.6.0),
-    tidytargets (>= 0.2.0)
+    tidytargets (>= 0.0.7)
 Imports:
     brms,
     dplyr,
@@ -58,7 +58,9 @@ VignetteBuilder: knitr
 SystemRequirements: CmdStan (https://mc-stan.org/users/interfaces/cmdstan)
 Remotes:
     stemangiola/tidytargets,
-    stemangiola/tidybulk@ed4e85e6
+    stemangiola/tidybulk@ed4e85e6,
+    stemangiola/tidySummarizedExperiment,
+    tidyomics/tidyprint
 Additional_repositories: https://stan-dev.r-universe.dev
 Config/testthat/edition: 3
 URL: https://github.com/MangiolaLaboratory

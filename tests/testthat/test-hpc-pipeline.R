@@ -9,7 +9,6 @@ test_that("estimate, hypothesis, and adjust append to one tidytargets script", {
     {
       unlink(store, recursive = TRUE)
       unlink(paste0(store, ".R"))
-      unlink(paste0(store, "_input"), recursive = TRUE)
     },
     add = TRUE
   )
@@ -23,7 +22,11 @@ test_that("estimate, hypothesis, and adjust append to one tidytargets script", {
 
   expect_s3_class(pipeline, "brmDE_hpc")
   expect_s3_class(pipeline, "tidytargets")
+  expect_equal(pipeline$gene_id$iterate, "map")
   expect_true("brms_fit" %in% names(pipeline))
+  expect_true("formula_abundance" %in% names(pipeline))
+  expect_true("formula_dispersion" %in% names(pipeline))
+  expect_equal(pipeline$formula_abundance$iterate, "none")
   expect_true("hypothesis_tbl" %in% names(pipeline))
   expect_true("adjust_tbl" %in% names(pipeline))
 
@@ -31,7 +34,9 @@ test_that("estimate, hypothesis, and adjust append to one tidytargets script", {
   # later steps. Nothing was said about sampling here, so those entries are
   # estimate_gene()'s own defaults rather than gaps.
   settings <- tidytargets::tt_metadata(pipeline)
-  expect_equal(settings$formula_abundance, "~dex")
+  expect_equal(settings$abundance, "counts")
+  expect_equal(settings$features, "ENSG00000120129")
+  expect_equal(settings$gene_ids, list("ENSG00000120129"))
   expect_equal(settings$offset, "offset")
   expect_equal(settings$dispersion_prior_log_mean, "dispersion_trended")
   expect_equal(settings$chains, 2)
@@ -41,25 +46,21 @@ test_that("estimate, hypothesis, and adjust append to one tidytargets script", {
   lines <- readLines(paste0(store, ".R"))
   script <- paste(lines, collapse = "\n")
   expect_match(script, "tt_factory")
-  # Arguments are targets, so targets invalidates the fits when they change and
-  # no worker reads them off disk. Only the input object itself is a file.
-  expect_match(script, 'target_output = "brms_fit_args"')
-  expect_match(script, 'target_output = "hypothesis_tbl_args"')
-  expect_match(script, 'target_output = "adjust_tbl_args"')
-  expect_match(script, 'offset = "offset"', fixed = TRUE)
-  expect_setequal(
-    list.files(paste0(store, "_input")),
-    c("se.rds", "computing_resources.rds")
-  )
-  expect_match(script, 'target_output = "formula_abundance_text"')
-  expect_match(script, 'target_output = "formula_dispersion_text"')
-  # Setup / identity targets run on the main process, not the crew controller.
-  expect_match(script, 'deployment = "main"')
-  # Dispersion is estimated upstream of the pipeline, not inside it.
-  expect_no_match(script, "estimate_dispersion", fixed = TRUE)
+  # Formulas and extra arguments are tt_data() snapshots; the iterate
+  # command names those targets so changing them invalidates the fits.
   expect_match(script, "estimate_gene_from_se")
   expect_match(script, "hypothesis_gene_from_fit")
   expect_match(script, "adjust_gene_from_fit")
+  expect_true(file.exists(file.path(store, "se_input_data.qs")))
+  expect_true(file.exists(file.path(store, "gene_id_data.qs")))
+  expect_true(file.exists(file.path(store, "formula_abundance_data.qs")))
+  expect_true(file.exists(file.path(store, "estimate_args_data.qs")))
+  expect_true(file.exists(file.path(store, "temp_computing_resources.qs")))
+  expect_true("gene_id" %in% names(pipeline))
+  # Snapshots run on the main process, not the crew controller.
+  expect_match(script, 'deployment = "main"')
+  # Dispersion is estimated upstream of the pipeline, not inside it.
+  expect_no_match(script, "estimate_dispersion", fixed = TRUE)
   expect_false(identical(trimws(lines[length(lines)]), "target_list"))
 })
 
@@ -73,45 +74,59 @@ test_that("changed arguments change the targets script, unchanged ones do not", 
     for (s in stores) {
       unlink(s, recursive = TRUE)
       unlink(paste0(s, ".R"))
-      unlink(paste0(s, "_input"), recursive = TRUE)
     },
     add = TRUE
   )
 
-  # targets hashes the target command, so anything that should force a refit
-  # has to be visible in the generated script. Arguments passed through `...`
-  # get there as the code they were written as, hence the quoted family.
-  script_for <- function(formula_abundance = ~dex,
-                         formula_dispersion = ~1,
-                         features = "ENSG00000120129",
-                         family = quote(brms::negbinomial())) {
+  other_feature <- setdiff(rownames(se), "ENSG00000120129")[[1]]
+
+  # Session values are snapshotted by tt_data() / tt_data_list(), so a
+  # change shows up in the qs file rather than in the generated script.
+  snapshot_for <- function(formula_abundance = ~dex,
+                            formula_dispersion = ~1,
+                            features = "ENSG00000120129",
+                            family = brms::negbinomial()) {
     store <- tempfile("brmde_hash_")
     stores <<- c(stores, store)
-    eval(bquote(
-      se |>
-        brmDE(store = store, features = features) |>
-        estimate(
-          formula_abundance,
-          formula_dispersion = formula_dispersion,
-          offset = "offset",
-          dispersion_prior_log_mean = "dispersion_trended",
-          family = .(family)
-        )
-    ))
-    # gsub, not sub: a single line can mention the store more than once.
-    gsub(basename(store), "STORE", readLines(paste0(store, ".R")), fixed = TRUE)
+    pipeline <- se |>
+      brmDE(store = store, features = features) |>
+      estimate(
+        formula_abundance,
+        formula_dispersion = formula_dispersion,
+        offset = "offset",
+        dispersion_prior_log_mean = "dispersion_trended",
+        family = family
+      )
+    qs_hash <- function(name) {
+      tools::md5sum(file.path(store, paste0(name, "_data.qs")))
+    }
+    list(
+      script = gsub(
+        basename(store), "STORE", readLines(paste0(store, ".R")),
+        fixed = TRUE
+      ),
+      gene_ids = tidytargets::tt_metadata(pipeline)$gene_ids,
+      formula_abundance = qs_hash("formula_abundance"),
+      formula_dispersion = qs_hash("formula_dispersion"),
+      estimate_args = qs_hash("estimate_args")
+    )
   }
 
-  base <- script_for()
-  expect_true(any(grepl("brms::negbinomial()", base, fixed = TRUE)))
-  expect_identical(script_for(), base)
-  expect_false(identical(script_for(formula_abundance = ~ dex + (1 | cell)), base))
-  expect_false(identical(script_for(formula_dispersion = ~cell), base))
-  expect_false(identical(script_for(features = "ENSG00000000003"), base))
+  base <- snapshot_for()
+  expect_identical(snapshot_for()$script, base$script)
+  expect_false(identical(
+    snapshot_for(formula_abundance = ~ dex + (1 | cell))$formula_abundance,
+    base$formula_abundance
+  ))
+  expect_false(identical(
+    snapshot_for(formula_dispersion = ~cell)$formula_dispersion,
+    base$formula_dispersion
+  ))
+  expect_false(identical(snapshot_for(features = other_feature)$gene_ids, base$gene_ids))
   expect_false(
     identical(
-      script_for(family = quote(brms::zero_inflated_negbinomial())),
-      base
+      snapshot_for(family = brms::zero_inflated_negbinomial())$estimate_args,
+      base$estimate_args
     )
   )
 })
@@ -132,7 +147,6 @@ test_that("estimate requires an offset column name", {
     {
       unlink(store, recursive = TRUE)
       unlink(paste0(store, ".R"))
-      unlink(paste0(store, "_input"), recursive = TRUE)
     },
     add = TRUE
   )
@@ -154,41 +168,35 @@ test_that("bundle regroups the genes into fewer fit targets", {
     for (s in stores) {
       unlink(s, recursive = TRUE)
       unlink(paste0(s, ".R"))
-      unlink(paste0(s, "_input"), recursive = TRUE)
     },
     add = TRUE
   )
 
-  script_for <- function(...) {
+  pipeline_for <- function(...) {
     store <- tempfile("brmde_bundle_")
     stores <<- c(stores, store)
     se |>
       brmDE(store = store, features = rownames(se)[1:6]) |>
       estimate(~dex, offset = "offset", ...) |>
       hypothesis("dextrt = 0")
-    # The store path is baked into the header, so blank it out before compared
-    # scripts can be expected to match.
+  }
+  script_of <- function(pipeline) {
+    store <- pipeline$initialisation$store
     gsub(basename(store), "STORE", readLines(paste0(store, ".R")), fixed = TRUE)
   }
 
-  unbundled <- script_for(bundle = 1)
-  bundled <- script_for(bundle = 3)
+  unbundled <- pipeline_for(bundle = 1)
+  bundled <- pipeline_for(bundle = 3)
 
-  # bundle = 1 is the graph as it was before bundling existed: one fit target
-  # per gene, and no extra target in between.
-  expect_false(any(grepl("gene_bundle", unbundled, fixed = TRUE)))
-  expect_true(any(grepl('other_arguments_to_map = "gene_id"', unbundled, fixed = TRUE)))
-  # The default bundles, so it is not that graph.
-  expect_true(any(grepl("gene_bundle", script_for(), fixed = TRUE)))
-
-  # With bundling the fits map over the bundles instead, and `bundle` is in
-  # the command so that changing it invalidates the fits.
-  expect_true(any(grepl('target_output = "gene_bundle"', bundled, fixed = TRUE)))
-  expect_true(any(grepl('other_arguments_to_map = "gene_bundle"', bundled, fixed = TRUE)))
-  expect_true(any(grepl("bundle = 3L", bundled, fixed = TRUE)))
+  # bundle = 1 is one gene per branch; the graph is the same, only n_units
+  # changes.
+  expect_equal(unbundled$gene_bundle$n_units, 6L)
+  expect_equal(bundled$gene_bundle$n_units, 2L)
+  expect_true(any(grepl('other_arguments_to_map = "gene_bundle"', script_of(unbundled), fixed = TRUE)))
+  expect_true(any(grepl('other_arguments_to_map = "gene_bundle"', script_of(bundled), fixed = TRUE)))
 
   # hypothesis() maps over the fit target, so it inherits the coarser branching.
-  expect_true(any(grepl('other_arguments_to_map = "brms_fit"', bundled, fixed = TRUE)))
+  expect_true(any(grepl('other_arguments_to_map = "brms_fit"', script_of(bundled), fixed = TRUE)))
 })
 
 test_that("bundle_gene_ids groups genes by size and keeps their order", {
@@ -214,7 +222,6 @@ test_that("bundle must be a positive whole number", {
     {
       unlink(store, recursive = TRUE)
       unlink(paste0(store, ".R"))
-      unlink(paste0(store, "_input"), recursive = TRUE)
     },
     add = TRUE
   )
@@ -243,7 +250,6 @@ test_that("bundled genes give one row per gene, as unbundled ones do", {
     {
       unlink(store, recursive = TRUE)
       unlink(paste0(store, ".R"))
-      unlink(paste0(store, "_input"), recursive = TRUE)
     },
     add = TRUE
   )
@@ -318,7 +324,6 @@ test_that("estimate |> hypothesis |> adjust evaluate as one pipeline", {
     {
       unlink(store, recursive = TRUE)
       unlink(paste0(store, ".R"))
-      unlink(paste0(store, "_input"), recursive = TRUE)
     },
     add = TRUE
   )

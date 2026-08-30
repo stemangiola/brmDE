@@ -103,17 +103,19 @@ column alone; what makes the result worth reading is \code{\link[=hypothesis]{hy
 per-contrast statistics and convergence are small enough to hold for every
 gene at once (see \code{\link[=hypothesis_gene]{hypothesis_gene()}}). The fits stay in the store. Read
 one with \code{targets::tar_read(brms_fit, branches = i, store = store)}, using
-the same \code{store} you passed to \code{\link[=brmDE]{brmDE()}}; with \code{bundle = 1} the branch
-index is the gene's row in the result.
+the same \code{store} you passed to \code{\link[=brmDE]{brmDE()}}, or
+\code{tidytargets::tt_explore(pipeline, "brms_fit", index = i)}. With
+\code{bundle = 1} the branch index is the gene's row in the result.
 }
 
 \section{What the pipeline remembers}{
 
 What the fits were asked for goes onto the pipeline with
-\code{\link[tidytargets:tt_metadata]{tidytargets::tt_metadata()}}: the formulas, the column names, and every
+\code{\link[tidytargets:tt_metadata]{tidytargets::tt_metadata()}}: the column names, and every
 \code{\link[=estimate_gene]{estimate_gene()}} argument the sampling depends on, defaults included, so
 the object carries its own specification while the fits stay in the store.
-Read it with \code{tt_metadata(pipeline)}. It is how \code{\link[=plot_volcano]{plot_volcano()}} knows the
+The formulas are targets, so changing one invalidates the fits. Read the
+rest with \code{tt_metadata(pipeline)}. It is how \code{\link[=plot_volcano]{plot_volcano()}} knows the
 \code{chains * draws_sampling} draws a \code{pH0} was counted from, and so why it
 takes the pipeline rather than the table.
 }
@@ -131,9 +133,9 @@ that is what it controls.
 \itemize{
 \item A bundle is fitted sequentially in one worker, so it needs about \code{bundle}
 times the walltime of a single fit.
-\item A bundle is one \code{.rds} holding \code{bundle} fits, and it is read back into
-the main process, so the size of a \code{brmsfit} is what limits how far you
-can push this.
+\item A bundle is one store file holding \code{bundle} fits, and it is read back
+into the main process, so the size of a \code{brmsfit} is what limits how
+far you can push this.
 \item Invalidation is per bundle. One gene failing loses its bundle, and
 changing the gene set reshuffles bundle membership and refits everything.
 Leave \code{bundle} at \code{1} when you rely on incremental reruns.

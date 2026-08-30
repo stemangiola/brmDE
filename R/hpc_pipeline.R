@@ -11,59 +11,11 @@ as_brmde_hpc <- function(x) {
   x
 }
 
-brmde_input_dir <- function(store) {
-  paste0(store, "_input")
-}
-
 # Formulas cross into the targets graph as text, so they carry no environment
 # and compare cleanly between runs. Terms resolve against the data first and
 # the global environment after, matching estimate_gene().
 as_pipeline_formula <- function(text) {
   stats::as.formula(text, env = globalenv())
-}
-
-write_brmde_hpc_header <- function(script,
-                                   packages,
-                                   controller_rds,
-                                   debug_step,
-                                   update,
-                                   garbage_collection,
-                                   workspace_on_error) {
-  opt <- substitute(
-    tar_option_set(
-      memory = "transient",
-      garbage_collection = GARBAGE,
-      storage = "main",
-      retrieval = "main",
-      debug = DEBUG,
-      cue = tar_cue(mode = UPDATE),
-      controller = readRDS(CONTROLLER),
-      packages = PACKAGES,
-      workspace_on_error = WORKSPACE,
-      format = "rds"
-    ),
-    list(
-      GARBAGE = garbage_collection,
-      DEBUG = debug_step,
-      UPDATE = update,
-      WORKSPACE = workspace_on_error,
-      CONTROLLER = controller_rds,
-      PACKAGES = packages
-    )
-  )
-
-  writeLines(
-    c(
-      "library(tidytargets)",
-      "library(brmDE)",
-      "library(targets)",
-      "",
-      deparse(opt, width.cutoff = 500L),
-      "",
-      "target_list <- list()"
-    ),
-    script
-  )
 }
 
 check_features <- function(features) {
@@ -231,9 +183,10 @@ collect_brmde_hpc <- function(input_hpc) {
 
 #' Start a gene-wise tidytargets pipeline
 #'
-#' Analogue of tidytargets' [tidytargets::tt_initialise()]: writes the targets
-#' header (`target_list`) and the shared steps (load SE, gene ids). Later
-#' calls to [estimate()], [hypothesis()], and [adjust()] append
+#' Calls [tidytargets::tt_initialise()] for the script header, then
+#' [tidytargets::tt_data()] to snapshot the `SummarizedExperiment` onto the
+#' store and [tidytargets::tt_data_list()] for the gene ids to map over.
+#' Later calls to [estimate()], [hypothesis()], and [adjust()] append
 #' `tt_iterate()` branches onto the same graph. Printing the object (or
 #' calling [tt_evaluate()]) runs the pipeline, as in tidytargets. Assigning
 #' it does not; an interactive session then says the pipeline is ready to be
@@ -250,7 +203,8 @@ collect_brmde_hpc <- function(input_hpc) {
 #' result, because a transcriptome's worth of `brmsfit` objects will not fit
 #' in one table: they stay in the store. Read one with
 #' `targets::tar_read(brms_fit, branches = i, store = store)`, using the same
-#' `store` you passed to [brmDE()]. See *Where the fits are* in [estimate()].
+#' `store` you passed to [brmDE()], or
+#' `tidytargets::tt_explore(pipeline, "brms_fit", index = i)`.
 #'
 #' @param .data A `SummarizedExperiment` that already carries a library size
 #'   offset in `colData` and dispersion in `rowData`. Neither is
@@ -348,67 +302,28 @@ brmDE <- function(.data,
     stop("Install tidytargets to build the pipeline.", call. = FALSE)
   }
 
-  dir.create(store, showWarnings = FALSE, recursive = TRUE)
-  input_dir <- brmde_input_dir(store)
-  dir.create(input_dir, recursive = TRUE, showWarnings = FALSE)
-  script <- paste0(store, ".R")
+  # Mapped units are registered by tt_data_list() now, not by
+  # tt_single(iterate = "map"), so the gene ids are snapshotted here.
+  gene_ids <- gene_ids_for_hpc(.data, features)
 
-  se_rds <- normalizePath(file.path(input_dir, "se.rds"), mustWork = FALSE)
-  controller_rds <- normalizePath(
-    file.path(input_dir, "computing_resources.rds"),
-    mustWork = FALSE
-  )
-  saveRDS(.data, se_rds)
-  saveRDS(computing_resources, controller_rds)
-
-  write_brmde_hpc_header(
-    script = script,
-    packages = packages,
-    controller_rds = controller_rds,
+  tidytargets::tt_initialise(
+    store = store,
+    computing_resources = computing_resources,
     debug_step = debug_step,
+    verbosity = verbosity,
     update = update,
     garbage_collection = garbage_collection,
-    workspace_on_error = workspace_on_error
-  )
-
-  input_hpc <- as_brmde_hpc(
-    list(
-      initialisation = list(
-        store = store,
-        computing_resources = computing_resources,
-        tier = 1L,
-        debug_step = debug_step,
-        verbosity = verbosity,
-        abundance = abundance,
-        features = features,
-        callr_function = callr_function
-      )
-    )
-  )
-
-  input_hpc |>
-    # Cheap setup targets stay on the main process; only gene-wise branches
-    # go through the crew controller.
-    tidytargets::tt_single(
-      "file_se",
-      se_rds,
-      format = "file",
-      deployment = "main"
-    ) |>
-    tidytargets::tt_single(
-      target_output = "se_input",
-      user_function = readRDS |> quote(),
-      file = "file_se" |> tidytargets::is_target(),
-      deployment = "main"
-    ) |>
-    tidytargets::tt_single(
-      target_output = "gene_id",
-      user_function = gene_ids_for_hpc |> quote(),
-      se = "se_input" |> tidytargets::is_target(),
+    workspace_on_error = workspace_on_error,
+    packages = packages
+  ) |>
+    tidytargets::tt_metadata(
+      abundance = abundance,
       features = features,
-      iterate = "map",
-      deployment = "main"
+      callr_function = callr_function,
+      gene_ids = gene_ids
     ) |>
+    tidytargets::tt_data(.data, target_output = "se_input") |>
+    tidytargets::tt_data_list(gene_ids, target_output = "gene_id") |>
     as_brmde_hpc()
 }
 
@@ -467,15 +382,17 @@ brmDE <- function(.data,
 #' per-contrast statistics and convergence are small enough to hold for every
 #' gene at once (see [hypothesis_gene()]). The fits stay in the store. Read
 #' one with `targets::tar_read(brms_fit, branches = i, store = store)`, using
-#' the same `store` you passed to [brmDE()]; with `bundle = 1` the branch
-#' index is the gene's row in the result.
+#' the same `store` you passed to [brmDE()], or
+#' `tidytargets::tt_explore(pipeline, "brms_fit", index = i)`. With
+#' `bundle = 1` the branch index is the gene's row in the result.
 #'
 #' @section What the pipeline remembers:
 #' What the fits were asked for goes onto the pipeline with
-#' [tidytargets::tt_metadata()]: the formulas, the column names, and every
+#' [tidytargets::tt_metadata()]: the column names, and every
 #' [estimate_gene()] argument the sampling depends on, defaults included, so
 #' the object carries its own specification while the fits stay in the store.
-#' Read it with `tt_metadata(pipeline)`. It is how [plot_volcano()] knows the
+#' The formulas are targets, so changing one invalidates the fits. Read the
+#' rest with `tt_metadata(pipeline)`. It is how [plot_volcano()] knows the
 #' `chains * draws_sampling` draws a `pH0` was counted from, and so why it
 #' takes the pipeline rather than the table.
 #'
@@ -491,9 +408,9 @@ brmDE <- function(.data,
 #'
 #' * A bundle is fitted sequentially in one worker, so it needs about `bundle`
 #'   times the walltime of a single fit.
-#' * A bundle is one `.rds` holding `bundle` fits, and it is read back into
-#'   the main process, so the size of a `brmsfit` is what limits how far you
-#'   can push this.
+#' * A bundle is one store file holding `bundle` fits, and it is read back
+#'   into the main process, so the size of a `brmsfit` is what limits how
+#'   far you can push this.
 #' * Invalidation is per bundle. One gene failing loses its bundle, and
 #'   changing the gene set reshuffles bundle membership and refits everything.
 #'   Leave `bundle` at `1` when you rely on incremental reruns.
@@ -538,24 +455,17 @@ estimate.tidytargets <- function(input_hpc,
                             ...) {
   offset <- check_offset_name(offset)
   bundle <- check_bundle(bundle)
-  abundance <- input_hpc$initialisation$abundance
-  args_target <- paste0(target_output, "_args")
+  abundance <- tidytargets::tt_metadata(input_hpc)$abundance
 
-  # The arguments travel as the code they were written as, so targets hashes
-  # that code and the worker rebuilds the objects rather than reading them off
-  # disk. As anywhere in targets, an argument naming something only this session
-  # holds cannot be rebuilt there: pass `brms::negbinomial()`, not a variable
-  # standing for it.
-  args <- as.call(c(
-    quote(list),
+  estimate_args <- c(
     list(
       abundance = abundance,
       offset = offset,
       dispersion_prior_log_mean = dispersion_prior_log_mean,
       dispersion_prior_log_sd = dispersion_prior_log_sd
     ),
-    as.list(substitute(list(...)))[-1L]
-  ))
+    list(...)
+  )
 
   # What the fits were asked for rides along on the pipeline, since the fits
   # themselves stay in the store: estimate_gene()'s arguments, with whatever
@@ -566,8 +476,6 @@ estimate.tidytargets <- function(input_hpc,
   settings <- utils::modifyList(as.list(formals(estimate_gene)), list(...))
   input_hpc <- tidytargets::tt_metadata(
     input_hpc,
-    formula_abundance = formula_text(formula_abundance),
-    formula_dispersion = formula_text(formula_dispersion),
     offset = offset,
     dispersion_prior_log_mean = dispersion_prior_log_mean,
     dispersion_prior_log_sd = dispersion_prior_log_sd,
@@ -576,58 +484,28 @@ estimate.tidytargets <- function(input_hpc,
     draws_sampling = settings$draws_sampling
   )
 
-  # The formulas and the arguments are targets of their own so that editing one
-  # invalidates the fits that depend on it. They only assemble small objects, so
-  # they run on main.
   pipeline <- input_hpc |>
-    tidytargets::tt_single(
-      target_output = "formula_abundance_text",
-      user_function = identity |> quote(),
-      x = formula_text(formula_abundance),
-      deployment = "main"
+    tidytargets::tt_data(formula_abundance <- formula_text(formula_abundance)) |>
+    tidytargets::tt_data(formula_dispersion <- formula_text(formula_dispersion)) |>
+    tidytargets::tt_data(estimate_args) |>
+    tidytargets::tt_data_list(
+      gene_bundle <- bundle_gene_ids(
+        tidytargets::tt_metadata(input_hpc)$gene_ids,
+        bundle
+      )
     ) |>
-    tidytargets::tt_single(
-      target_output = "formula_dispersion_text",
-      user_function = identity |> quote(),
-      x = formula_text(formula_dispersion),
-      deployment = "main"
-    ) |>
-    tidytargets::tt_single(
-      target_output = args_target,
-      user_function = identity |> quote(),
-      x = call("quote", args),
-      deployment = "main"
+    tidytargets::tt_iterate(
+      command = estimate_gene_from_se(
+        se_input,
+        gene_bundle,
+        formula_abundance,
+        formula_dispersion,
+        estimate_args
+      ),
+      target_output = target_output
     )
 
-  # The branch count is whatever this target's list is long, so bundling is
-  # just a regrouping of the gene ids upstream of the fit. At bundle = 1 that
-  # regrouping is the identity, and leaving the target out keeps the graph
-  # (and so the stored hashes) as it was before bundling existed.
-  feature_target <- "gene_id"
-  if (bundle > 1L) {
-    feature_target <- "gene_bundle"
-    pipeline <- pipeline |>
-      tidytargets::tt_single(
-        target_output = feature_target,
-        user_function = bundle_gene_ids |> quote(),
-        ids = "gene_id" |> tidytargets::is_target(),
-        bundle = bundle,
-        iterate = "map",
-        deployment = "main"
-      )
-  }
-
-  pipeline |>
-    tidytargets::tt_iterate(
-      target_output = target_output,
-      user_function = estimate_gene_from_se |> quote(),
-      se = "se_input" |> tidytargets::is_target(),
-      feature_id = feature_target |> tidytargets::is_target(),
-      formula_abundance = "formula_abundance_text" |> tidytargets::is_target(),
-      formula_dispersion = "formula_dispersion_text" |> tidytargets::is_target(),
-      args = args_target |> tidytargets::is_target()
-    ) |>
-    as_brmde_hpc()
+  as_brmde_hpc(pipeline)
 }
 
 #' Hypothesis tests on a tidytargets pipeline
@@ -669,25 +547,13 @@ hypothesis.tidytargets <- function(x,
     )
   }
 
-  args_target <- paste0(target_output, "_args")
-  args <- as.call(c(
-    quote(list),
-    list(hypothesis = hypothesis),
-    as.list(substitute(list(...)))[-1L]
-  ))
+  hypothesis_args <- c(list(hypothesis = hypothesis), list(...))
 
   x |>
-    tidytargets::tt_single(
-      target_output = args_target,
-      user_function = identity |> quote(),
-      x = call("quote", args),
-      deployment = "main"
-    ) |>
+    tidytargets::tt_data(hypothesis_args) |>
     tidytargets::tt_iterate(
-      target_output = target_output,
-      user_function = hypothesis_gene_from_fit |> quote(),
-      fit = target_input |> tidytargets::is_target(),
-      args = args_target |> tidytargets::is_target()
+      command = hypothesis_gene_from_fit(brms_fit, hypothesis_args),
+      target_output = target_output
     ) |>
     as_brmde_hpc()
 }
@@ -737,25 +603,13 @@ adjust.tidytargets <- function(input_hpc,
     )
   }
 
-  args_target <- paste0(target_output, "_args")
-  args <- as.call(c(
-    quote(list),
-    list(nullify = nullify),
-    as.list(substitute(list(...)))[-1L]
-  ))
+  adjust_args <- c(list(nullify = nullify), list(...))
 
   input_hpc |>
-    tidytargets::tt_single(
-      target_output = args_target,
-      user_function = identity |> quote(),
-      x = call("quote", args),
-      deployment = "main"
-    ) |>
+    tidytargets::tt_data(adjust_args) |>
     tidytargets::tt_iterate(
-      target_output = target_output,
-      user_function = adjust_gene_from_fit |> quote(),
-      fit = target_input |> tidytargets::is_target(),
-      args = args_target |> tidytargets::is_target()
+      command = adjust_gene_from_fit(brms_fit, adjust_args),
+      target_output = target_output
     ) |>
     as_brmde_hpc()
 }
@@ -768,36 +622,22 @@ tidytargets::tt_evaluate
 #' @importFrom brms hypothesis
 brms::hypothesis
 
-localize_target_append <- function(script) {
-  lines <- readLines(script)
-  lines <- vapply(
-    lines,
-    function(line) {
-      if (!grepl("target_list \\|> target_append\\(", line, perl = TRUE)) {
-        return(line)
-      }
-      inner <- sub("^.*target_list \\|> target_append\\(", "", line, perl = TRUE)
-      inner <- sub("\\)\\s*$", "", inner, perl = TRUE)
-      paste0("target_list <- c(target_list, list(", inner, "))")
-    },
-    character(1),
-    USE.NAMES = FALSE
-  )
-  writeLines(lines, script)
-}
-
 #' @exportS3Method tidytargets::tt_evaluate
 tt_evaluate.brmDE_hpc <- function(tt_input) {
   store <- tt_input$initialisation$store
   script <- paste0(store, ".R")
-  localize_target_append(script)
-  cat("target_list\n", file = script, append = TRUE)
+  # Each factory already assigns `target_list <- ...`; a trailing
+  # `target_list` is enough to return it, and is stripped first so print()
+  # is idempotent.
+  lines <- readLines(script)
+  lines <- lines[!grepl("^\\s*target_list\\s*$", lines)]
+  writeLines(c(lines, "target_list"), script)
 
   reporter <- tt_input$initialisation$verbosity
   make_args <- list(
     script = script,
     store = store,
-    callr_function = tt_input$initialisation$callr_function
+    callr_function = tidytargets::tt_metadata(tt_input)$callr_function
   )
   if (!is.null(reporter) && !identical(reporter, "undefined")) {
     make_args$reporter <- reporter
