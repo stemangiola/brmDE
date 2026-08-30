@@ -65,9 +65,10 @@ A \code{tidytargets} pipeline object (\code{brmDE_hpc}). The graph is not
 run until you print it or call \code{\link[=tt_evaluate]{tt_evaluate()}}.
 }
 \description{
-Analogue of tidytargets' \code{\link[tidytargets:tt_initialise]{tidytargets::tt_initialise()}}: writes the targets
-header (\code{target_list}) and the shared steps (load SE, gene ids). Later
-calls to \code{\link[=estimate]{estimate()}}, \code{\link[=hypothesis]{hypothesis()}}, and \code{\link[=adjust]{adjust()}} append
+Calls \code{\link[tidytargets:tt_initialise]{tidytargets::tt_initialise()}} for the script header, then
+\code{\link[tidytargets:tt_data]{tidytargets::tt_data()}} to snapshot the \code{SummarizedExperiment} onto the
+store and \code{\link[tidytargets:tt_data_list]{tidytargets::tt_data_list()}} for the gene ids to map over.
+Later calls to \code{\link[=estimate]{estimate()}}, \code{\link[=hypothesis]{hypothesis()}}, and \code{\link[=adjust]{adjust()}} append
 \code{tt_iterate()} branches onto the same graph. Printing the object (or
 calling \code{\link[=tt_evaluate]{tt_evaluate()}}) runs the pipeline, as in tidytargets. Assigning
 it does not; an interactive session then says the pipeline is ready to be
@@ -85,7 +86,8 @@ The fits are not in that
 result, because a transcriptome's worth of \code{brmsfit} objects will not fit
 in one table: they stay in the store. Read one with
 \code{targets::tar_read(brms_fit, branches = i, store = store)}, using the same
-\code{store} you passed to \code{\link[=brmDE]{brmDE()}}. See \emph{Where the fits are} in \code{\link[=estimate]{estimate()}}.
+\code{store} you passed to \code{\link[=brmDE]{brmDE()}}, or
+\code{tidytargets::tt_explore(pipeline, "brms_fit", index = i)}.
 }
 \examples{
 \dontrun{

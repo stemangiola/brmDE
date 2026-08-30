@@ -34,7 +34,7 @@ cmdstanr::install_cmdstan()
 
 | Function | Role |
 |----------|------|
-| `brmDE()` | Start a [tidytargets](https://github.com/stemangiola/tidytargets) pipeline (`tt_initialise()` analogue) |
+| `brmDE()` | Start a [tidytargets](https://github.com/stemangiola/tidytargets) pipeline (`tt_initialise()` + `tt_data()`) |
 | `estimate()` / `hypothesis()` / `adjust()` | `tt_iterate()` steps on that same graph |
 
 ### Plotting functions
