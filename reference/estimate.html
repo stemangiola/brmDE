@@ -18,7 +18,7 @@ per gene."><!-- mathjax --><script src="https://cdnjs.cloudflare.com/ajax/libs/m
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">brmDE</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.1.0</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">0.1.1</span>
       </span>
     </div>
 
@@ -39,6 +39,9 @@ per gene."><!-- mathjax --><script src="https://cdnjs.cloudflare.com/ajax/libs/m
       <a href="../articles/dispersion-priors.html">Integrating fast frequentist empirical-Bayes gene-expression dispersion estimation as a prior</a>
     </li>
   </ul></li>
+<li>
+  <a href="../news/index.html">Changelog</a>
+</li>
       </ul><ul class="nav navbar-nav navbar-right"></ul></div><!--/.nav-collapse -->
   </div><!--/.container -->
 </div><!--/.navbar -->
@@ -179,18 +182,20 @@ column alone; what makes the result worth reading is <code><a href="https://paul
 per-contrast statistics and convergence are small enough to hold for every
 gene at once (see <code><a href="hypothesis_gene.html">hypothesis_gene()</a></code>). The fits stay in the store. Read
 one with <code>targets::tar_read(brms_fit, branches = i, store = store)</code>, using
-the same <code>store</code> you passed to <code><a href="brmDE.html">brmDE()</a></code>; with <code>bundle = 1</code> the branch
-index is the gene's row in the result.</p>
+the same <code>store</code> you passed to <code><a href="brmDE.html">brmDE()</a></code>, or
+<code>tidytargets::tt_explore(pipeline, "brms_fit", index = i)</code>. With
+<code>bundle = 1</code> the branch index is the gene's row in the result.</p>
     </div>
     <div id="what-the-pipeline-remembers">
     <h2>What the pipeline remembers</h2>
 
 
 <p>What the fits were asked for goes onto the pipeline with
-<code><a href="https://stemangiola.github.io/tidytargets/reference/tt_metadata.html" class="external-link">tidytargets::tt_metadata()</a></code>: the formulas, the column names, and every
+<code><a href="https://stemangiola.github.io/tidytargets/reference/tt_metadata.html" class="external-link">tidytargets::tt_metadata()</a></code>: the column names, and every
 <code><a href="estimate_gene.html">estimate_gene()</a></code> argument the sampling depends on, defaults included, so
 the object carries its own specification while the fits stay in the store.
-Read it with <code>tt_metadata(pipeline)</code>. It is how <code><a href="plot_volcano.html">plot_volcano()</a></code> knows the
+The formulas are targets, so changing one invalidates the fits. Read the
+rest with <code>tt_metadata(pipeline)</code>. It is how <code><a href="plot_volcano.html">plot_volcano()</a></code> knows the
 <code>chains * draws_sampling</code> draws a <code>pH0</code> was counted from, and so why it
 takes the pipeline rather than the table.</p>
     </div>
@@ -206,9 +211,9 @@ branching because they map over the fit target. The result of
 <p>Size <code>bundle</code> against one job rather than against the gene count, since
 that is what it controls.</p><ul><li><p>A bundle is fitted sequentially in one worker, so it needs about <code>bundle</code>
 times the walltime of a single fit.</p></li>
-<li><p>A bundle is one <code>.rds</code> holding <code>bundle</code> fits, and it is read back into
-the main process, so the size of a <code>brmsfit</code> is what limits how far you
-can push this.</p></li>
+<li><p>A bundle is one store file holding <code>bundle</code> fits, and it is read back
+into the main process, so the size of a <code>brmsfit</code> is what limits how
+far you can push this.</p></li>
 <li><p>Invalidation is per bundle. One gene failing loses its bundle, and
 changing the gene set reshuffles bundle membership and refits everything.
 Leave <code>bundle</code> at <code>1</code> when you rely on incremental reruns.</p></li>
