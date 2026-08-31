@@ -547,13 +547,11 @@ g_3 &amp; \ell_3(\phi_1) &amp; \ell_3(\phi_2) &amp; \ell_3(\phi_3) &amp; \ell_3(
 <div class="section level3">
 <h3 id="edger-smooths-each-dispersion-column-over-abundance">2. edgeR smooths each dispersion column over abundance<a class="anchor" aria-label="anchor" href="#edger-smooths-each-dispersion-column-over-abundance"></a>
 </h3>
-<p>Each gene also has an abundance value</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mi>g</mi></msub><mi>.</mi></mrow><annotation encoding="application/x-tex">
-A_g.
-</annotation></semantics></math></p>
+<p>Each gene has an abundance value
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>A</mi><mi>g</mi></msub><annotation encoding="application/x-tex">A_g</annotation></semantics></math>.</p>
 <p>For one fixed candidate dispersion
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mi>k</mi></msub><annotation encoding="application/x-tex">\phi_k</annotation></semantics></math>,
-edgeR has the values</p>
+edgeR has the log-likelihood values</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ℓ</mi><mn>1</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mi>k</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><msub><mi>ℓ</mi><mn>2</mn></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mi>k</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mi>…</mi><mo>,</mo><msub><mi>ℓ</mi><mi>G</mi></msub><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mi>k</mi></msub><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
 \ell_1(\phi_k),
 \ell_2(\phi_k),
@@ -570,10 +568,8 @@ A_g
 regression through <code>locfit</code>.</p>
 <p>For every fixed candidate dispersion
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mi>k</mi></msub><annotation encoding="application/x-tex">\phi_k</annotation></semantics></math>,
-edgeR therefore obtains a smooth function of abundance,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mi>k</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>A</mi><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
-f_k(A).
-</annotation></semantics></math></p>
+edgeR therefore obtains a smooth function of abundance,
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mi>k</mi></msub><mo stretchy="false" form="prefix">(</mo><mi>A</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">f_k(A)</annotation></semantics></math>.</p>
 <p>For example,</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mn>1</mn></msub><mo stretchy="false" form="prefix">(</mo><mi>A</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">
 f_1(A)
@@ -596,10 +592,8 @@ over dispersion<a class="anchor" aria-label="anchor" href="#for-one-abundance-re
 </h3>
 <p>Consider a particular gene
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>g</mi><annotation encoding="application/x-tex">g</annotation></semantics></math>
-with abundance</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mi>g</mi></msub><mi>.</mi></mrow><annotation encoding="application/x-tex">
-A_g.
-</annotation></semantics></math></p>
+with abundance
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>A</mi><mi>g</mi></msub><annotation encoding="application/x-tex">A_g</annotation></semantics></math>.</p>
 <p>For every candidate dispersion,</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ϕ</mi><mn>1</mn></msub><mo>,</mo><msub><mi>ϕ</mi><mn>2</mn></msub><mo>,</mo><mi>…</mi><mo>,</mo><msub><mi>ϕ</mi><mi>K</mi></msub><mo>,</mo></mrow><annotation encoding="application/x-tex">
 \phi_1,\phi_2,\ldots,\phi_K,
