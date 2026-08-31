@@ -432,13 +432,9 @@ Each row is one gene-specific log-likelihood curve over $\phi$.
 
 ## 2. edgeR smooths each dispersion column over abundance
 
-Each gene also has an abundance value
+Each gene has an abundance value $A_g$.
 
-$$
-A_g.
-$$
-
-For one fixed candidate dispersion $\phi_k$, edgeR has the values
+For one fixed candidate dispersion $\phi_k$, edgeR has the log-likelihood values
 
 $$
 \ell_1(\phi_k),
@@ -457,11 +453,7 @@ $$
 
 With the default edgeR implementation, this smoothing uses local regression through `locfit`.
 
-For every fixed candidate dispersion $\phi_k$, edgeR therefore obtains a smooth function of abundance,
-
-$$
-f_k(A).
-$$
+For every fixed candidate dispersion $\phi_k$, edgeR therefore obtains a smooth function of abundance, $f_k(A)$.
 
 For example,
 
@@ -479,11 +471,8 @@ does the same for $\phi_2$, and so on.
 
 ## 3. For one abundance, reconstruct the smoothed log-likelihood curve over dispersion
 
-Consider a particular gene $g$ with abundance
+Consider a particular gene $g$ with abundance $A_g$.
 
-$$
-A_g.
-$$
 
 For every candidate dispersion,
 
