@@ -1,4 +1,4 @@
-# brmDE
+# brmDE (pre-alpha)
 
 [![R build status](https://github.com/stemangiola/brmDE/actions/workflows/rworkflows.yml/badge.svg)](https://github.com/stemangiola/brmDE/actions)
 
