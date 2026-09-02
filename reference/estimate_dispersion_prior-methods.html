@@ -130,8 +130,10 @@ See <code><a href="../articles/dispersion-priors.html">vignette("dispersion-prio
 
 
 <dt id="arg-formula-abundance">formula_abundance<a class="anchor" aria-label="anchor" href="#arg-formula-abundance"></a></dt>
-<dd><p>Fixed-effect design, the same formula you would
-pass to <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code> (no random effects).</p></dd>
+<dd><p>Fixed-effect model for the mean, used to build
+the edgeR design. edgeR has no random effects, so write the analogue
+yourself (<code>~ dex + cell</code> for <code>~ dex + (1 | cell)</code>). A <code>|</code> in the
+formula is an error.</p></dd>
 
 
 <dt id="arg-abundance">abundance<a class="anchor" aria-label="anchor" href="#arg-abundance"></a></dt>

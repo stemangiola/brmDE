@@ -102,7 +102,7 @@ evaluated, rather than appearing to do nothing.</p>
 offset in <code>colData</code> and dispersion in <code>rowData</code>. Neither is
 computed here: both are whole-matrix quantities, so derive them before
 the pipeline (<code><a href="https://rdrr.io/pkg/tidybulk/man/scale_abundance-methods.html" class="external-link">tidybulk::scale_abundance()</a></code> taking <code>log(1 / multiplier)</code>,
-and <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code>) and name the columns when you call
+and <code><a href="estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code>) and name the columns when you call
 <code><a href="estimate.html">estimate()</a></code>.</p></dd>
 
 
@@ -187,7 +187,6 @@ in one table: they stay in the store. Read one with
 <span class="r-in"><span><span class="co"># Whole-matrix quantities are prepared before the gene-wise pipeline.</span></span></span>
 <span class="r-in"><span><span class="va">se</span> <span class="op">&lt;-</span> <span class="va">airway</span></span></span>
 <span class="r-in"><span><span class="va">se</span><span class="op">$</span><span class="va">offset</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/colSums.html" class="external-link">colSums</a></span><span class="op">(</span><span class="fu">SummarizedExperiment</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">assay</a></span><span class="op">(</span><span class="va">se</span>, <span class="st">"counts"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">se</span> <span class="op">&lt;-</span> <span class="fu">tidybulk</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">estimate_dispersion</a></span><span class="op">(</span><span class="va">se</span>, formula_abundance <span class="op">=</span> <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="va">cell</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">se</span> <span class="op">&lt;-</span> <span class="fu"><a href="estimate_dispersion_prior-methods.html">estimate_dispersion_prior</a></span><span class="op">(</span><span class="va">se</span>, formula_abundance <span class="op">=</span> <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="va">cell</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="va">se</span> <span class="op">|&gt;</span></span></span>

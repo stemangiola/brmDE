@@ -178,10 +178,11 @@ here using tidySummarizedExperiment for convenience.</p>
 <p>For small sample sizes (e.g., n&lt;30) initialising an informative
 dispersion prior is useful For large sample size an informative prior is
 not needed</p>
-<p>Because tidybulk::estimate_dispersion() uses edgeR, which has no
-mixed models, write the fixed-effect analogue yourself:
-<code>dex + (1|cell)</code> becomes <code>dex + cell</code> and
-<code>dex + (dex|cell)</code> becomes <code>dex*cell</code>.</p>
+<p>Because <code><a href="../reference/estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code> uses edgeR, which
+has no mixed models, pass the fixed-effect analogue yourself:
+<code>~ dex + cell</code> for <code>~ dex + (1 | cell)</code>, and
+<code>~ dex + cell + dex:cell</code> for
+<code>~ dex + (dex | cell)</code>.</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span></span>
 <span><span class="va">airway</span> <span class="op">&lt;-</span></span>

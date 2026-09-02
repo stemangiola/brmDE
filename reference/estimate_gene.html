@@ -3,7 +3,7 @@
 SummarizedExperiment) and fits a brms model. You give the mean and
 dispersion models as plain one-sided formulas; the library size offset and the externally estimated dispersion offset are
 appended here, and the assembled formulas are reported with a message. A
-precomputed dispersion (typically from tidybulk::estimate_dispersion())
+precomputed dispersion (typically from estimate_dispersion_prior())
 is used as a prior on the negative
 binomial shape, not as a fixed plug-in: the gene-wise likelihood can still
 pull the posterior away from that estimate. Priors, inits, and MCMC
@@ -69,7 +69,7 @@ overridden."><!-- mathjax --><script src="https://cdnjs.cloudflare.com/ajax/libs
 <code>SummarizedExperiment</code>) and fits a brms model. You give the mean and
 dispersion models as plain one-sided formulas; the library size offset and the externally estimated dispersion offset are
 appended here, and the assembled formulas are reported with a message. A
-precomputed dispersion (typically from <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code>)
+precomputed dispersion (typically from <code><a href="estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code>)
 is used as a <strong>prior</strong> on the negative
 binomial shape, not as a fixed plug-in: the gene-wise likelihood can still
 pull the posterior away from that estimate. Priors, inits, and MCMC
@@ -146,10 +146,9 @@ the column becomes <code>offset(log(1/&lt;dispersion_prior_log_mean&gt;))</code>
 the prior <em>location</em> of the shape, which the gene's counts are then free
 to update. <code><a href="estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code> writes this as
 <code>"dispersion_prior_log_mean"</code> (<code>trended.dispersion</code>, \(\phi_{\mathrm{trend}}\)).
-You can also pass <code><a href="https://rdrr.io/pkg/tidybulk/man/estimate_dispersion-methods.html" class="external-link">tidybulk::estimate_dispersion()</a></code>'s <code>dispersion_trended</code>
-column: that is the same across-gene trend \(s_0^2\), information this
-gene has not yet contributed. Do not pass <code>dispersion_shrinked</code>, the
-tagwise posterior \(q_g^{post}\), which already includes this gene's
+That is the across-gene trend \(s_0^2\), information this
+gene has not yet contributed. Do not pass a tagwise / shrinked
+posterior, which already includes this gene's
 counts. See <code><a href="../articles/dispersion-priors.html">vignette("dispersion-priors")</a></code>.</p></dd>
 
 
