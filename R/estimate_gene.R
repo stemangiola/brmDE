@@ -4,7 +4,7 @@
 #' `SummarizedExperiment`) and fits a brms model. You give the mean and
 #' dispersion models as plain one-sided formulas; the library size offset and the externally estimated dispersion offset are
 #' appended here, and the assembled formulas are reported with a message. A
-#' precomputed dispersion (typically from [tidybulk::estimate_dispersion()])
+#' precomputed dispersion (typically from [estimate_dispersion_prior()])
 #' is used as a **prior** on the negative
 #' binomial shape, not as a fixed plug-in: the gene-wise likelihood can still
 #' pull the posterior away from that estimate. Priors, inits, and MCMC
@@ -45,10 +45,9 @@
 #'   the prior *location* of the shape, which the gene's counts are then free
 #'   to update. [estimate_dispersion_prior()] writes this as
 #'   `"dispersion_prior_log_mean"` (`trended.dispersion`, \eqn{\phi_{\mathrm{trend}}}).
-#'   You can also pass [tidybulk::estimate_dispersion()]'s `dispersion_trended`
-#'   column: that is the same across-gene trend \eqn{s_0^2}, information this
-#'   gene has not yet contributed. Do not pass `dispersion_shrinked`, the
-#'   tagwise posterior \eqn{q_g^{post}}, which already includes this gene's
+#'   That is the across-gene trend \eqn{s_0^2}, information this
+#'   gene has not yet contributed. Do not pass a tagwise / shrinked
+#'   posterior, which already includes this gene's
 #'   counts. See `vignette("dispersion-priors")`.
 #' @param dispersion_prior_log_sd Optional name of a log-dispersion prior SD
 #'   column written by [estimate_dispersion_prior()] as

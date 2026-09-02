@@ -76,9 +76,9 @@ adjust_gene(
 
 Naming an effect on its own tests whether it clears `test_above_log2FC` (default `1`, a doubling of expression), reporting the effect in `log2_fold_change` and the probability that the better supported side is wrong in `pH0`. Both ways of being wrong are in that one number: too small to matter, or pointing the other way. Because it is a probability rather than a test statistic, pipelines turn it into an FDR by averaging and add that as an `fdr` column.
 
-Neither `estimate_gene()` nor `brmDE()` normalises. Compute the offset yourself on all genes (TMM, or anything else), store it as a `colData` column, and pass that name to `offset`. Dispersion is the same kind of whole-matrix quantity: run `tidybulk::estimate_dispersion()` before `brmDE()` and pass the two column names to `estimate()`. Those columns become a **prior** on the negative binomial shape, not a plug-in: the gene-wise likelihood can still pull the posterior away from the external estimate.
+Neither `estimate_gene()` nor `brmDE()` normalises. Compute the offset yourself on all genes (TMM, or anything else), store it as a `colData` column, and pass that name to `offset`. Dispersion is the same kind of whole-matrix quantity: run `estimate_dispersion_prior()` before `brmDE()` and pass the two column names to `estimate()`. Those columns become a **prior** on the negative binomial shape, not a plug-in: the gene-wise likelihood can still pull the posterior away from the external estimate.
 
-The two models are given separately. `formula_abundance` is the mean model. For `tidybulk::estimate_dispersion()` write the fixed-effect analogue of that model (`~ dex + cell` for `~ dex + (1 | cell)`): edgeR has no random effects. `formula_dispersion` (default `~1`) is the model for the negative binomial shape. Neither should carry an offset: the library size offset and the `log(1/dispersion_trended)` offset are appended for you, and the assembled formulas are printed as a message so you can check them:
+The two models are given separately. `formula_abundance` is the mean model (the mixed formula you pass to `estimate()` / `estimate_gene()`). `estimate_dispersion_prior()` is a separate, edgeR step: pass the fixed-effect analogue yourself (`~ dex + cell` for `~ dex + (1 | cell)`). `formula_dispersion` (default `~1`) is the model for the negative binomial shape. Neither should carry an offset: the library size offset and the `log(1/dispersion_trended)` offset are appended for you, and the assembled formulas are printed as a message so you can check them:
 
 ```
 Abundance model (offset added by brmDE): counts ~ dex + (1 | cell) + offset(offset)
@@ -94,7 +94,6 @@ data("airway", package = "airway")
 
 se <- airway
 se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
-se <- tidybulk::estimate_dispersion(se, formula_abundance = ~ dex + cell)
 se <- estimate_dispersion_prior(se, formula_abundance = ~ dex + cell)
 
 se |>
@@ -129,7 +128,7 @@ vignette("dispersion-priors", package = "brmDE")
 
 ## Dispersion priors
 
-`estimate_dispersion_prior()` writes `dispersion_prior_log_mean` (\(\phi_{\mathrm{trend}}\), the across-gene trend) and `dispersion_prior_log_sd` (a width on \(\log\phi\)). Pass those names to `estimate()` / `estimate_gene()`. `method = "curvature"` (default) fills the SD from the Laplace approximation of edgeR's weighted smoothed shared log-likelihood; `method = "degrees_freedom"` fills it from the trigamma SD of the moderated df \(d_{\mathrm{residual}}+d_0\). You can also pass tidybulk's `dispersion_trended` as the mean column: that is the same \(s_0^2\), information this gene has not yet contributed. Do not pass `dispersion_shrinked`, which already includes this gene's counts. The shape intercept prior is always Student-t. Default `NULL` for the SD is a log-scale SD of 1.
+`estimate_dispersion_prior()` writes `dispersion_prior_log_mean` (\(\phi_{\mathrm{trend}}\), the across-gene trend) and `dispersion_prior_log_sd` (a width on \(\log\phi\)). Pass those names to `estimate()` / `estimate_gene()`. `method = "curvature"` (default) fills the SD from the Laplace approximation of edgeR's weighted smoothed shared log-likelihood; `method = "degrees_freedom"` fills it from the trigamma SD of the moderated df \(d_{\mathrm{residual}}+d_0\). Do not pass a tagwise / shrinked dispersion, which already includes this gene's counts. The shape intercept prior is always Student-t. Default `NULL` for the SD is a log-scale SD of 1.
 
 | `method` | Prior | Notes |
 | --- | --- | --- |

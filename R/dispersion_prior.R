@@ -277,8 +277,10 @@ edger_shared_loglik <- function(y,
 #' quadratic around `log(trended.dispersion)`.
 #'
 #' @param .data A `SummarizedExperiment` with counts in `abundance`.
-#' @param formula_abundance Fixed-effect design, the same formula you would
-#'   pass to [tidybulk::estimate_dispersion()] (no random effects).
+#' @param formula_abundance Fixed-effect model for the mean, used to build
+#'   the edgeR design. edgeR has no random effects, so write the analogue
+#'   yourself (`~ dex + cell` for `~ dex + (1 | cell)`). A `|` in the
+#'   formula is an error.
 #' @param abundance Assay name holding integer counts. Default `"counts"`.
 #' @param method `"curvature"` (default) or `"degrees_freedom"`. Chooses how
 #'   `log_sd_column` is filled.
@@ -335,6 +337,14 @@ setGeneric(
   mean_column <- check_column_name(mean_column, "mean_column")
   if (identical(log_sd_column, mean_column)) {
     stop("`log_sd_column` and `mean_column` must name different columns.", call. = FALSE)
+  }
+  if (grepl("|", paste(deparse(formula_abundance), collapse = ""), fixed = TRUE)) {
+    stop(
+      "estimate_dispersion_prior() uses edgeR, which has no random effects. ",
+      "Pass the fixed-effect analogue yourself, e.g. ~ dex + cell for ",
+      "~ dex + (1 | cell).",
+      call. = FALSE
+    )
   }
   design <- stats::model.matrix(
     formula_abundance,

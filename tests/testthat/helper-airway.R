@@ -41,12 +41,13 @@ airway_one_gene_tbl <- function(feature = "ENSG00000120129") {
 }
 
 # The pipeline is gene-wise only, so the whole-matrix quantities it consumes -
-# the offset and the edgeR dispersion - have to be on the object already.
+# the offset and the edgeR dispersion prior - have to be on the object already.
 airway_with_dispersion <- function(n_genes = 150, feature = "ENSG00000120129") {
-  skip_if_not_installed("tidybulk")
+  skip_if_not_installed("edgeR")
+  skip_if_not_installed("limma")
   se <- airway_se(n_genes = n_genes, feature = feature)
   se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
-  tidybulk::estimate_dispersion(se, formula_abundance = ~ dex + cell)
+  estimate_dispersion_prior(se, formula_abundance = ~ dex + cell)
 }
 
 airway_for_hpc <- airway_with_dispersion

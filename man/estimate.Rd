@@ -51,9 +51,7 @@ passed to \code{\link[=estimate_gene]{estimate_gene()}}. \code{~1} by default.}
 
 \item{dispersion_prior_log_mean}{Optional name of the \code{rowData} dispersion
 column. \code{\link[=estimate_dispersion_prior]{estimate_dispersion_prior()}} writes \code{"dispersion_prior_log_mean"}
-(\code{trended.dispersion}). You can also pass
-\code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}'s \code{dispersion_trended} (\eqn{s_0^2}),
-not \code{dispersion_shrinked}. Default \code{NULL} puts a zero offset on the
+(\code{trended.dispersion}). Default \code{NULL} puts a zero offset on the
 shape submodel (see \code{\link[=estimate_gene]{estimate_gene()}}).}
 
 \item{dispersion_prior_log_sd}{Optional name of a log-dispersion prior SD

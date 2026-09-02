@@ -680,14 +680,14 @@ There are two important situations in which the edgeR dispersion trend can be sy
 
 - A zero-inflated negative-binomial model in `brmDE` must be approximated upstream by an ordinary negative-binomial model. Zero inflation can then be absorbed by the edgeR negative-binomial dispersion, potentially increasing the estimated dispersion.
 
-For these cases, call `estimate_dispersion_prior(..., method = "degrees_freedom")`: the same Student-t intercept prior, but with `dispersion_prior_log_sd` filled from the log-scale SD \(\sqrt{\psi'(d_{\mathrm{eff}}/2)}\) implied by the **moderated** effective df \(d_{\mathrm{eff}} = d_{\mathrm{residual}} + d_0\) (`prior.df` from `squeezeVar()` / `estimateDisp()`). tidybulk writes the df as `dispersion_degrees_freedom`; convert it with the same trigamma formula, or let `estimate_dispersion_prior()` do it. The default `method = "curvature"` is the local Laplace approximation of the weighted smoothed shared log-likelihood derived above.
+For these cases, call `estimate_dispersion_prior(..., method = "degrees_freedom")`: the same Student-t intercept prior, but with `dispersion_prior_log_sd` filled from the log-scale SD \(\sqrt{\psi'(d_{\mathrm{eff}}/2)}\) implied by the **moderated** effective df \(d_{\mathrm{eff}} = d_{\mathrm{residual}} + d_0\) (`prior.df` from `squeezeVar()` / `estimateDisp()`). `estimate_dispersion_prior()` converts that df with the same trigamma formula. The default `method = "curvature"` is the local Laplace approximation of the weighted smoothed shared log-likelihood derived above.
 
 
 # Appendix 3: Examples of how to use R formulas approximate a mixed-effect model with a fixed-effect one
 
-`edgeR` and `DESeq2` have no random effects. To obtain the most relevant dispersion estimate, we can approximate the model fitted in `brmDE` using its fixed-effect analogue: drop the `|` and promote the grouping factor to a fixed term. If the random term also has a slope, include the interaction.
+`edgeR` and `DESeq2` have no random effects. Pass `estimate_dispersion_prior()` the fixed-effect analogue of the mixed model you will fit in `brmDE`: drop the `|` and promote the grouping factor to a fixed term. If the random term also has a slope, include the interaction.
 
-| Mixed-effect model (`brmDE`) | Fixed-effect analogue (`estimate_dispersion()`) |
+| Mixed-effect model (`brmDE`) | Fixed-effect analogue |
 |----|----|
 | `~ treatment + (1 \| hospital)` | `~ treatment + hospital` |
 | `~ treatment + (1 \| hospital) + (1 \| batch)` | `~ treatment + hospital + batch` |

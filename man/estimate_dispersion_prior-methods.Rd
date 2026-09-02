@@ -46,8 +46,10 @@ estimate_dispersion_prior(
 \arguments{
 \item{.data}{A \code{SummarizedExperiment} with counts in \code{abundance}.}
 
-\item{formula_abundance}{Fixed-effect design, the same formula you would
-pass to \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}} (no random effects).}
+\item{formula_abundance}{Fixed-effect model for the mean, used to build
+the edgeR design. edgeR has no random effects, so write the analogue
+yourself (\code{~ dex + cell} for \code{~ dex + (1 | cell)}). A \code{|} in the
+formula is an error.}
 
 \item{abundance}{Assay name holding integer counts. Default \code{"counts"}.}
 

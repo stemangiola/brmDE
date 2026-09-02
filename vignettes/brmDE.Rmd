@@ -99,9 +99,9 @@ airway <- airway |>
 For small sample sizes (e.g., n<30) initialising an informative dispersion prior is useful
 For large sample size an informative prior is not needed
 
-Because tidybulk::estimate_dispersion() uses edgeR, which has no mixed
-models, write the fixed-effect analogue yourself:
-`dex + (1|cell)` becomes `dex + cell` and `dex + (dex|cell)` becomes `dex*cell`.
+Because `estimate_dispersion_prior()` uses edgeR, which has no mixed models, pass the
+fixed-effect analogue yourself: `~ dex + cell` for `~ dex + (1 | cell)`, and
+`~ dex + cell + dex:cell` for `~ dex + (dex | cell)`.
   
 ```{r}
 

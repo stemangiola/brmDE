@@ -9,6 +9,15 @@ test_that("estimate_dispersion_prior is an S4 method for SummarizedExperiment", 
   )
 })
 
+test_that("estimate_dispersion_prior rejects a mixed-effect formula", {
+  skip_if_not_installed("airway")
+  se <- airway_se(n_genes = 8)
+  expect_error(
+    estimate_dispersion_prior(se, formula_abundance = ~ dex + (1 | cell)),
+    "no random effects"
+  )
+})
+
 test_that("estimate_dispersion_prior writes prior mean and SD columns", {
   skip_if_not_installed("edgeR")
   skip_if_not_installed("limma")

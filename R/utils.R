@@ -537,7 +537,7 @@ check_dispersion_values <- function(data, dispersion_prior_log_mean) {
     stop(
       "Dispersion column '", dispersion_prior_log_mean, "' has ", sum(bad),
       " non-finite or non-positive value(s). estimate_dispersion_prior() ",
-      "and tidybulk::estimate_dispersion() return NA when the design cannot ",
+      "and estimate_dispersion_prior() return NA when the design cannot ",
       "be fit; fix that rather than passing the result on.",
       call. = FALSE
     )

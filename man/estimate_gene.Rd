@@ -59,10 +59,9 @@ the column becomes \verb{offset(log(1/<dispersion_prior_log_mean>))}: that is
 the prior \emph{location} of the shape, which the gene's counts are then free
 to update. \code{\link[=estimate_dispersion_prior]{estimate_dispersion_prior()}} writes this as
 \code{"dispersion_prior_log_mean"} (\code{trended.dispersion}, \eqn{\phi_{\mathrm{trend}}}).
-You can also pass \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}'s \code{dispersion_trended}
-column: that is the same across-gene trend \eqn{s_0^2}, information this
-gene has not yet contributed. Do not pass \code{dispersion_shrinked}, the
-tagwise posterior \eqn{q_g^{post}}, which already includes this gene's
+That is the across-gene trend \eqn{s_0^2}, information this
+gene has not yet contributed. Do not pass a tagwise / shrinked
+posterior, which already includes this gene's
 counts. See \code{vignette("dispersion-priors")}.}
 
 \item{dispersion_prior_log_sd}{Optional name of a log-dispersion prior SD
@@ -163,7 +162,7 @@ Prepares one gene's samples (data frame or one-row
 \code{SummarizedExperiment}) and fits a brms model. You give the mean and
 dispersion models as plain one-sided formulas; the library size offset and the externally estimated dispersion offset are
 appended here, and the assembled formulas are reported with a message. A
-precomputed dispersion (typically from \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}})
+precomputed dispersion (typically from \code{\link[=estimate_dispersion_prior]{estimate_dispersion_prior()}})
 is used as a \strong{prior} on the negative
 binomial shape, not as a fixed plug-in: the gene-wise likelihood can still
 pull the posterior away from that estimate. Priors, inits, and MCMC

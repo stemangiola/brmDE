@@ -27,7 +27,7 @@ brmDE(
 offset in \code{colData} and dispersion in \code{rowData}. Neither is
 computed here: both are whole-matrix quantities, so derive them before
 the pipeline (\code{tidybulk::scale_abundance()} taking \code{log(1 / multiplier)},
-and \code{\link[tidybulk:estimate_dispersion]{tidybulk::estimate_dispersion()}}) and name the columns when you call
+and \code{\link[=estimate_dispersion_prior]{estimate_dispersion_prior()}}) and name the columns when you call
 \code{\link[=estimate]{estimate()}}.}
 
 \item{abundance}{Count assay name.}
@@ -96,7 +96,6 @@ data("airway", package = "airway")
 # Whole-matrix quantities are prepared before the gene-wise pipeline.
 se <- airway
 se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
-se <- tidybulk::estimate_dispersion(se, formula_abundance = ~ dex + cell)
 se <- estimate_dispersion_prior(se, formula_abundance = ~ dex + cell)
 
 se |>

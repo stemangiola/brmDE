@@ -210,7 +210,7 @@ collect_brmde_hpc <- function(input_hpc) {
 #'   offset in `colData` and dispersion in `rowData`. Neither is
 #'   computed here: both are whole-matrix quantities, so derive them before
 #'   the pipeline (`tidybulk::scale_abundance()` taking `log(1 / multiplier)`,
-#'   and [tidybulk::estimate_dispersion()]) and name the columns when you call
+#'   and [estimate_dispersion_prior()]) and name the columns when you call
 #'   [estimate()].
 #' @param abundance Count assay name.
 #' @param features Optional character vector of gene ids to fit, e.g.
@@ -240,7 +240,6 @@ collect_brmde_hpc <- function(input_hpc) {
 #' # Whole-matrix quantities are prepared before the gene-wise pipeline.
 #' se <- airway
 #' se$offset <- log(colSums(SummarizedExperiment::assay(se, "counts")))
-#' se <- tidybulk::estimate_dispersion(se, formula_abundance = ~ dex + cell)
 #' se <- estimate_dispersion_prior(se, formula_abundance = ~ dex + cell)
 #'
 #' se |>
@@ -340,9 +339,7 @@ brmDE <- function(.data,
 #'   (the same argument as [estimate_gene()]).
 #' @param dispersion_prior_log_mean Optional name of the `rowData` dispersion
 #'   column. [estimate_dispersion_prior()] writes `"dispersion_prior_log_mean"`
-#'   (`trended.dispersion`). You can also pass
-#'   [tidybulk::estimate_dispersion()]'s `dispersion_trended` (\eqn{s_0^2}),
-#'   not `dispersion_shrinked`. Default `NULL` puts a zero offset on the
+#'   (`trended.dispersion`). Default `NULL` puts a zero offset on the
 #'   shape submodel (see [estimate_gene()]).
 #' @param dispersion_prior_log_sd Optional name of a log-dispersion prior SD
 #'   column written by [estimate_dispersion_prior()] as
