@@ -53,8 +53,9 @@ formula is an error.}
 
 \item{abundance}{Assay name holding integer counts. Default \code{"counts"}.}
 
-\item{method}{\code{"curvature"} (default) or \code{"degrees_freedom"}. Chooses how
-\code{log_sd_column} is filled.}
+\item{method}{How \code{log_sd_column} is filled. The documented value is
+\code{"curvature"} (default): local Normal approximation of the weighted
+smoothed shared log-likelihood.}
 
 \item{log_sd_column}{Name of the \code{rowData} column to write for the
 log-scale SD. Default \code{"dispersion_prior_log_sd"}. Pass this name to
@@ -65,39 +66,36 @@ location, \code{trended.dispersion} (\eqn{\phi_{\mathrm{trend}}}). Default
 \code{"dispersion_prior_log_mean"}. Pass this name to \code{\link[=estimate_gene]{estimate_gene()}} /
 \code{\link[=estimate]{estimate()}} as \code{dispersion_prior_log_mean}.}
 
-\item{n_local}{Number of dispersion-grid points used in the local
-quadratic around each gene's trended dispersion. Used when
-\code{method = "curvature"}. Default \code{10}.}
+\item{n_local}{Number of candidate dispersion values used in the local
+quadratic around each gene's trended dispersion. Default \code{10}.}
 
-\item{grid.range}{Range of the dispersion grid in \code{spline.pts} units,
+\item{grid.range}{Range of candidate dispersions in \code{spline.pts} units,
 where \code{phi = 0.1 * 2^spline.pts}. Default \code{c(-20, 10)}.}
 
-\item{grid.length}{Number of points on that grid. Default \code{61}.}
+\item{grid.length}{Number of candidate values in that range. Default \code{61}.}
 }
 \value{
 \code{.data} with \code{mean_column} and \code{log_sd_column} added to \code{rowData}.
 The mean is the trended \eqn{\phi}. The SD is the Laplace width on
-\eqn{\log(\phi)} when \code{method = "curvature"} (\code{NA} where the quadratic
-cannot be formed), or the trigamma SD from the moderated df when
-\code{method = "degrees_freedom"}.
+\eqn{\log(\phi)} (\code{NA} where the quadratic cannot be formed).
 }
 \description{
-Writes two \code{rowData} columns from the shared log-likelihood grid:
+Writes two \code{rowData} columns from the shared log-likelihood:
 \code{dispersion_prior_log_mean} is \code{trended.dispersion} (\eqn{\phi_{\mathrm{trend}}}),
-and \code{dispersion_prior_log_sd} is a width on \eqn{\log(\phi)}.
-\code{method = "curvature"} (default) fills that width with the local Normal
-(Laplace) approximation of the weighted smoothed shared log-likelihood;
-\code{method = "degrees_freedom"} fills it with
-\eqn{\sqrt{\psi'(d_{\mathrm{eff}}/2)}} from the moderated df
-\eqn{d_{\mathrm{residual}} + d_0}. \(d_0\) is \code{squeezeVar()}'s
-\code{df.prior}, the same empirical-Bayes prior df that \code{estimateDisp()}
-returns as \code{prior.df}. Pass both column names to \code{\link[=estimate_gene]{estimate_gene()}} /
+and \code{dispersion_prior_log_sd} is a width on \eqn{\log(\phi)} from the local
+Normal (Laplace) approximation of the weighted smoothed shared
+log-likelihood. Pass both column names to \code{\link[=estimate_gene]{estimate_gene()}} /
 \code{\link[=estimate]{estimate()}} as \code{dispersion_prior_log_mean} and \code{dispersion_prior_log_sd}.
 See \code{vignette("dispersion-priors")}.
 }
 \details{
-\code{estimateDisp()} does not return the shared log-likelihood grid, so this
-rebuilds it (the same Cox--Reid profile-likelihood grid and \code{WLEB()}
-smooth that \code{estimateDisp()} uses) and, for \code{"curvature"}, fits a local
-quadratic around \code{log(trended.dispersion)}.
+The shape intercept prior in \code{\link[=estimate_gene]{estimate_gene()}} / \code{\link[=estimate]{estimate()}} is always
+Student-t. That heavier-tailed prior is what lets the posterior leave a
+misplaced edgeR mode under mixed-effect or zero-inflated models; this
+function only supplies the location and a Laplace width.
+
+\code{estimateDisp()} does not return the shared log-likelihood, so this
+rebuilds it (the same Cox--Reid profile likelihood and \code{WLEB()} smooth
+that \code{estimateDisp()} uses) and fits a local quadratic around
+\code{log(trended.dispersion)}.
 }

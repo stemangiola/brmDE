@@ -258,23 +258,23 @@ edger_shared_loglik <- function(y,
 
 #' Log-scale SD and location of the edgeR smoothed-dispersion prior
 #'
-#' Writes two `rowData` columns from the shared log-likelihood grid:
+#' Writes two `rowData` columns from the shared log-likelihood:
 #' `dispersion_prior_log_mean` is `trended.dispersion` (\eqn{\phi_{\mathrm{trend}}}),
-#' and `dispersion_prior_log_sd` is a width on \eqn{\log(\phi)}.
-#' `method = "curvature"` (default) fills that width with the local Normal
-#' (Laplace) approximation of the weighted smoothed shared log-likelihood;
-#' `method = "degrees_freedom"` fills it with
-#' \eqn{\sqrt{\psi'(d_{\mathrm{eff}}/2)}} from the moderated df
-#' \eqn{d_{\mathrm{residual}} + d_0}. \(d_0\) is `squeezeVar()`'s
-#' `df.prior`, the same empirical-Bayes prior df that `estimateDisp()`
-#' returns as `prior.df`. Pass both column names to [estimate_gene()] /
+#' and `dispersion_prior_log_sd` is a width on \eqn{\log(\phi)} from the local
+#' Normal (Laplace) approximation of the weighted smoothed shared
+#' log-likelihood. Pass both column names to [estimate_gene()] /
 #' [estimate()] as `dispersion_prior_log_mean` and `dispersion_prior_log_sd`.
 #' See `vignette("dispersion-priors")`.
 #'
-#' `estimateDisp()` does not return the shared log-likelihood grid, so this
-#' rebuilds it (the same Cox--Reid profile-likelihood grid and `WLEB()`
-#' smooth that `estimateDisp()` uses) and, for `"curvature"`, fits a local
-#' quadratic around `log(trended.dispersion)`.
+#' The shape intercept prior in [estimate_gene()] / [estimate()] is always
+#' Student-t. That heavier-tailed prior is what lets the posterior leave a
+#' misplaced edgeR mode under mixed-effect or zero-inflated models; this
+#' function only supplies the location and a Laplace width.
+#'
+#' `estimateDisp()` does not return the shared log-likelihood, so this
+#' rebuilds it (the same Cox--Reid profile likelihood and `WLEB()` smooth
+#' that `estimateDisp()` uses) and fits a local quadratic around
+#' `log(trended.dispersion)`.
 #'
 #' @param .data A `SummarizedExperiment` with counts in `abundance`.
 #' @param formula_abundance Fixed-effect model for the mean, used to build
@@ -282,8 +282,9 @@ edger_shared_loglik <- function(y,
 #'   yourself (`~ dex + cell` for `~ dex + (1 | cell)`). A `|` in the
 #'   formula is an error.
 #' @param abundance Assay name holding integer counts. Default `"counts"`.
-#' @param method `"curvature"` (default) or `"degrees_freedom"`. Chooses how
-#'   `log_sd_column` is filled.
+#' @param method How `log_sd_column` is filled. The documented value is
+#'   `"curvature"` (default): local Normal approximation of the weighted
+#'   smoothed shared log-likelihood.
 #' @param log_sd_column Name of the `rowData` column to write for the
 #'   log-scale SD. Default `"dispersion_prior_log_sd"`. Pass this name to
 #'   [estimate_gene()] / [estimate()] as `dispersion_prior_log_sd`.
@@ -291,18 +292,15 @@ edger_shared_loglik <- function(y,
 #'   location, `trended.dispersion` (\eqn{\phi_{\mathrm{trend}}}). Default
 #'   `"dispersion_prior_log_mean"`. Pass this name to [estimate_gene()] /
 #'   [estimate()] as `dispersion_prior_log_mean`.
-#' @param n_local Number of dispersion-grid points used in the local
-#'   quadratic around each gene's trended dispersion. Used when
-#'   `method = "curvature"`. Default `10`.
-#' @param grid.range Range of the dispersion grid in `spline.pts` units,
+#' @param n_local Number of candidate dispersion values used in the local
+#'   quadratic around each gene's trended dispersion. Default `10`.
+#' @param grid.range Range of candidate dispersions in `spline.pts` units,
 #'   where `phi = 0.1 * 2^spline.pts`. Default `c(-20, 10)`.
-#' @param grid.length Number of points on that grid. Default `61`.
+#' @param grid.length Number of candidate values in that range. Default `61`.
 #'
 #' @return `.data` with `mean_column` and `log_sd_column` added to `rowData`.
 #'   The mean is the trended \eqn{\phi}. The SD is the Laplace width on
-#'   \eqn{\log(\phi)} when `method = "curvature"` (`NA` where the quadratic
-#'   cannot be formed), or the trigamma SD from the moderated df when
-#'   `method = "degrees_freedom"`.
+#'   \eqn{\log(\phi)} (`NA` where the quadratic cannot be formed).
 #'
 #' @docType methods
 #' @rdname estimate_dispersion_prior-methods

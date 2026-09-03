@@ -51,9 +51,8 @@
 #'   counts. See `vignette("dispersion-priors")`.
 #' @param dispersion_prior_log_sd Optional name of a log-dispersion prior SD
 #'   column written by [estimate_dispersion_prior()] as
-#'   `"dispersion_prior_log_sd"`. That function's `method` chooses the width:
-#'   Laplace curvature of the shared log-likelihood, or the trigamma SD from
-#'   the moderated df. The intercept prior is always Student-t
+#'   `"dispersion_prior_log_sd"` (Laplace width of the weighted shared
+#'   log-likelihood on \(\log\phi\)). The intercept prior is always Student-t
 #'   (`student_t(shape_prior_df, 0, scale)`), with `scale` set so that its
 #'   standard deviation equals this log-scale SD. Default `NULL` targets a
 #'   log-scale SD of 1. The gene-wise posterior is not constrained to equal

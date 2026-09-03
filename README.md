@@ -128,12 +128,6 @@ vignette("dispersion-priors", package = "brmDE")
 
 ## Dispersion priors
 
-`estimate_dispersion_prior()` writes `dispersion_prior_log_mean` (\(\phi_{\mathrm{trend}}\), the across-gene trend) and `dispersion_prior_log_sd` (a width on \(\log\phi\)). Pass those names to `estimate()` / `estimate_gene()`. `method = "curvature"` (default) fills the SD from the Laplace approximation of edgeR's weighted smoothed shared log-likelihood; `method = "degrees_freedom"` fills it from the trigamma SD of the moderated df \(d_{\mathrm{residual}}+d_0\). Do not pass a tagwise / shrinked dispersion, which already includes this gene's counts. The shape intercept prior is always Student-t. Default `NULL` for the SD is a log-scale SD of 1.
-
-| `method` | Prior | Notes |
-| --- | --- | --- |
-| `"curvature"` | `student_t` on the intercept of `shape ~ 1 + offset(log(1/dispersion_prior_log_mean))` | Laplace \(\sigma\) from the shared log-likelihood |
-| `"degrees_freedom"` | `student_t` on the same intercept | trigamma \(\sigma\) from \(d_{\mathrm{eff}}\) |
-| skip the writer, pass `NULL` | `student_t` on the same intercept | log-scale SD 1 |
+`estimate_dispersion_prior()` writes `dispersion_prior_log_mean` (\(\phi_{\mathrm{trend}}\), the across-gene trend) and `dispersion_prior_log_sd` (a width on \(\log\phi\) from the Laplace approximation of edgeR's weighted smoothed shared log-likelihood). Pass those names to `estimate()` / `estimate_gene()`. Do not pass a tagwise / shrinked dispersion, which already includes this gene's counts. The shape intercept prior is always Student-t: that is what lets the posterior leave a misplaced edgeR mode under mixed-effect or zero-inflated models. Default `NULL` for the SD is a log-scale SD of 1.
 
 See `?estimate_gene` and `vignette("dispersion-priors")`.

@@ -113,8 +113,8 @@ airway <-
 One rowData column per estimate, named by the corresponding arguments
 (defaults shown):
   dispersion_prior_log_mean     = trended phi; pass this as the location
-  dispersion_prior_log_sd       = log-scale SD; curvature (default) or
-                                  degrees_freedom, set by method=
+  dispersion_prior_log_sd       = log-scale SD from the Laplace curvature
+                                  of the weighted shared log-likelihood
 
 Let's display the abundance offset and the dispersion estimates. Here we use `tidySummarizedExperiment` for convenience
 
@@ -321,9 +321,8 @@ The default prior set applies whenever `prior` is left `NULL` and `family` is a 
 
 See `vignette("dispersion-priors")`
 
-| `estimate_dispersion_prior(method = )` | Model for shape | Prior width |
-|-----------------------------------------|-----------------|-------------|
-| `"curvature"` (default) | `shape ~ 1 + offset(log(1/dispersion_prior_log_mean))`, or `offset(0)` if the mean is `NULL` | Student-t on the intercept; Laplace SD of the shared log-likelihood |
-| `"degrees_freedom"` | the same submodel | Student-t on the intercept; trigamma SD from the moderated df |
+| Setting | Model for shape | Prior width |
+|---------|-----------------|-------------|
+| `estimate_dispersion_prior()` (default) | `shape ~ 1 + offset(log(1/dispersion_prior_log_mean))`, or `offset(0)` if the mean is `NULL` | Student-t on the intercept; Laplace SD of the shared log-likelihood |
 | skip `estimate_dispersion_prior()`, pass `NULL` | the same submodel | Student-t on the intercept; log-scale SD 1 |
 
