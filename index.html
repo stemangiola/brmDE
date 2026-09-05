@@ -249,41 +249,7 @@ Dispersion model (offset added by brmDE): shape ~ 1 + offset(log(1/dispersion_tr
 <div class="section level2">
 <h2 id="dispersion-priors">Dispersion priors<a class="anchor" aria-label="anchor" href="#dispersion-priors"></a>
 </h2>
-<p><code><a href="reference/estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code> writes <code>dispersion_prior_log_mean</code> ((<em>{}), the across-gene trend) and <code>dispersion_prior_log_sd</code> (a width on ()). Pass those names to <code><a href="reference/estimate.html">estimate()</a></code> / <code><a href="reference/estimate_gene.html">estimate_gene()</a></code>. <code>method = "curvature"</code> (default) fills the SD from the Laplace approximation of edgeR’s weighted smoothed shared log-likelihood; <code>method = "degrees_freedom"</code> fills it from the trigamma SD of the moderated df (d</em>{}+d_0). Do not pass a tagwise / shrinked dispersion, which already includes this gene’s counts. The shape intercept prior is always Student-t. Default <code>NULL</code> for the SD is a log-scale SD of 1.</p>
-<table class="table">
-<colgroup>
-<col width="33%">
-<col width="33%">
-<col width="33%">
-</colgroup>
-<thead><tr>
-<th><code>method</code></th>
-<th>Prior</th>
-<th>Notes</th>
-</tr></thead>
-<tbody>
-<tr>
-<td><code>"curvature"</code></td>
-<td>
-<code>student_t</code> on the intercept of <code>shape ~ 1 + offset(log(1/dispersion_prior_log_mean))</code>
-</td>
-<td>Laplace () from the shared log-likelihood</td>
-</tr>
-<tr>
-<td><code>"degrees_freedom"</code></td>
-<td>
-<code>student_t</code> on the same intercept</td>
-<td>trigamma () from (d_{})</td>
-</tr>
-<tr>
-<td>skip the writer, pass <code>NULL</code>
-</td>
-<td>
-<code>student_t</code> on the same intercept</td>
-<td>log-scale SD 1</td>
-</tr>
-</tbody>
-</table>
+<p><code><a href="reference/estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code> writes <code>dispersion_prior_log_mean</code> ((_{}), the across-gene trend) and <code>dispersion_prior_log_sd</code> (a width on () from the Laplace approximation of edgeR’s weighted smoothed shared log-likelihood). Pass those names to <code><a href="reference/estimate.html">estimate()</a></code> / <code><a href="reference/estimate_gene.html">estimate_gene()</a></code>. Do not pass a tagwise / shrinked dispersion, which already includes this gene’s counts. The shape intercept prior is always Student-t: that is what lets the posterior leave a misplaced edgeR mode under mixed-effect or zero-inflated models. Default <code>NULL</code> for the SD is a log-scale SD of 1.</p>
 <p>See <code><a href="reference/estimate_gene.html">?estimate_gene</a></code> and <code><a href="articles/dispersion-priors.html">vignette("dispersion-priors")</a></code>.</p>
 </div>
 </div>

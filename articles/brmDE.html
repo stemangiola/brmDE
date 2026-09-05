@@ -190,8 +190,8 @@ has no mixed models, pass the fixed-effect analogue yourself:
 <span>  <span class="fu"><a href="../reference/estimate_dispersion_prior-methods.html">estimate_dispersion_prior</a></span><span class="op">(</span>formula_abundance <span class="op">=</span> <span class="op">~</span> <span class="va">dex</span> <span class="op">+</span> <span class="va">cell</span><span class="op">)</span></span></code></pre></div>
 <p>One rowData column per estimate, named by the corresponding arguments
 (defaults shown): dispersion_prior_log_mean = trended phi; pass this as
-the location dispersion_prior_log_sd = log-scale SD; curvature (default)
-or degrees_freedom, set by method=</p>
+the location dispersion_prior_log_sd = log-scale SD from the Laplace
+curvature of the weighted shared log-likelihood</p>
 <p>Let’s display the abundance offset and the dispersion estimates. Here
 we use <code>tidySummarizedExperiment</code> for convenience</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
@@ -430,19 +430,19 @@ zero-inflated or not.</p>
 <p>See <code><a href="../articles/dispersion-priors.html">vignette("dispersion-priors")</a></code></p>
 <table class="table">
 <colgroup>
-<col width="57%">
 <col width="23%">
-<col width="18%">
+<col width="43%">
+<col width="33%">
 </colgroup>
 <thead><tr class="header">
-<th><code>estimate_dispersion_prior(method = )</code></th>
+<th>Setting</th>
 <th>Model for shape</th>
 <th>Prior width</th>
 </tr></thead>
 <tbody>
 <tr class="odd">
 <td>
-<code>"curvature"</code> (default)</td>
+<code><a href="../reference/estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code> (default)</td>
 <td>
 <code>shape ~ 1 + offset(log(1/dispersion_prior_log_mean))</code>,
 or <code>offset(0)</code> if the mean is <code>NULL</code>
@@ -451,11 +451,6 @@ or <code>offset(0)</code> if the mean is <code>NULL</code>
 log-likelihood</td>
 </tr>
 <tr class="even">
-<td><code>"degrees_freedom"</code></td>
-<td>the same submodel</td>
-<td>Student-t on the intercept; trigamma SD from the moderated df</td>
-</tr>
-<tr class="odd">
 <td>skip <code><a href="../reference/estimate_dispersion_prior-methods.html">estimate_dispersion_prior()</a></code>, pass
 <code>NULL</code>
 </td>
