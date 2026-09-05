@@ -24,6 +24,7 @@ Depends:
 Imports:
     brms,
     dplyr,
+    methods,
     ggplot2 (>= 3.5.0),
     glue,
     instantiate (>= 0.2.3),
